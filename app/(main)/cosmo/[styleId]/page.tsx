@@ -3,8 +3,11 @@ import Link from 'next/link'
 import { BackButton } from '@/components/ui/BackButton'
 import { TopBar } from '@/components/layout/TopBar'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
+import { Avatar } from '@/components/ui/Avatar'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
+import { createClient } from '@/lib/supabase/server'
 import type { StyleId } from '@/lib/style-id/types'
+import type { Profile } from '@/types/database'
 
 export default async function CosmoStylePage({
   params,
@@ -16,6 +19,17 @@ export default async function CosmoStylePage({
   if (!style) notFound()
 
   const others = Object.values(STYLE_TYPES).filter(s => s.id !== styleId)
+
+  const supabase = await createClient()
+  const { data: users } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url, followers_count')
+    .eq('style_id', styleId)
+    .eq('is_private', false)
+    .order('followers_count', { ascending: false })
+    .limit(20)
+
+  const styleUsers = (users ?? []) as Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'followers_count'>[]
 
   return (
     <>
@@ -131,6 +145,57 @@ export default async function CosmoStylePage({
               </span>
             ))}
           </div>
+        </div>
+
+        {/* このスタイルのユーザー */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+            このスタイルのユーザー
+          </p>
+
+          {styleUsers.length === 0 ? (
+            <div
+              className="rounded-2xl p-6 flex flex-col items-center gap-2"
+              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+            >
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                まだユーザーがいません
+              </p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                STYLE ID診断でこのスタイルが出たら登録しよう
+              </p>
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ border: '1px solid var(--border)' }}
+            >
+              {styleUsers.map((user, i) => (
+                <Link
+                  key={user.id}
+                  href={`/profile/${user.username}`}
+                  className="flex items-center gap-3 px-4 py-3 transition-colors active:opacity-75"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    borderTop: i > 0 ? '1px solid var(--border)' : undefined,
+                  }}
+                >
+                  <Avatar src={user.avatar_url} username={user.username} size="md" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                      {user.display_name ?? user.username}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                      @{user.username}
+                    </p>
+                  </div>
+                  <p className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                    {user.followers_count.toLocaleString()} フォロワー
+                  </p>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* CTA */}

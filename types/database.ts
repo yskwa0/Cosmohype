@@ -8,6 +8,7 @@ export type Profile = {
   style_tags: string[]
   style_id: string | null
   theme: string | null
+  is_private: boolean
   followers_count: number
   following_count: number
   created_at: string
@@ -98,6 +99,7 @@ export type Database = {
           style_tags: string[]
           style_id: string | null
           theme: string | null
+          is_private: boolean
           followers_count: number
           following_count: number
           created_at: string
@@ -113,6 +115,7 @@ export type Database = {
           style_tags?: string[]
           style_id?: string | null
           theme?: string | null
+          is_private?: boolean
           followers_count?: number
           following_count?: number
           created_at?: string
@@ -128,6 +131,7 @@ export type Database = {
           style_tags?: string[]
           style_id?: string | null
           theme?: string | null
+          is_private?: boolean
           followers_count?: number
           following_count?: number
           updated_at?: string
