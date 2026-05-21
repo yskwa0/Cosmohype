@@ -9,9 +9,11 @@ import type { Comment } from '@/types/database'
 interface Props {
   postId: string
   userId?: string
+  onCommentAdded?: () => void
+  onCommentDeleted?: () => void
 }
 
-export function InlineComments({ postId, userId }: Props) {
+export function InlineComments({ postId, userId, onCommentAdded, onCommentDeleted }: Props) {
   const [comments, setComments] = useState<Comment[]>([])
   const [loading, setLoading] = useState(true)
   const [body, setBody] = useState('')
@@ -43,6 +45,7 @@ export function InlineComments({ postId, userId }: Props) {
     if (!error && data) {
       setComments(prev => [...prev, data as Comment])
       setBody('')
+      onCommentAdded?.()
     }
     setSubmitting(false)
   }
@@ -50,6 +53,7 @@ export function InlineComments({ postId, userId }: Props) {
   async function handleDelete(commentId: string) {
     await supabase.from('comments').delete().eq('id', commentId)
     setComments(prev => prev.filter(c => c.id !== commentId))
+    onCommentDeleted?.()
   }
 
   if (loading) return (

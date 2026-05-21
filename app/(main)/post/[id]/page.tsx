@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
-import { PostCard } from '@/components/post/PostCard'
+import { PostDetail } from '@/components/post/PostDetail'
 import { CommentSection } from '@/components/post/CommentSection'
 import type { Post, Comment } from '@/types/database'
 
@@ -18,14 +18,20 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
   if (!post) notFound()
 
-  const isLiked = user
-    ? await supabase.from('likes').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data)
-    : false
+  const [isLiked, isSaved, { data: postItems }] = await Promise.all([
+    user
+      ? supabase.from('likes').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data)
+      : Promise.resolve(false),
+    user
+      ? supabase.from('saved_posts').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data)
+      : Promise.resolve(false),
+    supabase.from('post_items').select('*').eq('post_id', id).order('display_order', { ascending: true }),
+  ])
 
   return (
     <>
       <TopBar title="投稿" left={<BackButton />} />
-      <PostCard post={post as Post} userId={user?.id} isLiked={isLiked} />
+      <PostDetail post={{ ...post, post_items: postItems ?? [] } as Post} userId={user?.id} isLiked={isLiked} isSaved={isSaved} />
       <CommentSection
         postId={id}
         userId={user?.id ?? null}

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
+import { BackButton } from '@/components/ui/BackButton'
 import { ProfileEditForm } from '@/components/profile/ProfileEditForm'
 import type { Profile } from '@/types/database'
 
@@ -19,7 +20,7 @@ export default async function ProfileEditPage() {
 
   return (
     <>
-      <TopBar title="プロフィールを編集" />
+      <TopBar title="プロフィールを編集" left={<BackButton href={`/profile/${profileRaw.username}`} />} />
       <ProfileEditForm profile={profileRaw as Profile} />
     </>
   )

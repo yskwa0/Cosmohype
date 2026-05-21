@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { BackButton } from '@/components/ui/BackButton'
 import { TopBar } from '@/components/layout/TopBar'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
@@ -7,7 +8,18 @@ import { Avatar } from '@/components/ui/Avatar'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import { createClient } from '@/lib/supabase/server'
 import type { StyleId } from '@/lib/style-id/types'
-import type { Profile } from '@/types/database'
+
+type GridPost = {
+  id: string
+  caption: string | null
+  imageUrl: string
+  profile: {
+    id: string
+    username: string
+    display_name: string | null
+    avatar_url: string | null
+  }
+}
 
 export default async function CosmoStylePage({
   params,
@@ -18,31 +30,51 @@ export default async function CosmoStylePage({
   const style = STYLE_TYPES[styleId as StyleId]
   if (!style) notFound()
 
-  const others = Object.values(STYLE_TYPES).filter(s => s.id !== styleId)
-
   const supabase = await createClient()
-  const { data: users } = await supabase
+
+  // このスタイルの公開ユーザーIDを取得
+  const { data: profileData } = await supabase
     .from('profiles')
-    .select('id, username, display_name, avatar_url, followers_count')
+    .select('id')
     .eq('style_id', styleId)
     .eq('is_private', false)
-    .order('followers_count', { ascending: false })
-    .limit(20)
 
-  const styleUsers = (users ?? []) as Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'followers_count'>[]
+  const profileIds = (profileData ?? []).map(p => p.id)
+
+  // 投稿を取得（画像あり・最新順）
+  let gridPosts: GridPost[] = []
+  if (profileIds.length > 0) {
+    const { data: rawPosts } = await supabase
+      .from('posts')
+      .select('id, caption, user_id, profiles(id, username, display_name, avatar_url), post_images(url, display_order)')
+      .in('user_id', profileIds)
+      .order('created_at', { ascending: false })
+      .limit(30)
+
+    gridPosts = (rawPosts ?? [])
+      .map(p => {
+        const images = (p.post_images ?? []) as { url: string; display_order: number }[]
+        images.sort((a, b) => a.display_order - b.display_order)
+        const imageUrl = images[0]?.url
+        const profile = p.profiles as { id: string; username: string; display_name: string | null; avatar_url: string | null } | null
+        if (!imageUrl || !profile) return null
+        return { id: p.id, caption: p.caption, imageUrl, profile }
+      })
+      .filter((p): p is GridPost => p !== null)
+      .slice(0, 20)
+  }
 
   return (
     <>
       <TopBar title={style.name} left={<BackButton href="/cosmo" />} />
 
-      {/* ── ヒーロー ── */}
+      {/* キャラクター＋説明 */}
       <div
         className="relative flex flex-col items-center justify-center pt-10 pb-8 px-5 gap-4"
         style={{
           background: `linear-gradient(160deg, ${style.palette[0]}30 0%, var(--bg) 60%)`,
         }}
       >
-        {/* グラデーションライン */}
         <div
           className="absolute top-0 left-0 right-0 h-[3px]"
           style={{ background: style.gradient }}
@@ -64,208 +96,68 @@ export default async function CosmoStylePage({
           >
             {style.subtitle}
           </span>
-        </div>
-      </div>
-
-      {/* ── 詳細コンテンツ ── */}
-      <div className="px-5 pb-10 flex flex-col gap-5">
-
-        {/* 説明文 */}
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-        >
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-sub)' }}>
+          <p className="text-sm leading-relaxed mt-1" style={{ color: 'var(--text-sub)' }}>
             {style.description}
           </p>
         </div>
+      </div>
 
-        {/* 似合う色 */}
-        <div
-          className="rounded-2xl p-5"
-          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-        >
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
-            似合う色
-          </p>
-          <div className="flex gap-3">
-            {style.palette.map((color, i) => (
-              <div key={i} className="flex flex-col items-center gap-1.5">
-                <div
-                  className="w-12 h-12 rounded-2xl flex-shrink-0"
-                  style={{ background: color, border: '1px solid var(--border)' }}
-                />
-                <span className="text-[9px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                  {color.toUpperCase()}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* 投稿グリッド */}
+      <div className="px-4 pb-10">
+        <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
+          このスタイルの人
+        </p>
 
-        {/* 特徴 */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
-            特徴
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {style.traits.map(t => (
-              <span
-                key={t}
-                className="px-3 py-1.5 rounded-full text-xs font-semibold"
-                style={{
-                  background: 'var(--purple-dim)',
-                  color: 'var(--purple)',
-                  border: '1px solid var(--border)',
-                }}
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* おすすめアイテム */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
-            おすすめアイテム・スタイル
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {style.keywords.map(k => (
-              <span
-                key={k}
-                className="px-3 py-1.5 rounded-full text-xs font-medium"
-                style={{
-                  background: 'var(--bg-elevated)',
-                  color: 'var(--text-sub)',
-                  border: '1px solid var(--border)',
-                }}
-              >
-                # {k}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* このスタイルのユーザー */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: 'var(--text-muted)' }}>
-            このスタイルのユーザー
-          </p>
-
-          {styleUsers.length === 0 ? (
-            <div
-              className="rounded-2xl p-6 flex flex-col items-center gap-2"
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-            >
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                まだユーザーがいません
-              </p>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                STYLE ID診断でこのスタイルが出たら登録しよう
-              </p>
-            </div>
-          ) : (
-            <div
-              className="rounded-2xl overflow-hidden"
-              style={{ border: '1px solid var(--border)' }}
-            >
-              {styleUsers.map((user, i) => (
-                <Link
-                  key={user.id}
-                  href={`/profile/${user.username}`}
-                  className="flex items-center gap-3 px-4 py-3 transition-colors active:opacity-75"
-                  style={{
-                    background: 'var(--bg-elevated)',
-                    borderTop: i > 0 ? '1px solid var(--border)' : undefined,
-                  }}
-                >
-                  <Avatar src={user.avatar_url} username={user.username} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
-                      {user.display_name ?? user.username}
-                    </p>
-                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-                      @{user.username}
-                    </p>
-                  </div>
-                  <p className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-                    {user.followers_count.toLocaleString()} フォロワー
-                  </p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* CTA */}
-        <div className="flex flex-col gap-3 pt-2">
-          <Link
-            href="/style-id"
-            className="w-full h-14 rounded-2xl flex items-center justify-center text-base font-semibold text-white transition-transform duration-75 active:scale-[0.97]"
-            style={{
-              background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
-              boxShadow: '0 4px 20px rgba(124,58,237,0.4)',
-            }}
+        {gridPosts.length === 0 ? (
+          <div
+            className="rounded-2xl p-8 flex flex-col items-center gap-2"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
           >
-            STYLE ID診断をする ✨
-          </Link>
-        </div>
-
-        {/* 他のSTYLE IDも見る */}
-        <div className="flex flex-col gap-3 pt-2">
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
-            他のSTYLE IDも見る
-          </p>
-
-          {/* 横スクロールカード */}
-          <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-            {others.map(s => (
+            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
+              まだ投稿がありません
+            </p>
+            <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+              STYLE IDを設定して投稿すると<br />ここに表示されます
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-1.5">
+            {gridPosts.map(post => (
               <Link
-                key={s.id}
-                href={`/cosmo/${s.id}`}
-                className="flex-shrink-0 active:opacity-75 transition-opacity duration-75"
+                key={post.id}
+                href={`/profile/${post.profile.username}`}
+                className="block active:opacity-80 transition-opacity"
               >
                 <div
-                  className="w-28 rounded-2xl overflow-hidden flex flex-col"
-                  style={{
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border)',
-                  }}
+                  className="relative rounded-2xl overflow-hidden"
+                  style={{ aspectRatio: '3/4' }}
                 >
-                  <div className="h-[3px]" style={{ background: s.gradient }} />
-                  <div className="flex flex-col items-center gap-1.5 px-2 pt-3 pb-3">
-                    <StyleAlien styleId={s.id as StyleId} size={52} />
-                    <p
-                      className="text-[11px] font-bold text-center leading-tight"
-                      style={{ color: 'var(--text)' }}
-                    >
-                      {s.name}
-                    </p>
-                    <p
-                      className="text-[9px] text-center"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      {s.subtitle}
+                  <Image
+                    src={post.imageUrl}
+                    alt={post.caption ?? 'コーデ'}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 448px) 50vw, 224px"
+                  />
+                  {/* グラデーションオーバーレイ */}
+                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent" />
+                  {/* ユーザー情報 */}
+                  <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 flex items-center gap-1.5">
+                    <Avatar
+                      src={post.profile.avatar_url}
+                      username={post.profile.username}
+                      size="sm"
+                      className="ring-1 ring-white/30 flex-shrink-0"
+                    />
+                    <p className="text-white text-xs font-semibold truncate leading-none">
+                      {post.profile.display_name ?? post.profile.username}
                     </p>
                   </div>
                 </div>
               </Link>
             ))}
           </div>
-
-          <Link
-            href="/cosmo"
-            className="w-full h-11 rounded-2xl flex items-center justify-center text-sm font-semibold transition-all duration-75 active:scale-[0.97] active:opacity-80"
-            style={{
-              background: 'var(--bg-elevated)',
-              border: '1px solid var(--border)',
-              color: 'var(--text-sub)',
-            }}
-          >
-            すべてのSTYLE IDを見る
-          </Link>
-        </div>
+        )}
       </div>
     </>
   )

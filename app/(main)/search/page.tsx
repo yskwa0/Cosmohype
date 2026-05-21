@@ -8,6 +8,7 @@ import { SearchInput } from '@/components/search/SearchInput'
 import { SearchHistory } from '@/components/search/SearchHistory'
 import Link from 'next/link'
 import type { Post, Profile } from '@/types/database'
+import { getTodayHypeTheme } from '@/lib/hypeThemes'
 
 export const dynamic = 'force-dynamic'
 
@@ -152,6 +153,7 @@ async function DiscoverView({ userId }: { userId: string }) {
     .from('profiles')
     .select('*')
     .not('id', 'in', `(${[...followingIds].join(',')})`)
+    .eq('is_private', false)
     .order('followers_count', { ascending: false })
     .limit(30)
 
@@ -165,9 +167,6 @@ async function DiscoverView({ userId }: { userId: string }) {
         .slice(0, 6)
         .map(({ user }) => user)
     : []
-
-  const similarIds = new Set(similar.map(u => u.id))
-  const recommended = allUsers.filter(u => !similarIds.has(u.id)).slice(0, 10)
 
   return (
     <>
@@ -192,19 +191,6 @@ async function DiscoverView({ userId }: { userId: string }) {
           </section>
         )}
 
-        {recommended.length > 0 && (
-          <section>
-            <h2 className="px-4 pt-2 pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-              おすすめユーザー
-            </h2>
-            <div className="flex flex-col">
-              {recommended.map(u => (
-                <UserRow key={u.id} user={u} userId={userId} myTags={myTags} showTags={false} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {allUsers.length === 0 && (
           <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
             <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
@@ -219,6 +205,8 @@ async function DiscoverView({ userId }: { userId: string }) {
         )}
 
         <StyleIdBanner />
+        <CosmoBanner />
+        <HypeBanner />
       </div>
     </>
   )
@@ -289,6 +277,160 @@ function StyleIdBanner() {
             <div
               className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(255,255,255,0.18)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </Link>
+    </section>
+  )
+}
+
+function HypeBanner() {
+  const { label: theme } = getTodayHypeTheme()
+  return (
+    <section className="px-4 pb-6">
+      <h2 className="pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        HYPE
+      </h2>
+      <Link href="/hype" className="block active:opacity-80 transition-opacity">
+        <div
+          className="relative rounded-3xl overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #1C0030 0%, #7C1D6F 50%, #EC4899 100%)' }}
+        >
+          {/* 星の装飾 */}
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 360 110" preserveAspectRatio="xMidYMid slice" aria-hidden>
+            {[
+              [25, 18], [90, 60], [145, 12], [195, 75], [245, 28], [305, 55], [345, 22],
+              [60, 88], [170, 42], [285, 88], [140, 88], [325, 38],
+            ].map(([x, y], i) => (
+              <circle key={i} cx={x} cy={y} r={i % 3 === 0 ? 1.5 : 1} fill="white" opacity={0.2 + (i % 4) * 0.1} />
+            ))}
+          </svg>
+
+          <div className="relative flex items-center gap-4 px-5 py-5">
+            {/* アイコン */}
+            <div
+              className="w-[60px] h-[60px] rounded-2xl flex-shrink-0 flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}
+            >
+              <svg viewBox="0 0 60 60" width={40} height={40} aria-hidden>
+                {/* 放射線 */}
+                <line x1={30} y1={6} x2={30} y2={15} stroke="white" strokeWidth={2} strokeLinecap="round" opacity={0.75} />
+                <line x1={30} y1={45} x2={30} y2={54} stroke="white" strokeWidth={2} strokeLinecap="round" opacity={0.75} />
+                <line x1={6} y1={30} x2={15} y2={30} stroke="white" strokeWidth={2} strokeLinecap="round" opacity={0.75} />
+                <line x1={45} y1={30} x2={54} y2={30} stroke="white" strokeWidth={2} strokeLinecap="round" opacity={0.75} />
+                <line x1={13} y1={13} x2={19} y2={19} stroke="white" strokeWidth={1.5} strokeLinecap="round" opacity={0.5} />
+                <line x1={41} y1={41} x2={47} y2={47} stroke="white" strokeWidth={1.5} strokeLinecap="round" opacity={0.5} />
+                <line x1={47} y1={13} x2={41} y2={19} stroke="white" strokeWidth={1.5} strokeLinecap="round" opacity={0.5} />
+                <line x1={13} y1={47} x2={19} y2={41} stroke="white" strokeWidth={1.5} strokeLinecap="round" opacity={0.5} />
+                {/* 外側ダイヤ */}
+                <path d="M30 13 L44 30 L30 47 L16 30Z" fill="#FBCFE8" opacity={0.9} />
+                {/* 内側ダイヤ */}
+                <path d="M30 21 L38 30 L30 39 L22 30Z" fill="white" opacity={0.95} />
+                {/* 中心 */}
+                <circle cx={30} cy={30} r={4.5} fill="#EC4899" />
+              </svg>
+            </div>
+
+            {/* テキスト */}
+            <div className="flex-1 min-w-0">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: 'rgba(249,168,212,0.85)' }}
+              >
+                今日のHYPE
+              </span>
+              <h3 className="text-white font-bold text-[15px] leading-snug mt-0.5">
+                {theme}
+              </h3>
+              <p className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                今日のテーマでコーデを投稿してみよう
+              </p>
+            </div>
+
+            {/* 矢印 */}
+            <div
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.18)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </Link>
+    </section>
+  )
+}
+
+function CosmoBanner() {
+  return (
+    <section className="px-4 pb-6">
+      <h2 className="pb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        COSMO
+      </h2>
+      <Link href="/cosmo" className="block active:opacity-80 transition-opacity">
+        <div
+          className="relative rounded-3xl overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #0F0A2E 0%, #1E1B4B 50%, #4C1D95 100%)' }}
+        >
+          {/* 星の装飾 */}
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 360 110" preserveAspectRatio="xMidYMid slice" aria-hidden>
+            {[
+              [20, 30], [70, 10], [120, 75], [180, 20], [230, 80], [280, 30], [350, 65],
+              [45, 65], [160, 55], [260, 12], [310, 85], [90, 90],
+            ].map(([x, y], i) => (
+              <circle key={i} cx={x} cy={y} r={i % 3 === 0 ? 1.5 : 1} fill="white" opacity={0.2 + (i % 4) * 0.1} />
+            ))}
+            {/* 軌道リング */}
+            <ellipse cx={55} cy={55} rx={28} ry={18} fill="none" stroke="rgba(167,139,250,0.15)" strokeWidth={1} />
+          </svg>
+
+          <div className="relative flex items-center gap-4 px-5 py-5">
+            {/* アイコン */}
+            <div
+              className="w-[60px] h-[60px] rounded-2xl flex-shrink-0 flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.10)', backdropFilter: 'blur(8px)' }}
+            >
+              <svg viewBox="0 0 60 60" width={40} height={40} aria-hidden>
+                {/* 中央の惑星 */}
+                <circle cx={30} cy={30} r={10} fill="#7C3AED" opacity={0.9} />
+                <ellipse cx={30} cy={30} rx={18} ry={6} fill="none" stroke="#A78BFA" strokeWidth={1.2} opacity={0.7} />
+                {/* 周回する点（ユーザー） */}
+                <circle cx={30} cy={12} r={3} fill="#E9D5FF" />
+                <circle cx={48} cy={30} r={2.5} fill="#C4B5FD" />
+                <circle cx={30} cy={48} r={2.5} fill="#DDD6FE" />
+                <circle cx={12} cy={30} r={2} fill="#A78BFA" />
+                {/* 星 */}
+                <text x={44} y={16} fontSize={9} fill="#FCD34D">✦</text>
+              </svg>
+            </div>
+
+            {/* テキスト */}
+            <div className="flex-1 min-w-0">
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest"
+                style={{ color: 'rgba(167,139,250,0.8)' }}
+              >
+                STYLE ID DISCOVERY
+              </span>
+              <h3 className="text-white font-bold text-[15px] leading-snug mt-0.5">
+                同じスタイルの仲間を<br />探してみよう
+              </h3>
+              <p className="text-[11px] mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                STYLE IDで絞って、感覚の合う人を見つけよう
+              </p>
+            </div>
+
+            {/* 矢印 */}
+            <div
+              className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.15)' }}
             >
               <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />

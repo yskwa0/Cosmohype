@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
 import { LogoutButton } from './LogoutButton'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
+import { StartDmButton } from '@/components/dm/StartDmButton'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { Profile } from '@/types/database'
 import type { StyleId } from '@/lib/style-id/types'
@@ -90,9 +91,12 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
             {profile.display_name ?? profile.username}
           </h1>
           {profile.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
-            <div className="flex-shrink-0" title={STYLE_TYPES[profile.style_id as StyleId].name}>
+            <Link
+              href={`/cosmo/${profile.style_id}`}
+              className="flex-shrink-0 transition-opacity active:opacity-70"
+            >
               <StyleAlien styleId={profile.style_id as StyleId} size={24} />
-            </div>
+            </Link>
           )}
         </div>
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>@{profile.username}</p>
@@ -127,31 +131,38 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
           <LogoutButton />
         </div>
       ) : currentUserId && (
-        <div className="relative" style={{ overflow: 'visible' }}>
-          <button
-            onClick={toggleFollow}
-            disabled={loading}
-            className="w-full h-9 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-            style={following
-              ? { background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }
-              : { background: 'var(--purple-glow)', color: '#fff' }
-            }
-          >
-            {following ? 'フォロー中' : 'フォローする'}
-          </button>
-          {sparkling && (
-            <div ref={starsRef} className="absolute inset-0 pointer-events-none" style={{ overflow: 'visible', zIndex: 50 }}>
-              {Array.from({ length: STAR_COUNT }).map((_, i) => (
-                <span
-                  key={i}
-                  className="absolute top-1/2 left-1/2 select-none text-sm"
-                  style={{ color: i % 2 === 0 ? 'var(--purple)' : '#E9D5FF' }}
-                >
-                  ★
-                </span>
-              ))}
-            </div>
-          )}
+        <div className="flex gap-2">
+          <div className="relative flex-1" style={{ overflow: 'visible' }}>
+            <button
+              onClick={toggleFollow}
+              disabled={loading}
+              className="w-full h-9 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              style={following
+                ? { background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }
+                : { background: 'var(--purple-glow)', color: '#fff' }
+              }
+            >
+              {following ? 'フォロー中' : 'フォローする'}
+            </button>
+            {sparkling && (
+              <div ref={starsRef} className="absolute inset-0 pointer-events-none" style={{ overflow: 'visible', zIndex: 50 }}>
+                {Array.from({ length: STAR_COUNT }).map((_, i) => (
+                  <span
+                    key={i}
+                    className="absolute top-1/2 left-1/2 select-none text-sm"
+                    style={{ color: i % 2 === 0 ? 'var(--purple)' : '#E9D5FF' }}
+                  >
+                    ★
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <StartDmButton
+            targetUserId={profile.id}
+            currentUserId={currentUserId}
+            className="flex-1"
+          />
         </div>
       )}
     </div>

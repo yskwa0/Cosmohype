@@ -1,15 +1,33 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TopBar } from '@/components/layout/TopBar'
 import { PostCard } from '@/components/post/PostCard'
-import { Avatar } from '@/components/ui/Avatar'
 import { FeedTabs } from '@/components/layout/FeedTabs'
+import { FeedSwipeWrapper } from '@/components/layout/FeedSwipeWrapper'
 import type { Post, Profile } from '@/types/database'
 
+const VALID_TABS = ['recommended', 'following'] as const
+type FeedTab = typeof VALID_TABS[number]
+
+function scorePost(post: Post, userStyleId: string | null, followingIds: Set<string>): number {
+  let score = 0
+
+  if (userStyleId && post.profiles?.style_id === userStyleId) score += 40
+  if (post.tags?.some(t => t.toLowerCase() === 'hype')) score += 30
+  score += (post.likes_count ?? 0) * 2
+  score += (post.saves_count ?? 0) * 5
+  score += (post.comments_count ?? 0) * 3
+  if (Date.now() - new Date(post.created_at).getTime() < 24 * 60 * 60 * 1000) score += 15
+  if (followingIds.has(post.user_id)) score += 30
+
+  return score
+}
+
 export default async function FeedPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const { tab } = await searchParams
-  const isFollowing = tab === 'following'
+  const { tab: rawTab } = await searchParams
+  const tab: FeedTab = VALID_TABS.includes(rawTab as FeedTab) ? (rawTab as FeedTab) : 'recommended'
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -24,68 +42,89 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   if (!profileData) redirect('/profile/setup')
   const profile = profileData as Profile
 
-  let posts: Post[] = []
-  let likedPostIds = new Set<string>()
-  let savedPostIds = new Set<string>()
-
   const { data: blocksData } = await supabase
     .from('blocks')
     .select('blocked_id')
     .eq('blocker_id', user.id)
   const blockedIds = (blocksData ?? []).map(b => b.blocked_id)
 
-  if (isFollowing) {
-    const { data: follows } = await supabase
-      .from('follows')
-      .select('following_id')
-      .eq('follower_id', user.id)
+  const [{ data: likedData }, { data: savedData }, { data: followsData }] = await Promise.all([
+    supabase.from('likes').select('post_id').eq('user_id', user.id),
+    supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
+    supabase.from('follows').select('following_id').eq('follower_id', user.id),
+  ])
+  const likedPostIds = new Set((likedData ?? []).map(l => l.post_id))
+  const savedPostIds = new Set((savedData ?? []).map(s => s.post_id))
+  const followingIds = new Set((followsData ?? []).map(f => f.following_id))
 
-    const followingIds = (follows ?? []).map(f => f.following_id)
+  let posts: Post[] = []
 
-    const validFollowingIds = followingIds.filter(id => !blockedIds.includes(id))
+  if (tab === 'following') {
+    const validFollowingIds = [...followingIds].filter(id => !blockedIds.includes(id))
     if (validFollowingIds.length > 0) {
-      let q = supabase.from('posts').select(`*, profiles(*), post_images(*)`).in('user_id', validFollowingIds)
+      let q = supabase
+        .from('posts')
+        .select(`*, profiles(*), post_images(*)`)
+        .in('user_id', validFollowingIds)
+        .eq('is_archived', false)
       if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-      const [{ data: postsData }, { data: likedData }, { data: savedData }] = await Promise.all([
-        q.order('created_at', { ascending: false }).limit(30),
-        supabase.from('likes').select('post_id').eq('user_id', user.id),
-        supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
-      ])
-      posts = (postsData ?? []) as Post[]
-      likedPostIds = new Set((likedData ?? []).map(l => l.post_id))
-      savedPostIds = new Set((savedData ?? []).map(s => s.post_id))
+      const { data } = await q.order('created_at', { ascending: false }).limit(50)
+      posts = (data ?? []) as Post[]
     }
   } else {
-    let q = supabase.from('posts').select(`*, profiles(*), post_images(*)`)
+    let q = supabase.from('posts').select(`*, profiles(*), post_images(*)`).eq('is_archived', false)
     if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-    const [{ data: postsData }, { data: likedData }, { data: savedData }] = await Promise.all([
-      q.order('created_at', { ascending: false }).limit(30),
-      supabase.from('likes').select('post_id').eq('user_id', user.id),
-      supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
-    ])
-    posts = (postsData ?? []) as Post[]
-    likedPostIds = new Set((likedData ?? []).map(l => l.post_id))
-    savedPostIds = new Set((savedData ?? []).map(s => s.post_id))
+    const { data } = await q.order('created_at', { ascending: false }).limit(100)
+    posts = (data ?? []) as Post[]
+  }
+
+  posts = posts.filter(p =>
+    !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id)
+  )
+
+  if (tab === 'recommended') {
+    posts = [...posts].sort((a, b) =>
+      scorePost(b, profile.style_id, followingIds) - scorePost(a, profile.style_id, followingIds)
+    )
   }
 
   return (
     <>
       <TopBar
         showLogo
-        right={<Avatar src={profile.avatar_url} username={profile.username} size="sm" />}
+        right={
+          <Link
+            href="/dm"
+            className="w-9 h-9 flex items-center justify-center rounded-full"
+            style={{ color: 'var(--text-sub)' }}
+            aria-label="メッセージ"
+          >
+            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+            </svg>
+          </Link>
+        }
       />
       <Suspense>
         <FeedTabs />
       </Suspense>
-      <div className="flex flex-col gap-3 py-4">
-        {posts.length === 0 ? (
-          isFollowing ? <EmptyFollowingFeed /> : <EmptyFeed />
-        ) : (
-          posts.map(post => (
-            <PostCard key={post.id} post={post} userId={user.id} isLiked={likedPostIds.has(post.id)} isSaved={savedPostIds.has(post.id)} />
-          ))
-        )}
-      </div>
+      <FeedSwipeWrapper currentTab={tab}>
+        <div className="flex flex-col gap-3 py-4 feed-animate-in">
+          {posts.length === 0 ? (
+            tab === 'following' ? <EmptyFollowingFeed /> : <EmptyFeed />
+          ) : (
+            posts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                userId={user.id}
+                isLiked={likedPostIds.has(post.id)}
+                isSaved={savedPostIds.has(post.id)}
+              />
+            ))
+          )}
+        </div>
+      </FeedSwipeWrapper>
     </>
   )
 }

@@ -4,14 +4,10 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import { ImageUpload } from './ImageUpload'
-
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+import type { PostItem } from '@/types/database'
 
 const CATEGORIES = ['トップス', 'ボトムス', 'アウター', 'シューズ', 'バッグ', 'アクセサリー', 'ハット/キャップ', 'その他']
-
 const SILHOUETTES = ['オーバーサイズ', 'ジャストサイズ', 'タイト', 'ワイド', 'ストレート', 'フレア', '短丈', 'ロング丈', 'レイヤード']
-
 const GENRES = ['ストリート', 'カジュアル', 'モード', 'きれいめ', '韓国', '古着', 'Y2K', 'ガーリー', 'ミニマル', 'スポーティー', 'フェミニン', 'ボーイッシュ', 'アメカジ', 'グランジ', 'サブカル', 'ノームコア', 'ラグジュアリー', 'テック系']
 
 type ItemDraft = {
@@ -32,23 +28,47 @@ const EMPTY_DRAFT: ItemDraft = {
   purchase_url: '',
 }
 
-export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: string }) {
+function itemToDraft(item: PostItem): ItemDraft {
+  return {
+    item_name: item.item_name,
+    category: item.category,
+    color: item.color ?? '',
+    silhouette: item.silhouette ?? '',
+    genre: item.genre ?? '',
+    purchase_url: item.purchase_url ?? '',
+  }
+}
+
+export function PostEditForm({
+  postId,
+  initialCaption,
+  initialTags,
+  initialBrandTags,
+  initialHypeTheme,
+  initialItems,
+}: {
+  postId: string
+  initialCaption: string
+  initialTags: string[]
+  initialBrandTags: string[]
+  initialHypeTheme?: string
+  initialItems: PostItem[]
+}) {
   const router = useRouter()
   const supabase = createClient()
 
-  const [images, setImages] = useState<File[]>([])
-  const [caption, setCaption] = useState('')
+  const [caption, setCaption] = useState(initialCaption)
   const [tagInput, setTagInput] = useState('')
   const [brandInput, setBrandInput] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [brandTags, setBrandTags] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>(initialTags)
+  const [brandTags, setBrandTags] = useState<string[]>(initialBrandTags)
 
-  // 1件目: 常時表示・必須
-  const [firstItem, setFirstItem] = useState<ItemDraft>(EMPTY_DRAFT)
-
-  // 2件目以降: 確定済みカード
-  const [extraItems, setExtraItems] = useState<ItemDraft[]>([])
-  // 2件目以降追加フォーム
+  const [firstItem, setFirstItem] = useState<ItemDraft>(
+    initialItems.length > 0 ? itemToDraft(initialItems[0]) : EMPTY_DRAFT
+  )
+  const [extraItems, setExtraItems] = useState<ItemDraft[]>(
+    initialItems.slice(1).map(itemToDraft)
+  )
   const [extraDraftOpen, setExtraDraftOpen] = useState(false)
   const [extraDraft, setExtraDraft] = useState<ItemDraft>(EMPTY_DRAFT)
   const [extraDraftError, setExtraDraftError] = useState('')
@@ -95,7 +115,6 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {}
-    if (images.length === 0) newErrors.images = '画像を1枚以上追加してください'
     if (!firstItem.item_name.trim() || !firstItem.category) {
       newErrors.items = '着用アイテム名とカテゴリを入力してください'
     }
@@ -109,43 +128,29 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
     setLoading(true)
     try {
-      const { data: post, error: postError } = await supabase
+      const { error: postError } = await supabase
         .from('posts')
-        .insert({
-          user_id: userId,
+        .update({
           caption: caption.trim() || null,
           tags,
           brand_tags: brandTags,
-          hype_theme: hypeTheme ?? null,
         })
-        .select()
-        .single()
+        .eq('id', postId)
 
       if (postError) throw postError
 
-      const uploadPromises = images.map(async (file, i) => {
-        if (!ALLOWED_TYPES.includes(file.type)) return
-        const ext = file.name.split('.').pop()
-        const path = `${userId}/${post.id}/${i}.${ext}`
-        const { error } = await supabase.storage
-          .from('posts')
-          .upload(path, file, { contentType: file.type })
-        if (error) throw error
+      // 既存 post_items を削除して再挿入
+      const { error: deleteError } = await supabase
+        .from('post_items')
+        .delete()
+        .eq('post_id', postId)
 
-        const { data } = supabase.storage.from('posts').getPublicUrl(path)
-        await supabase.from('post_images').insert({
-          post_id: post.id,
-          url: data.publicUrl,
-          display_order: i,
-        })
-      })
-
-      await Promise.all(uploadPromises)
+      if (deleteError) throw deleteError
 
       const allItems = [firstItem, ...extraItems]
-      const { error: itemsError } = await supabase.from('post_items').insert(
+      const { error: insertError } = await supabase.from('post_items').insert(
         allItems.map((item, i) => ({
-          post_id: post.id,
+          post_id: postId,
           item_name: item.item_name.trim(),
           category: item.category,
           color: item.color.trim() || null,
@@ -155,13 +160,14 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           display_order: i,
         }))
       )
-      if (itemsError) throw itemsError
 
-      router.push('/feed')
+      if (insertError) throw insertError
+
+      router.push(`/post/${postId}`)
       router.refresh()
     } catch (err) {
       console.error(err)
-      setErrors({ submit: '投稿に失敗しました。もう一度お試しください。' })
+      setErrors({ submit: '保存に失敗しました。もう一度お試しください。' })
     } finally {
       setLoading(false)
     }
@@ -169,7 +175,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-4 pb-10">
-      {hypeTheme && (
+      {initialHypeTheme && (
         <div
           className="flex items-start gap-3 rounded-xl px-4 py-3"
           style={{ background: 'var(--purple-dim)', border: '1px solid var(--border)' }}
@@ -179,15 +185,10 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
             <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: 'var(--purple)' }}>
               今日のHYPE
             </p>
-            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{hypeTheme}</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>{initialHypeTheme}</p>
           </div>
         </div>
       )}
-
-      <div>
-        <p className="text-sm font-medium mb-2" style={{ color: 'var(--label-text)' }}>コーデ写真 *</p>
-        <ImageUpload files={images} onChange={setImages} error={errors.images} />
-      </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>キャプション</label>
@@ -387,7 +388,6 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           </div>
         ))}
 
-        {/* 2件目以降: 追加ボタン & フォーム */}
         {!extraDraftOpen && (
           <button
             type="button"
@@ -516,7 +516,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
       )}
 
       <Button type="submit" loading={loading} fullWidth className="h-12">
-        投稿する
+        保存する
       </Button>
     </form>
   )

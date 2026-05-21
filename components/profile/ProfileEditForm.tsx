@@ -47,6 +47,7 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
   const [selectedStyleId, setSelectedStyleId] = useState<StyleId | null>(
     (profile.style_id as StyleId) ?? null
   )
+  const [isPrivate, setIsPrivate] = useState(profile.is_private ?? false)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -99,6 +100,7 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
         style_tags: selectedTags,
         style_id: selectedStyleId,
         theme: selectedTheme,
+        is_private: isPrivate,
       }).eq('id', profile.id)
 
       if (error) throw error
@@ -306,6 +308,32 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
             <p className="text-xs" style={{ color: 'var(--hint-text)' }}>
               保存後、次のページ読み込みで反映されます
             </p>
+          </div>
+
+          {/* Private Account Toggle */}
+          <div
+            className="flex items-center justify-between rounded-2xl px-4 py-4"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+          >
+            <div className="flex flex-col gap-0.5 pr-4">
+              <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>非公開アカウント</p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                オンにすると、あなたのプロフィールはCOSMOなどの公開一覧に表示されません。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPrivate(prev => !prev)}
+              className="relative flex-shrink-0 w-12 h-7 rounded-full transition-colors duration-200 focus:outline-none"
+              style={{ background: isPrivate ? 'var(--purple)' : 'var(--border)' }}
+              aria-checked={isPrivate}
+              role="switch"
+            >
+              <span
+                className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform duration-200"
+                style={{ transform: isPrivate ? 'translateX(20px)' : 'translateX(0px)' }}
+              />
+            </button>
           </div>
 
           {errors.submit && (
