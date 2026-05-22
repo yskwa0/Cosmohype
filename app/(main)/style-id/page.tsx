@@ -35,7 +35,7 @@ export default function StyleIdTopPage() {
           style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
         >
           {[
-            { step: '01', text: '8問の質問に答える（約1分）' },
+            { step: '01', text: '15問の質問に答える（約2分）' },
             { step: '02', text: 'あなたのスタイルIDが判明' },
             { step: '03', text: '相性診断でコーデ仲間を探す' },
           ].map(({ step, text }) => (

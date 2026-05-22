@@ -76,7 +76,8 @@ export type PostItem = {
   id: string
   post_id: string
   item_name: string
-  category: string
+  brand_name: string | null
+  category: string | null
   color: string | null
   silhouette: string | null
   genre: string | null
@@ -129,6 +130,13 @@ export type UserBlock = {
   id: string
   blocker_id: string
   blocked_id: string
+  created_at: string
+}
+
+export type StyleDiagnosis = {
+  id: string
+  user_id: string
+  result: string
   created_at: string
 }
 
@@ -274,7 +282,8 @@ export type Database = {
           id: string
           post_id: string
           item_name: string
-          category: string
+          brand_name: string | null
+          category: string | null
           color: string | null
           silhouette: string | null
           genre: string | null
@@ -286,7 +295,8 @@ export type Database = {
           id?: string
           post_id: string
           item_name: string
-          category: string
+          brand_name?: string | null
+          category?: string | null
           color?: string | null
           silhouette?: string | null
           genre?: string | null
@@ -298,7 +308,8 @@ export type Database = {
           id?: string
           post_id?: string
           item_name?: string
-          category?: string
+          brand_name?: string | null
+          category?: string | null
           color?: string | null
           silhouette?: string | null
           genre?: string | null
@@ -622,6 +633,30 @@ export type Database = {
           {
             foreignKeyName: "user_blocks_blocked_id_fkey"
             columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      style_diagnoses: {
+        Row: {
+          id: string
+          user_id: string
+          result: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          result: string
+          created_at?: string
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "style_diagnoses_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

@@ -69,12 +69,17 @@
 .theme-cream-white .logo-dark  { display: none; }
 .theme-cream-white .logo-light { display: block; }
 
+html {
+  background: var(--bg);
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
 }
 
 input::placeholder,
@@ -84,7 +89,16 @@ textarea::placeholder {
 
 ::-webkit-scrollbar { display: none; }
 * { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 2px solid #A855F7; outline-offset: 2px; }
+:focus-visible { outline: none; }
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #A855F7;
+  outline-offset: 2px;
+}
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 @keyframes feedFadeIn {

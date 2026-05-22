@@ -3,8 +3,8 @@ import { useRef, useState } from 'react'
 import Image from 'next/image'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_SIZE_MB = 10
-const MAX_FILES = 5
+const MAX_SIZE_MB = 5
+const MAX_FILES = 3
 
 interface ImageUploadProps {
   files: File[]
@@ -34,8 +34,13 @@ export function ImageUpload({ files, onChange, error }: ImageUploadProps) {
       return
     }
 
-    const merged = [...files, ...selected].slice(0, MAX_FILES)
-    onChange(merged)
+    if (files.length + selected.length > MAX_FILES) {
+      setLocalError(`写真は最大${MAX_FILES}枚まで追加できます`)
+      e.target.value = ''
+      return
+    }
+
+    onChange([...files, ...selected])
     e.target.value = ''
   }
 

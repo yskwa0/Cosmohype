@@ -8,29 +8,13 @@ import { ImageUpload } from './ImageUpload'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
-const CATEGORIES = ['トップス', 'ボトムス', 'アウター', 'シューズ', 'バッグ', 'アクセサリー', 'ハット/キャップ', 'その他']
-
-const SILHOUETTES = ['オーバーサイズ', 'ジャストサイズ', 'タイト', 'ワイド', 'ストレート', 'フレア', '短丈', 'ロング丈', 'レイヤード']
-
-const GENRES = ['ストリート', 'カジュアル', 'モード', 'きれいめ', '韓国', '古着', 'Y2K', 'ガーリー', 'ミニマル', 'スポーティー', 'フェミニン', 'ボーイッシュ', 'アメカジ', 'グランジ', 'サブカル', 'ノームコア', 'ラグジュアリー', 'テック系']
-
 type ItemDraft = {
   item_name: string
-  category: string
-  color: string
-  silhouette: string
-  genre: string
+  brand_name: string
   purchase_url: string
 }
 
-const EMPTY_DRAFT: ItemDraft = {
-  item_name: '',
-  category: '',
-  color: '',
-  silhouette: '',
-  genre: '',
-  purchase_url: '',
-}
+const EMPTY_DRAFT: ItemDraft = { item_name: '', brand_name: '', purchase_url: '' }
 
 export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: string }) {
   const router = useRouter()
@@ -43,15 +27,10 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
   const [tags, setTags] = useState<string[]>([])
   const [brandTags, setBrandTags] = useState<string[]>([])
 
-  // 1件目: 常時表示・必須
-  const [firstItem, setFirstItem] = useState<ItemDraft>(EMPTY_DRAFT)
-
-  // 2件目以降: 確定済みカード
-  const [extraItems, setExtraItems] = useState<ItemDraft[]>([])
-  // 2件目以降追加フォーム
-  const [extraDraftOpen, setExtraDraftOpen] = useState(false)
-  const [extraDraft, setExtraDraft] = useState<ItemDraft>(EMPTY_DRAFT)
-  const [extraDraftError, setExtraDraftError] = useState('')
+  const [items, setItems] = useState<ItemDraft[]>([])
+  const [draftOpen, setDraftOpen] = useState(false)
+  const [draft, setDraft] = useState<ItemDraft>(EMPTY_DRAFT)
+  const [draftError, setDraftError] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -68,37 +47,30 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
     setter(current.filter(t => t !== tag))
   }
 
-  function openExtraDraft() {
-    setExtraDraft(EMPTY_DRAFT)
-    setExtraDraftError('')
-    setExtraDraftOpen(true)
+  function openDraft() {
+    setDraft(EMPTY_DRAFT)
+    setDraftError('')
+    setDraftOpen(true)
   }
 
-  function confirmExtraDraft() {
-    if (!extraDraft.item_name.trim()) {
-      setExtraDraftError('アイテム名を入力してください')
+  function confirmDraft() {
+    if (!draft.item_name.trim()) {
+      setDraftError('アイテム名を入力してください')
       return
     }
-    if (!extraDraft.category) {
-      setExtraDraftError('カテゴリを選択してください')
-      return
-    }
-    setExtraItems(prev => [...prev, { ...extraDraft, item_name: extraDraft.item_name.trim() }])
-    setExtraDraftOpen(false)
-    setExtraDraft(EMPTY_DRAFT)
-    setExtraDraftError('')
+    setItems(prev => [...prev, { ...draft, item_name: draft.item_name.trim() }])
+    setDraftOpen(false)
+    setDraft(EMPTY_DRAFT)
+    setDraftError('')
   }
 
-  function removeExtraItem(index: number) {
-    setExtraItems(prev => prev.filter((_, i) => i !== index))
+  function removeItem(index: number) {
+    setItems(prev => prev.filter((_, i) => i !== index))
   }
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {}
     if (images.length === 0) newErrors.images = '画像を1枚以上追加してください'
-    if (!firstItem.item_name.trim() || !firstItem.category) {
-      newErrors.items = '着用アイテム名とカテゴリを入力してください'
-    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -142,20 +114,18 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
       await Promise.all(uploadPromises)
 
-      const allItems = [firstItem, ...extraItems]
-      const { error: itemsError } = await supabase.from('post_items').insert(
-        allItems.map((item, i) => ({
-          post_id: post.id,
-          item_name: item.item_name.trim(),
-          category: item.category,
-          color: item.color.trim() || null,
-          silhouette: item.silhouette.trim() || null,
-          genre: item.genre.trim() || null,
-          purchase_url: item.purchase_url.trim() || null,
-          display_order: i,
-        }))
-      )
-      if (itemsError) throw itemsError
+      if (items.length > 0) {
+        const { error: itemsError } = await supabase.from('post_items').insert(
+          items.map((item, i) => ({
+            post_id: post.id,
+            item_name: item.item_name,
+            brand_name: item.brand_name.trim() || null,
+            purchase_url: item.purchase_url.trim() || null,
+            display_order: i,
+          }))
+        )
+        if (itemsError) throw itemsError
+      }
 
       router.push('/feed')
       router.refresh()
@@ -266,117 +236,36 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
       {/* 着用アイテム */}
       <div className="flex flex-col gap-3">
-        <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>着用アイテム *</p>
-
-        {/* 1件目: 常時表示 */}
-        <div
-          className="flex flex-col gap-3 rounded-2xl px-4 py-4"
-          style={{ background: 'var(--bg-subtle)', border: `1px solid ${errors.items ? 'rgb(248,113,113)' : 'var(--border)'}` }}
-        >
-          <Input
-            label="アイテム名 *"
-            value={firstItem.item_name}
-            onChange={e => setFirstItem(d => ({ ...d, item_name: e.target.value }))}
-            placeholder="例: オーバーサイズTシャツ"
-          />
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>カテゴリ *</label>
-            <select
-              value={firstItem.category}
-              onChange={e => setFirstItem(d => ({ ...d, category: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 text-sm appearance-none"
-              style={{
-                background: 'var(--input-bg)',
-                color: firstItem.category ? 'var(--input-text)' : 'var(--hint-text)',
-                borderColor: 'var(--input-border)',
-              }}
-            >
-              <option value="" disabled>カテゴリを選択</option>
-              {CATEGORIES.map(c => (
-                <option key={c} value={c} style={{ color: 'var(--input-text)' }}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="色"
-              value={firstItem.color}
-              onChange={e => setFirstItem(d => ({ ...d, color: e.target.value }))}
-              placeholder="例: ホワイト"
-            />
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>シルエット</label>
-              <select
-                value={firstItem.silhouette}
-                onChange={e => setFirstItem(d => ({ ...d, silhouette: e.target.value }))}
-                className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 text-sm appearance-none"
-                style={{
-                  background: 'var(--input-bg)',
-                  color: firstItem.silhouette ? 'var(--input-text)' : 'var(--hint-text)',
-                  borderColor: 'var(--input-border)',
-                }}
-              >
-                <option value="">選択</option>
-                {SILHOUETTES.map(s => (
-                  <option key={s} value={s} style={{ color: 'var(--input-text)' }}>{s}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>系統</label>
-            <select
-              value={firstItem.genre}
-              onChange={e => setFirstItem(d => ({ ...d, genre: e.target.value }))}
-              className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 text-sm appearance-none"
-              style={{
-                background: 'var(--input-bg)',
-                color: firstItem.genre ? 'var(--input-text)' : 'var(--hint-text)',
-                borderColor: 'var(--input-border)',
-              }}
-            >
-              <option value="">選択</option>
-              {GENRES.map(g => (
-                <option key={g} value={g} style={{ color: 'var(--input-text)' }}>{g}</option>
-              ))}
-            </select>
-          </div>
-
-          <Input
-            label="購入先URL"
-            type="url"
-            value={firstItem.purchase_url}
-            onChange={e => setFirstItem(d => ({ ...d, purchase_url: e.target.value }))}
-            placeholder="https://..."
-            hint="任意"
-          />
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>着用アイテム</p>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>任意</span>
         </div>
 
-        {errors.items && (
-          <p className="text-xs text-red-500">{errors.items}</p>
-        )}
-
-        {/* 2件目以降: 確定済みカード */}
-        {extraItems.map((item, i) => (
+        {/* 確定済みカード */}
+        {items.map((item, i) => (
           <div
             key={i}
-            className="flex items-start justify-between gap-2 rounded-xl px-3 py-2.5"
+            className="flex items-start justify-between gap-2 rounded-xl px-3 py-3"
             style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)' }}
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
                 {item.item_name}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                {[item.category, item.color, item.silhouette, item.genre].filter(Boolean).join(' · ')}
-              </p>
+              {item.brand_name && (
+                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
+                  {item.brand_name}
+                </p>
+              )}
+              {item.purchase_url && (
+                <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--purple)' }}>
+                  {item.purchase_url}
+                </p>
+              )}
             </div>
             <button
               type="button"
-              onClick={() => removeExtraItem(i)}
+              onClick={() => removeItem(i)}
               className="flex-shrink-0 mt-0.5"
               aria-label={`${item.item_name}を削除`}
             >
@@ -387,11 +276,11 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           </div>
         ))}
 
-        {/* 2件目以降: 追加ボタン & フォーム */}
-        {!extraDraftOpen && (
+        {/* 追加ボタン */}
+        {!draftOpen && (
           <button
             type="button"
-            onClick={openExtraDraft}
+            onClick={openDraft}
             className="self-start text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
             style={{ color: 'var(--purple)', background: 'var(--purple-dim)', border: '1px solid var(--border)' }}
           >
@@ -399,100 +288,42 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           </button>
         )}
 
-        {extraDraftOpen && (
+        {/* 追加フォーム */}
+        {draftOpen && (
           <div
             className="flex flex-col gap-3 rounded-2xl px-4 py-4"
             style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)' }}
           >
             <Input
               label="アイテム名 *"
-              value={extraDraft.item_name}
-              onChange={e => setExtraDraft(d => ({ ...d, item_name: e.target.value }))}
-              placeholder="例: ワイドデニムパンツ"
+              value={draft.item_name}
+              onChange={e => setDraft(d => ({ ...d, item_name: e.target.value }))}
+              placeholder="例: オーバーサイズTシャツ"
             />
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>カテゴリ *</label>
-              <select
-                value={extraDraft.category}
-                onChange={e => setExtraDraft(d => ({ ...d, category: e.target.value }))}
-                className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 text-sm appearance-none"
-                style={{
-                  background: 'var(--input-bg)',
-                  color: extraDraft.category ? 'var(--input-text)' : 'var(--hint-text)',
-                  borderColor: 'var(--input-border)',
-                }}
-              >
-                <option value="" disabled>カテゴリを選択</option>
-                {CATEGORIES.map(c => (
-                  <option key={c} value={c} style={{ color: 'var(--input-text)' }}>{c}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Input
-                label="色"
-                value={extraDraft.color}
-                onChange={e => setExtraDraft(d => ({ ...d, color: e.target.value }))}
-                placeholder="例: ブラック"
-              />
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>シルエット</label>
-                <select
-                  value={extraDraft.silhouette}
-                  onChange={e => setExtraDraft(d => ({ ...d, silhouette: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 text-sm appearance-none"
-                  style={{
-                    background: 'var(--input-bg)',
-                    color: extraDraft.silhouette ? 'var(--input-text)' : 'var(--hint-text)',
-                    borderColor: 'var(--input-border)',
-                  }}
-                >
-                  <option value="">選択</option>
-                  {SILHOUETTES.map(s => (
-                    <option key={s} value={s} style={{ color: 'var(--input-text)' }}>{s}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>系統</label>
-              <select
-                value={extraDraft.genre}
-                onChange={e => setExtraDraft(d => ({ ...d, genre: e.target.value }))}
-                className="w-full px-4 py-3 rounded-xl border focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/30 text-sm appearance-none"
-                style={{
-                  background: 'var(--input-bg)',
-                  color: extraDraft.genre ? 'var(--input-text)' : 'var(--hint-text)',
-                  borderColor: 'var(--input-border)',
-                }}
-              >
-                <option value="">選択</option>
-                {GENRES.map(g => (
-                  <option key={g} value={g} style={{ color: 'var(--input-text)' }}>{g}</option>
-                ))}
-              </select>
-            </div>
-
             <Input
-              label="購入先URL"
+              label="ブランド"
+              value={draft.brand_name}
+              onChange={e => setDraft(d => ({ ...d, brand_name: e.target.value }))}
+              placeholder="例: UNIQLO"
+              hint="任意"
+            />
+            <Input
+              label="商品URL"
               type="url"
-              value={extraDraft.purchase_url}
-              onChange={e => setExtraDraft(d => ({ ...d, purchase_url: e.target.value }))}
+              value={draft.purchase_url}
+              onChange={e => setDraft(d => ({ ...d, purchase_url: e.target.value }))}
               placeholder="https://..."
               hint="任意"
             />
 
-            {extraDraftError && (
-              <p className="text-xs text-red-500">{extraDraftError}</p>
+            {draftError && (
+              <p className="text-xs text-red-500">{draftError}</p>
             )}
 
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => { setExtraDraftOpen(false); setExtraDraftError('') }}
+                onClick={() => { setDraftOpen(false); setDraftError('') }}
                 className="flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors"
                 style={{ color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'transparent' }}
               >
@@ -500,7 +331,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
               </button>
               <button
                 type="button"
-                onClick={confirmExtraDraft}
+                onClick={confirmDraft}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 style={{ background: 'var(--purple)', color: 'white' }}
               >

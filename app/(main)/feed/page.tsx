@@ -48,11 +48,13 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     .eq('blocker_id', user.id)
   const blockedIds = (blocksData ?? []).map(b => b.blocked_id)
 
-  const [{ data: likedData }, { data: savedData }, { data: followsData }] = await Promise.all([
+  const [{ data: likedData }, { data: savedData }, { data: followsData }, { data: unreadData }] = await Promise.all([
     supabase.from('likes').select('post_id').eq('user_id', user.id),
     supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
     supabase.from('follows').select('following_id').eq('follower_id', user.id),
+    supabase.rpc('get_unread_counts'),
   ])
+  const hasUnread = (unreadData ?? []).some(row => Number(row.unread_count) > 0)
   const likedPostIds = new Set((likedData ?? []).map(l => l.post_id))
   const savedPostIds = new Set((savedData ?? []).map(s => s.post_id))
   const followingIds = new Set((followsData ?? []).map(f => f.following_id))
@@ -95,13 +97,16 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
         right={
           <Link
             href="/dm"
-            className="w-9 h-9 flex items-center justify-center rounded-full"
+            className="relative w-9 h-9 flex items-center justify-center rounded-full"
             style={{ color: 'var(--text-sub)' }}
             aria-label="メッセージ"
           >
             <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
             </svg>
+            {hasUnread && (
+              <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-red-500" />
+            )}
           </Link>
         }
       />

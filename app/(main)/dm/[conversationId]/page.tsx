@@ -4,10 +4,12 @@ import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { Avatar } from '@/components/ui/Avatar'
 import { ChatView } from '@/components/dm/ChatView'
+import { DmChatMenu } from '@/components/dm/DmChatMenu'
 import type { MessageRow } from '@/components/dm/ChatView'
 import type { Profile } from '@/types/database'
 
 type OtherProfileRow = {
+  user_id: string
   profiles: Pick<Profile, 'username' | 'display_name' | 'avatar_url'> | null
 }
 
@@ -34,7 +36,7 @@ export default async function ChatPage({
   const [{ data: otherRaw }, { data: messagesRaw }] = await Promise.all([
     supabase
       .from('conversation_participants')
-      .select('profiles(username, display_name, avatar_url)')
+      .select('user_id, profiles(username, display_name, avatar_url)')
       .eq('conversation_id', conversationId)
       .neq('user_id', user.id)
       .limit(1)
@@ -43,12 +45,21 @@ export default async function ChatPage({
       .from('messages')
       .select('id, sender_id, body, created_at')
       .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true })
-      .limit(200),
+      .order('created_at', { ascending: false })
+      .limit(30),
+    supabase
+      .from('conversation_participants')
+      .update({ last_read_at: new Date().toISOString() })
+      .eq('conversation_id', conversationId)
+      .eq('user_id', user.id),
   ])
 
-  const otherUser = ((otherRaw as OtherProfileRow | null)?.profiles) ?? null
-  const initialMessages = (messagesRaw ?? []) as MessageRow[]
+  const otherRow = otherRaw as OtherProfileRow | null
+  const otherUser = otherRow?.profiles ?? null
+  const otherUserId = otherRow?.user_id ?? null
+  const rawMessages = (messagesRaw ?? []) as MessageRow[]
+  const initialMessages = [...rawMessages].reverse()
+  const initialHasMore = rawMessages.length === 30
 
   return (
     <>
@@ -68,11 +79,15 @@ export default async function ChatPage({
             'メッセージ'
           )
         }
+        right={otherUserId ? (
+          <DmChatMenu targetUserId={otherUserId} currentUserId={user.id} />
+        ) : undefined}
       />
       <ChatView
         conversationId={conversationId}
         userId={user.id}
         initialMessages={initialMessages}
+        initialHasMore={initialHasMore}
       />
     </>
   )

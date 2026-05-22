@@ -28,88 +28,46 @@ export function StartDmButton({ targetUserId, currentUserId, className }: Props)
   }, [currentUserId, targetUserId])
 
   async function handleClick() {
+    console.log('[DM] handleClick fired', { targetUserId, currentUserId, loading, blocked })
     if (loading || blocked) return
     setLoading(true)
 
-    const supabase = createClient()
+    try {
+      console.log('[DM] calling /api/dm/start')
+      const res = await fetch('/api/dm/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId }),
+      })
 
-    // 自分 → 相手 のブロック再確認
-    const { data: selfBlock } = await supabase
-      .from('blocks')
-      .select('id')
-      .eq('blocker_id', currentUserId)
-      .eq('blocked_id', targetUserId)
-      .maybeSingle()
+      console.log('[DM] API status:', res.status)
 
-    if (selfBlock) {
-      setBlocked(true)
-      setLoading(false)
-      return
-    }
-
-    // 既存会話を検索
-    const { data: myConvs } = await supabase
-      .from('conversation_participants')
-      .select('conversation_id')
-      .eq('user_id', currentUserId)
-
-    const myConvIds = (myConvs ?? []).map(c => c.conversation_id)
-    let conversationId: string | null = null
-
-    if (myConvIds.length > 0) {
-      const { data: shared } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', targetUserId)
-        .in('conversation_id', myConvIds)
-        .limit(1)
-        .maybeSingle()
-
-      conversationId = shared?.conversation_id ?? null
-    }
-
-    // 既存会話があれば SECURITY DEFINER 関数で双方向ブロック確認
-    if (conversationId) {
-      const { data: isBlocked } = await supabase
-        .rpc('is_dm_blocked', { conv_id: conversationId })
-
-      if (isBlocked) {
+      if (res.status === 403) {
         setBlocked(true)
-        setLoading(false)
         return
       }
+
+      if (!res.ok) {
+        const body = await res.text()
+        console.log('[DM] API error body:', body)
+        return
+      }
+
+      const json = await res.json()
+      console.log('[DM] API response:', json)
+
+      const { conversationId } = json
+      if (!conversationId) {
+        console.log('[DM] conversationId is empty')
+        return
+      }
+
+      const url = `/dm/${conversationId}`
+      console.log('[DM] router.push to:', url)
+      router.push(url)
+    } finally {
+      setLoading(false)
     }
-
-    // 会話がなければ新規作成
-    if (!conversationId) {
-      const { data: newConv, error: convError } = await supabase
-        .from('conversations')
-        .insert({})
-        .select('id')
-        .single()
-
-      if (convError || !newConv) {
-        setLoading(false)
-        return
-      }
-
-      conversationId = newConv.id
-
-      const { error: selfError } = await supabase
-        .from('conversation_participants')
-        .insert({ conversation_id: conversationId, user_id: currentUserId })
-
-      if (selfError) {
-        setLoading(false)
-        return
-      }
-
-      await supabase
-        .from('conversation_participants')
-        .insert({ conversation_id: conversationId, user_id: targetUserId })
-    }
-
-    router.push(`/dm/${conversationId}`)
   }
 
   if (blocked) {
