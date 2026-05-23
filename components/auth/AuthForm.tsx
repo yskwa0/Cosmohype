@@ -1,31 +1,12 @@
 'use client'
-import { useState, InputHTMLAttributes } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-
-function DarkInput({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-medium text-[#9B97B2] uppercase tracking-widest">{label}</label>
-      <input
-        className="w-full px-4 py-3 rounded-xl text-[#111118] placeholder:text-[#D1CAEC] text-sm focus:outline-none transition-all"
-        style={{
-          background: '#FFFFFF',
-          border: '1px solid rgba(124,58,237,0.15)',
-        }}
-        onFocus={e => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.45)' }}
-        onBlur={e => { e.currentTarget.style.borderColor = 'rgba(124,58,237,0.15)' }}
-        {...props}
-      />
-    </div>
-  )
-}
 
 type Mode = 'login' | 'register'
 
 export function AuthForm({ mode }: { mode: Mode }) {
-  const router = useRouter()
   const supabase = createClient()
 
   const [email, setEmail] = useState('')
@@ -34,8 +15,20 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prevHtml = html.style.backgroundColor
+    const prevBody = body.style.backgroundColor
+    html.style.backgroundColor = '#0A0A1A'
+    body.style.backgroundColor = '#0A0A1A'
+    return () => {
+      html.style.backgroundColor = prevHtml
+      body.style.backgroundColor = prevBody
+    }
+  }, [])
+
+  async function handleAction() {
     setLoading(true)
     setError(null)
     setMessage(null)
@@ -52,11 +45,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        router.push('/feed')
-        router.refresh()
+        window.location.href = '/feed'
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'エラーが発生しました'
+      const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes('Invalid login credentials')) {
         setError('メールアドレスまたはパスワードが正しくありません')
       } else if (msg.includes('User already registered')) {
@@ -70,76 +62,113 @@ export function AuthForm({ mode }: { mode: Mode }) {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-[#FAFAFA]">
+    <div
+      style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 24px', background: 'linear-gradient(to bottom, #0A0A1A 0%, #1A0533 20%, #2D0A5F 50%, #1A0533 80%, #0A0A1A 100%)', position: 'relative' }}
+    >
 
-      <div className="w-full max-w-sm relative z-10">
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-black tracking-tighter mb-1"
-            style={{ background: 'linear-gradient(90deg, #7C3AED 0%, #A855F7 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            Cosmohype
-          </h1>
-          <p className="text-sm text-[#9B97B2]">ファッションで、自分を表現しよう</p>
+      {/* 戻るボタン */}
+      <Link
+        href="/"
+        aria-label="トップに戻る"
+        style={{ position: 'absolute', top: '16px', left: '16px', width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(124,58,237,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+      >
+        <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+      </Link>
+
+      {/* 星エフェクト — pointer-events: none で操作を一切ブロックしない */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+        <div style={{ position: 'absolute', top: '25%', left: '50%', transform: 'translateX(-50%)', width: '384px', height: '384px', borderRadius: '50%', background: 'rgba(124,58,237,0.2)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+        <div style={{ position: 'absolute', bottom: '25%', right: '25%', width: '256px', height: '256px', borderRadius: '50%', background: 'rgba(236,72,153,0.2)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+      </div>
+
+      <div style={{ width: '100%', maxWidth: '384px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <Image
+            src="/cosmohypelogo.png"
+            alt="Cosmohype"
+            width={220}
+            height={68}
+            style={{ objectFit: 'contain', margin: '0 auto 8px' }}
+            priority
+          />
+          <p style={{ fontSize: '14px', color: '#C4B5FD' }}>ファッションで、自分を表現しよう</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <DarkInput
-            label="メールアドレス"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="your@email.com"
-            required
-            autoComplete="email"
-          />
-          <DarkInput
-            label="パスワード"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder={mode === 'register' ? '8文字以上' : 'パスワード'}
-            required
-            minLength={mode === 'register' ? 8 : undefined}
-            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '11px', fontWeight: 500, color: '#9B97B2', textTransform: 'uppercase', letterSpacing: '0.1em' }}>メールアドレス</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              autoComplete="email"
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', color: '#111118', background: '#FFFFFF', border: '1px solid rgba(124,58,237,0.15)', boxSizing: 'border-box', outline: 'none' }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '11px', fontWeight: 500, color: '#9B97B2', textTransform: 'uppercase', letterSpacing: '0.1em' }}>パスワード</label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder={mode === 'register' ? '8文字以上' : 'パスワード'}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              minLength={mode === 'register' ? 8 : undefined}
+              style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', color: '#111118', background: '#FFFFFF', border: '1px solid rgba(124,58,237,0.15)', boxSizing: 'border-box', outline: 'none' }}
+            />
+          </div>
 
           {error && (
-            <p className="text-sm text-red-400 rounded-xl px-4 py-3"
-              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <p style={{ fontSize: '14px', color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', padding: '12px 16px' }}>
               {error}
             </p>
           )}
           {message && (
-            <p className="text-sm text-[#A855F7] rounded-xl px-4 py-3"
-              style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)' }}>
+            <p style={{ fontSize: '14px', color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '12px', padding: '12px 16px' }}>
               {message}
             </p>
           )}
 
           <button
-            type="submit"
+            type="button"
             disabled={loading}
-            className="w-full h-12 rounded-xl text-white font-semibold mt-2 transition-opacity disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)', boxShadow: '0 4px 20px rgba(168,85,247,0.4)' }}
+            onClick={handleAction}
+            style={{
+              width: '100%',
+              height: '48px',
+              borderRadius: '12px',
+              color: 'white',
+              fontWeight: 600,
+              fontSize: '15px',
+              marginTop: '8px',
+              background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+              border: 'none',
+              cursor: 'pointer',
+              opacity: loading ? 0.5 : 1,
+              position: 'relative',
+              zIndex: 100,
+            }}
           >
-            {loading
-              ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              : mode === 'register' ? 'アカウントを作成' : 'ログイン'
-            }
+            {loading ? '...' : mode === 'register' ? 'アカウントを作成' : 'ログイン'}
           </button>
-        </form>
+        </div>
 
-        <p className="text-center text-sm text-[#4A4468] mt-6">
+        <p style={{ textAlign: 'center', fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginTop: '24px' }}>
           {mode === 'login' ? (
             <>アカウントをお持ちでない方は{' '}
-              <Link href="/register" className="text-[#A855F7] font-medium">新規登録</Link>
+              <Link href="/register" style={{ color: '#A855F7', fontWeight: 500 }}>新規登録</Link>
             </>
           ) : (
             <>すでにアカウントをお持ちの方は{' '}
-              <Link href="/login" className="text-[#A855F7] font-medium">ログイン</Link>
+              <Link href="/login" style={{ color: '#A855F7', fontWeight: 500 }}>ログイン</Link>
             </>
           )}
         </p>
       </div>
+
     </div>
   )
 }

@@ -10,7 +10,7 @@ interface TopBarProps {
 
 export function TopBar({ title, showLogo = false, left, right }: TopBarProps) {
   return (
-    <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'var(--nav-bg)' }}>
+    <header className="sticky top-0 z-40" style={{ background: 'var(--bg)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="max-w-md mx-auto flex items-center justify-between px-5 h-14">
         <div className="flex items-center gap-2">
           {left}

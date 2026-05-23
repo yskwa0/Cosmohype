@@ -60,7 +60,7 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl" style={{ background: 'var(--nav-bg)' }}>
       <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border), transparent)' }} />
-      <div className="max-w-md mx-auto flex items-end justify-around px-6 pb-safe pt-2 pb-3">
+      <div className="max-w-md mx-auto flex items-end justify-around px-6 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
         {navItems.map(({ href, label, icon }) => {
           const active = pathname === href || (href !== '/post/new' && pathname.startsWith(href))
           const isPost = href === '/post/new'

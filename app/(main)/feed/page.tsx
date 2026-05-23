@@ -1,11 +1,10 @@
-import { Suspense } from 'react'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TopBar } from '@/components/layout/TopBar'
 import { PostCard } from '@/components/post/PostCard'
-import { FeedTabs } from '@/components/layout/FeedTabs'
-import { FeedSwipeWrapper } from '@/components/layout/FeedSwipeWrapper'
+import { FeedSlider } from '@/components/layout/FeedSlider'
+import { DmPanel, type DmConversation } from '@/components/dm/DmPanel'
+import { DmIconButton } from '@/components/dm/DmIconButton'
 import type { Post, Profile } from '@/types/database'
 
 const VALID_TABS = ['recommended', 'following'] as const
@@ -13,7 +12,6 @@ type FeedTab = typeof VALID_TABS[number]
 
 function scorePost(post: Post, userStyleId: string | null, followingIds: Set<string>): number {
   let score = 0
-
   if (userStyleId && post.profiles?.style_id === userStyleId) score += 40
   if (post.tags?.some(t => t.toLowerCase() === 'hype')) score += 30
   score += (post.likes_count ?? 0) * 2
@@ -21,7 +19,6 @@ function scorePost(post: Post, userStyleId: string | null, followingIds: Set<str
   score += (post.comments_count ?? 0) * 3
   if (Date.now() - new Date(post.created_at).getTime() < 24 * 60 * 60 * 1000) score += 15
   if (followingIds.has(post.user_id)) score += 30
-
   return score
 }
 
@@ -38,7 +35,6 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     .select('*')
     .eq('id', user.id)
     .single()
-
   if (!profileData) redirect('/profile/setup')
   const profile = profileData as Profile
 
@@ -48,88 +44,132 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     .eq('blocker_id', user.id)
   const blockedIds = (blocksData ?? []).map(b => b.blocked_id)
 
-  const [{ data: likedData }, { data: savedData }, { data: followsData }, { data: unreadData }] = await Promise.all([
+  // Phase 1: parallel — social graph, unread counts, DM conversation IDs
+  const [{ data: likedData }, { data: savedData }, { data: followsData }, { data: unreadData }, { data: convParticipations }] = await Promise.all([
     supabase.from('likes').select('post_id').eq('user_id', user.id),
     supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
     supabase.from('follows').select('following_id').eq('follower_id', user.id),
     supabase.rpc('get_unread_counts'),
+    supabase.from('conversation_participants').select('conversation_id').eq('user_id', user.id),
   ])
+
   const hasUnread = (unreadData ?? []).some(row => Number(row.unread_count) > 0)
   const likedPostIds = new Set((likedData ?? []).map(l => l.post_id))
   const savedPostIds = new Set((savedData ?? []).map(s => s.post_id))
   const followingIds = new Set((followsData ?? []).map(f => f.following_id))
+  const validFollowingIds = [...followingIds].filter(id => !blockedIds.includes(id))
+  const conversationIds = (convParticipations ?? []).map(p => p.conversation_id)
 
-  let posts: Post[] = []
-
-  if (tab === 'following') {
-    const validFollowingIds = [...followingIds].filter(id => !blockedIds.includes(id))
-    if (validFollowingIds.length > 0) {
-      let q = supabase
-        .from('posts')
-        .select(`*, profiles(*), post_images(*)`)
-        .in('user_id', validFollowingIds)
-        .eq('is_archived', false)
-      if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-      const { data } = await q.order('created_at', { ascending: false }).limit(50)
-      posts = (data ?? []) as Post[]
-    }
-  } else {
+  // Phase 2: parallel — feed posts and DM details
+  const buildRecQ = () => {
     let q = supabase.from('posts').select(`*, profiles(*), post_images(*)`).eq('is_archived', false)
     if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-    const { data } = await q.order('created_at', { ascending: false }).limit(100)
-    posts = (data ?? []) as Post[]
+    return q.order('created_at', { ascending: false }).limit(100)
+  }
+  const buildFollowQ = () => {
+    let q = supabase.from('posts').select(`*, profiles(*), post_images(*)`).in('user_id', validFollowingIds).eq('is_archived', false)
+    if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
+    return q.order('created_at', { ascending: false }).limit(50)
   }
 
-  posts = posts.filter(p =>
-    !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id)
-  )
+  const [recResult, followResult, othersResult, messagesResult, conversationsResult] = await Promise.all([
+    buildRecQ(),
+    validFollowingIds.length > 0 ? buildFollowQ() : Promise.resolve({ data: null }),
+    conversationIds.length > 0
+      ? supabase.from('conversation_participants').select('conversation_id, profiles(username, display_name, avatar_url)').in('conversation_id', conversationIds).neq('user_id', user.id)
+      : Promise.resolve({ data: null }),
+    conversationIds.length > 0
+      ? supabase.from('messages').select('conversation_id, body, created_at').in('conversation_id', conversationIds).order('created_at', { ascending: false }).limit(Math.max(conversationIds.length * 5, 20))
+      : Promise.resolve({ data: null }),
+    conversationIds.length > 0
+      ? supabase.from('conversations').select('id, updated_at').in('id', conversationIds)
+      : Promise.resolve({ data: null }),
+  ])
 
-  if (tab === 'recommended') {
-    posts = [...posts].sort((a, b) =>
-      scorePost(b, profile.style_id, followingIds) - scorePost(a, profile.style_id, followingIds)
-    )
+  // Build feed posts
+  const recommendedPosts = ((recResult.data ?? []) as Post[])
+    .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))
+    .sort((a, b) => scorePost(b, profile.style_id, followingIds) - scorePost(a, profile.style_id, followingIds))
+
+  const followingPosts = ((followResult.data ?? []) as Post[])
+    .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))
+
+  // Build DM conversation list
+  type OtherRow = { conversation_id: string; profiles: DmConversation['otherUser'] }
+  type MsgRow = { conversation_id: string; body: string; created_at: string }
+
+  const othersByConv: Record<string, DmConversation['otherUser']> = {}
+  for (const row of (othersResult.data ?? []) as OtherRow[]) {
+    if (row.profiles) othersByConv[row.conversation_id] = row.profiles
   }
+  const latestByConv: Record<string, { body: string; created_at: string }> = {}
+  for (const msg of (messagesResult.data ?? []) as MsgRow[]) {
+    if (!latestByConv[msg.conversation_id]) latestByConv[msg.conversation_id] = msg
+  }
+  const updatedAtByConv: Record<string, string> = {}
+  for (const conv of (conversationsResult.data ?? []) as { id: string; updated_at: string }[]) {
+    updatedAtByConv[conv.id] = conv.updated_at
+  }
+  const unreadByConv: Record<string, number> = {}
+  for (const row of unreadData ?? []) {
+    unreadByConv[row.conversation_id] = Number(row.unread_count)
+  }
+
+  const dmConversations: DmConversation[] = conversationIds
+    .map(id => ({
+      id,
+      otherUser: othersByConv[id] ?? null,
+      latestMessage: latestByConv[id] ?? null,
+      unread: unreadByConv[id] ?? 0,
+      sortKey: latestByConv[id]?.created_at ?? updatedAtByConv[id] ?? '',
+    }))
+    .filter(c => c.otherUser !== null)
+    .sort((a: DmConversation & { sortKey: string }, b: DmConversation & { sortKey: string }) => b.sortKey.localeCompare(a.sortKey))
 
   return (
     <>
       <TopBar
         showLogo
-        right={
-          <Link
-            href="/dm"
-            className="relative w-9 h-9 flex items-center justify-center rounded-full"
-            style={{ color: 'var(--text-sub)' }}
-            aria-label="メッセージ"
-          >
-            <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" fill="none" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-            </svg>
-            {hasUnread && (
-              <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-red-500" />
-            )}
-          </Link>
-        }
+        right={<DmIconButton hasUnread={hasUnread} />}
       />
-      <Suspense>
-        <FeedTabs />
-      </Suspense>
-      <FeedSwipeWrapper currentTab={tab}>
-        <div className="flex flex-col gap-3 py-4 feed-animate-in">
-          {posts.length === 0 ? (
-            tab === 'following' ? <EmptyFollowingFeed /> : <EmptyFeed />
-          ) : (
-            posts.map(post => (
-              <PostCard
-                key={post.id}
-                post={post}
-                userId={user.id}
-                isLiked={likedPostIds.has(post.id)}
-                isSaved={savedPostIds.has(post.id)}
-              />
-            ))
-          )}
-        </div>
-      </FeedSwipeWrapper>
+      <FeedSlider
+        initialTab={tab}
+        recommended={
+          <div className="flex flex-col gap-3 py-4 feed-animate-in">
+            {recommendedPosts.length === 0 ? (
+              <EmptyFeed />
+            ) : (
+              recommendedPosts.map(post => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  userId={user.id}
+                  isLiked={likedPostIds.has(post.id)}
+                  isSaved={savedPostIds.has(post.id)}
+                />
+              ))
+            )}
+          </div>
+        }
+        following={
+          <div className="flex flex-col gap-3 py-4 feed-animate-in">
+            {followingPosts.length === 0 ? (
+              <EmptyFollowingFeed />
+            ) : (
+              followingPosts.map(post => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  userId={user.id}
+                  isLiked={likedPostIds.has(post.id)}
+                  isSaved={savedPostIds.has(post.id)}
+                />
+              ))
+            )}
+          </div>
+        }
+        dm={<DmPanel conversations={dmConversations} />}
+      />
     </>
   )
 }

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { Avatar } from '@/components/ui/Avatar'
 import { formatRelativeTime } from '@/lib/utils'
+import { DmPageShell } from '@/components/layout/DmPageShell'
 
 type OtherParticipantRow = {
   conversation_id: string
@@ -34,10 +35,10 @@ export default async function DmPage() {
 
   if (conversationIds.length === 0) {
     return (
-      <>
+      <DmPageShell>
         <TopBar title="メッセージ" />
         <EmptyDmList />
-      </>
+      </DmPageShell>
     )
   }
 
@@ -92,7 +93,7 @@ export default async function DmPage() {
     .sort((a, b) => b.sortKey.localeCompare(a.sortKey))
 
   return (
-    <>
+    <DmPageShell>
       <TopBar title="メッセージ" />
       {conversations.length === 0 ? (
         <EmptyDmList />
@@ -114,7 +115,7 @@ export default async function DmPage() {
                   <div className="flex items-baseline justify-between gap-2">
                     <span
                       className="text-sm font-semibold truncate"
-                      style={{ color: conv.unread > 0 ? 'var(--text)' : 'var(--text)' }}
+                      style={{ color: 'var(--text)' }}
                     >
                       {conv.otherUser?.display_name ?? conv.otherUser?.username}
                     </span>
@@ -149,7 +150,7 @@ export default async function DmPage() {
           ))}
         </ul>
       )}
-    </>
+    </DmPageShell>
   )
 }
 
