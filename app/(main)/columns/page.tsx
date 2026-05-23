@@ -4,6 +4,20 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { TopBar } from '@/components/layout/TopBar'
 
+function BackButton() {
+  return (
+    <Link
+      href="/contents"
+      className="flex items-center justify-center w-9 h-9 -ml-1 rounded-full active:opacity-60 transition-opacity"
+      aria-label="戻る"
+    >
+      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} style={{ color: 'var(--text)' }}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+      </svg>
+    </Link>
+  )
+}
+
 type Column = {
   category: string
   title: string
@@ -89,7 +103,7 @@ export default function ColumnsPage() {
 
   return (
     <>
-      <TopBar title="コラム" />
+      <TopBar title="コラム" left={<BackButton />} />
       <div className="max-w-md mx-auto pb-24">
 
         {/* 検索バー */}
@@ -189,43 +203,106 @@ export default function ColumnsPage() {
   )
 }
 
+const CATEGORY_CONFIG: Record<string, { gradient: string; accent: string; icon: React.ReactNode }> = {
+  'ブランド': {
+    gradient: 'linear-gradient(135deg, #0A1A0A 0%, #14532D 45%, #16A34A 100%)',
+    accent: 'rgba(134,239,172,0.9)',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="#86EFAC" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+      </svg>
+    ),
+  },
+  '基礎知識': {
+    gradient: 'linear-gradient(135deg, #1A0844 0%, #5B21B6 45%, #A855F7 100%)',
+    accent: 'rgba(196,181,253,0.9)',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="#C4B5FD" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+      </svg>
+    ),
+  },
+  '歴史': {
+    gradient: 'linear-gradient(135deg, #1C0A08 0%, #7C2D12 45%, #EA580C 100%)',
+    accent: 'rgba(253,186,116,0.9)',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="#FED7AA" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  'トレンド': {
+    gradient: 'linear-gradient(135deg, #1C0030 0%, #7C1D6F 50%, #EC4899 100%)',
+    accent: 'rgba(249,168,212,0.9)',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="#F9A8D4" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+      </svg>
+    ),
+  },
+  'スタイル': {
+    gradient: 'linear-gradient(135deg, #0C1A3A 0%, #1E3A6E 45%, #3B82F6 100%)',
+    accent: 'rgba(147,197,253,0.9)',
+    icon: (
+      <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="#93C5FD" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
+      </svg>
+    ),
+  },
+}
+
+const STAR_DOTS: [number, number][] = [
+  [30, 20], [80, 55], [130, 15], [200, 70], [250, 25], [310, 60], [340, 18],
+  [55, 85], [175, 40], [290, 90], [150, 85], [320, 40],
+]
+
 function ColumnCard({ col }: { col: Column }) {
+  const config = CATEGORY_CONFIG[col.category] ?? CATEGORY_CONFIG['基礎知識']
+
   return (
-    <Link
-      href={`/columns/${col.slug}`}
-      className="block rounded-2xl overflow-hidden active:opacity-75 transition-opacity"
-      style={{
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
-      }}
-    >
-      <div
-        className="h-1 w-full"
-        style={{ background: 'linear-gradient(90deg, var(--purple-glow), var(--purple))' }}
-      />
-      <div className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <span
-            className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-            style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}
+    <Link href={`/columns/${col.slug}`} className="block active:opacity-80 transition-opacity">
+      <div className="rounded-3xl overflow-hidden" style={{ background: config.gradient }}>
+        <div className="relative flex items-center gap-4 px-5 py-5">
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            viewBox="0 0 360 110"
+            preserveAspectRatio="xMidYMid slice"
+            aria-hidden
           >
-            {col.category}
-          </span>
-          <div className="flex items-center gap-2.5">
-            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-              {col.readingTime}で読める
+            {STAR_DOTS.map(([x, y], i) => (
+              <circle key={i} cx={x} cy={y} r={i % 3 === 0 ? 1.5 : 1} fill="white" opacity={0.2 + (i % 4) * 0.08} />
+            ))}
+          </svg>
+
+          <div
+            className="w-[56px] h-[56px] rounded-2xl flex-shrink-0 flex items-center justify-center"
+            style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}
+          >
+            {config.icon}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: config.accent }}>
+              {col.category}
             </span>
-            <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} style={{ color: 'var(--text-muted)' }}>
+            <h3 className="text-white font-bold text-[14px] leading-snug mt-0.5 line-clamp-2">
+              {col.title}
+            </h3>
+            <p className="text-[11px] mt-1 line-clamp-2" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              {col.description}
+            </p>
+          </div>
+
+          <div
+            className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
+            style={{ background: 'rgba(255,255,255,0.18)' }}
+          >
+            <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </div>
         </div>
-        <h3 className="text-sm font-bold leading-snug mb-2" style={{ color: 'var(--text)' }}>
-          {col.title}
-        </h3>
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-          {col.description}
-        </p>
       </div>
     </Link>
   )

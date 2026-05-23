@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
-import { LogoutButton } from './LogoutButton'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { StartDmButton } from '@/components/dm/StartDmButton'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
@@ -72,38 +71,40 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
 
   return (
     <div className="px-5 pt-6 pb-5">
-      <div className="flex items-center gap-5 mb-4">
-        <div className="relative">
+      {/* Avatar (left) + Name/Username (right) */}
+      <div className="flex items-center justify-center gap-4 mb-4">
+        <div className="relative flex-shrink-0">
           <div className="absolute -inset-0.5 rounded-full opacity-60 blur-[2px]"
             style={{ background: 'linear-gradient(135deg, #7C3AED, #EC4899)' }} />
           <Avatar src={profile.avatar_url} username={profile.username} size="xl" className="relative" />
         </div>
-        <div className="flex gap-6">
-          <Stat value={postsCount} label="投稿" />
-          <Stat value={followersCount} label="フォロワー" />
-          <Stat value={profile.following_count} label="フォロー" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <h1 className="text-base font-bold leading-snug" style={{ color: 'var(--text)' }}>
+              {profile.display_name ?? profile.username}
+            </h1>
+            {profile.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
+              <Link
+                href={`/cosmo/${profile.style_id}`}
+                className="flex-shrink-0 transition-opacity active:opacity-70"
+              >
+                <StyleAlien styleId={profile.style_id as StyleId} size={24} />
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="mb-3">
-        <div className="flex items-center gap-1.5">
-          <h1 className="text-base font-bold leading-snug" style={{ color: 'var(--text)' }}>
-            {profile.display_name ?? profile.username}
-          </h1>
-          {profile.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
-            <Link
-              href={`/cosmo/${profile.style_id}`}
-              className="flex-shrink-0 transition-opacity active:opacity-70"
-            >
-              <StyleAlien styleId={profile.style_id as StyleId} size={24} />
-            </Link>
-          )}
-        </div>
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>@{profile.username}</p>
-        {profile.bio && (
-          <p className="text-sm leading-relaxed mt-2" style={{ color: 'var(--text-sub)' }}>{profile.bio}</p>
-        )}
+      {/* Stats: full-width, 3 equal columns */}
+      <div className="grid grid-cols-3 text-center mb-3">
+        <Stat value={postsCount} label="投稿" />
+        <Stat value={followersCount} label="フォロワー" />
+        <Stat value={profile.following_count} label="フォロー" />
       </div>
+
+      {profile.bio && (
+        <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-sub)' }}>{profile.bio}</p>
+      )}
 
       {profile.style_tags?.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
@@ -120,16 +121,13 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
       )}
 
       {isOwner ? (
-        <div className="flex flex-col gap-2">
-          <Link
-            href="/profile/edit"
-            className="w-full flex items-center justify-center h-9 rounded-xl border text-sm font-medium transition-colors"
-            style={{ borderColor: 'var(--border)', color: 'var(--text-sub)' }}
-          >
-            プロフィールを編集
-          </Link>
-          <LogoutButton />
-        </div>
+        <Link
+          href="/profile/edit"
+          className="w-full flex items-center justify-center h-9 rounded-xl border text-sm font-medium transition-colors"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-sub)' }}
+        >
+          プロフィールを編集
+        </Link>
       ) : currentUserId && (
         <div className="flex gap-2">
           <div className="relative flex-1" style={{ overflow: 'visible' }}>

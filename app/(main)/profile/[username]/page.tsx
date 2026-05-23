@@ -67,7 +67,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
       <TopBar
         title={
           <span className="flex items-center gap-1.5">
-            {profile.display_name ?? `@${profile.username}`}
+            @{profile.username}
             {profile.is_private && (
               <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor" aria-label="非公開アカウント" style={{ color: 'var(--text-sub)' }}>
                 <path d="M18 10h-1V7a5 5 0 0 0-10 0v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zm-6 7a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm3.1-7H8.9V7a3.1 3.1 0 0 1 6.2 0v3z"/>

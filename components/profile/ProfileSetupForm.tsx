@@ -5,11 +5,12 @@ import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { AvatarCropper } from '@/components/ui/AvatarCropper'
 
 const STYLE_TAGS = ['ストリート', 'カジュアル', 'フェミニン', 'モード', 'ヴィンテージ', 'スポーツ', 'ナチュラル', 'ゴシック', 'ミリタリー', 'ワーク']
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_SIZE_MB = 5
+const MAX_SIZE_MB = 10
 
 export function ProfileSetupForm({ userId }: { userId: string }) {
   const router = useRouter()
@@ -22,6 +23,8 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [cropperSrc, setCropperSrc] = useState<string | null>(null)
+  const [cropperExiting, setCropperExiting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -34,6 +37,7 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    e.target.value = ''
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       setErrors(prev => ({ ...prev, avatar: 'JPEG / PNG / WebP のみ対応しています' }))
@@ -45,8 +49,21 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
     }
 
     setErrors(prev => ({ ...prev, avatar: '' }))
+    setCropperExiting(false)
+    setCropperSrc(URL.createObjectURL(file))
+  }
+
+  function handleCropConfirm(blob: Blob) {
+    if (cropperSrc) URL.revokeObjectURL(cropperSrc)
+    const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
     setAvatarFile(file)
     setAvatarPreview(URL.createObjectURL(file))
+    setCropperSrc(null)
+  }
+
+  function handleCropCancel() {
+    if (cropperSrc) URL.revokeObjectURL(cropperSrc)
+    setCropperSrc(null)
   }
 
   function validate(): boolean {
@@ -77,7 +94,7 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
         if (uploadError) throw uploadError
 
         const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-        avatarUrl = data.publicUrl
+        avatarUrl = `${data.publicUrl}?t=${Date.now()}`
       }
 
       const { error } = await supabase.from('profiles').upsert({
@@ -136,6 +153,25 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
             {errors.avatar && <p className="text-xs text-red-500">{errors.avatar}</p>}
           </div>
+
+          {cropperSrc && (
+            <>
+              <div
+                className="fixed inset-0 bg-black pointer-events-none"
+                style={{
+                  zIndex: 9997,
+                  opacity: cropperExiting ? 0 : 1,
+                  transition: cropperExiting ? 'opacity 260ms ease-in' : 'none',
+                }}
+              />
+              <AvatarCropper
+                src={cropperSrc}
+                onConfirm={handleCropConfirm}
+                onCancel={handleCropCancel}
+                onExitStart={() => setCropperExiting(true)}
+              />
+            </>
+          )}
 
           <Input
             label="ユーザーネーム *"

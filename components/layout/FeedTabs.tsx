@@ -15,7 +15,7 @@ export function FeedTabs() {
   const tab: TabValue = TABS.some(t => t.value === rawTab) ? (rawTab as TabValue) : 'recommended'
 
   return (
-    <div className="sticky top-14 z-30 flex" style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)' }}>
+    <div className="sticky top-14 z-30 flex select-none" style={{ background: 'var(--nav-bg)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', WebkitUserSelect: 'none' }}>
       {TABS.map(({ value, label, href }) => (
         <button
           key={value}

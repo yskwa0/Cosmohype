@@ -265,7 +265,7 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           </Link>
         </div>
 
-        {/* おすすめアイテム */}
+        {/* MVP: おすすめアイテムセクション一時非表示（将来のアフィリエイト対応時に復活）
         {recommendItems && (
           <div className="flex flex-col gap-3 pt-2">
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--purple)' }}>
@@ -306,6 +306,7 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
             ))}
           </div>
         )}
+        */}
       </div>
     </>
   )

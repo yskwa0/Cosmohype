@@ -16,6 +16,8 @@ export function BackButton({ href }: { href?: string } = {}) {
       className="flex items-center justify-center w-9 h-9 rounded-full"
       style={{
         color: 'var(--text)',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
         transform: pressed ? 'scale(0.78)' : 'scale(1)',
         transition: pressed
           ? 'transform 0.07s ease-out'

@@ -1,9 +1,10 @@
 'use client'
 import { useRef, useState } from 'react'
 import Image from 'next/image'
+import { compressImage } from '@/lib/compressImage'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
-const MAX_SIZE_MB = 5
+const MAX_SIZE_MB = 15
 const MAX_FILES = 3
 
 interface ImageUploadProps {
@@ -18,7 +19,7 @@ export function ImageUpload({ files, onChange, error }: ImageUploadProps) {
 
   const previews = files.map(f => URL.createObjectURL(f))
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
     setLocalError(null)
 
@@ -40,7 +41,8 @@ export function ImageUpload({ files, onChange, error }: ImageUploadProps) {
       return
     }
 
-    onChange([...files, ...selected])
+    const compressed = await Promise.all(selected.map(f => compressImage(f, 2048, 0.85)))
+    onChange([...files, ...compressed])
     e.target.value = ''
   }
 

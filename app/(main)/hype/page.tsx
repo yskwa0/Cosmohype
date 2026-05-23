@@ -69,7 +69,7 @@ export default async function HypePage() {
 
   return (
     <>
-      <TopBar title="今日のHYPE" left={<BackButton href="/search" />} />
+      <TopBar title="今日のHYPE" left={<BackButton href="/contents" />} />
 
       <div className="flex flex-col pb-24">
         {/* Hero */}

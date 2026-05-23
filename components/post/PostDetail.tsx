@@ -275,11 +275,13 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         </div>
       </div>
 
+      {/* MVP: 着用アイテムセクション一時非表示（将来のアフィリエイト対応時に復活）
       {post.post_items && post.post_items.length > 0 && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
           <PostRecommendItems items={post.post_items} />
         </div>
       )}
+      */}
     </div>
   )
 }

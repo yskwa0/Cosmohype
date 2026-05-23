@@ -663,6 +663,28 @@ export type Database = {
           }
         ]
       }
+      username_changes: {
+        Row: {
+          id: string
+          user_id: string
+          changed_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          changed_at?: string
+        }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "username_changes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

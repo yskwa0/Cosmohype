@@ -28,7 +28,7 @@ export default async function StyleCheckPage() {
 
   return (
     <>
-      <TopBar title="AIスタイル診断" left={<BackButton href="/search" />} />
+      <TopBar title="AIスタイル診断" left={<BackButton href="/contents" />} />
       <StyleCheckForm todayResult={todayDiag?.result ?? null} />
     </>
   )

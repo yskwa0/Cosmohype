@@ -12,6 +12,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { InlineComments } from './InlineComments'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
+import { ImageViewer } from '@/components/ui/ImageViewer'
 import type { Post } from '@/types/database'
 
 function isToday(dateStr: string): boolean {
@@ -34,6 +35,8 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
   const [saved, setSaved] = useState(isSaved)
   const [commentsCount, setCommentsCount] = useState(post.comments_count)
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerIdx, setViewerIdx] = useState(0)
   const lastTapRef = useRef(0)
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
@@ -78,9 +81,9 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
   }
 
   function handleImageTap(e: React.MouseEvent<HTMLDivElement>) {
+    e.stopPropagation()
     const now = Date.now()
     if (now - lastTapRef.current < 300) {
-      // ダブルタップ: シングルタップ遷移をキャンセルしていいね
       if (singleTapTimerRef.current) {
         clearTimeout(singleTapTimerRef.current)
         singleTapTimerRef.current = null
@@ -90,20 +93,28 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
       setTimeout(() => setHeartPos(null), 800)
       if (!liked) toggleLike()
     } else {
-      // シングルタップ: 300ms待って詳細ページへ遷移
       singleTapTimerRef.current = setTimeout(() => {
-        router.push(`/post/${post.id}`)
+        setViewerIdx(currentImage)
+        setViewerOpen(true)
       }, 300)
     }
     lastTapRef.current = now
   }
 
   return (
-    <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+    <div
+      className="px-4 py-3"
+      style={{ borderBottom: '1px solid var(--border)' }}
+      onClick={() => router.push(`/post/${post.id}`)}
+    >
       <div className="flex gap-3">
 
         {/* 左: アバター */}
-        <Link href={`/profile/${profile?.username ?? ''}`} className="flex-shrink-0">
+        <Link
+          href={`/profile/${profile?.username ?? ''}`}
+          className="flex-shrink-0 self-start"
+          onClick={e => e.stopPropagation()}
+        >
           <Avatar src={profile?.avatar_url} username={profile?.username} size="md" />
         </Link>
 
@@ -113,13 +124,20 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
           {/* ヘッダー行 */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <Link href={`/profile/${profile?.username ?? ''}`}>
+              <Link
+                href={`/profile/${profile?.username ?? ''}`}
+                onClick={e => e.stopPropagation()}
+              >
                 <span className="font-bold text-sm truncate" style={{ color: 'var(--text)' }}>
                   {profile?.display_name ?? profile?.username}
                 </span>
               </Link>
               {profile?.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
-                <Link href={`/cosmo/${profile.style_id}`} className="flex-shrink-0 transition-opacity active:opacity-70">
+                <Link
+                  href={`/cosmo/${profile.style_id}`}
+                  className="flex-shrink-0 transition-opacity active:opacity-70"
+                  onClick={e => e.stopPropagation()}
+                >
                   <StyleAlien styleId={profile.style_id as StyleId} size={20} />
                 </Link>
               )}
@@ -129,16 +147,20 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
                 {formatRelativeTime(post.created_at)}
               </span>
               {userId && userId === post.user_id && (
-                <PostOwnerMenu
-                  postId={post.id}
-                  postCreatedAt={post.created_at}
-                  userId={post.user_id}
-                  username={profile?.username ?? ''}
-                  isArchived={post.is_archived}
-                />
+                <div onClick={e => e.stopPropagation()}>
+                  <PostOwnerMenu
+                    postId={post.id}
+                    postCreatedAt={post.created_at}
+                    userId={post.user_id}
+                    username={profile?.username ?? ''}
+                    isArchived={post.is_archived}
+                  />
+                </div>
               )}
               {userId && userId !== post.user_id && profile?.id && (
-                <PostMenu postId={post.id} postOwnerId={profile.id} currentUserId={userId} />
+                <div onClick={e => e.stopPropagation()}>
+                  <PostMenu postId={post.id} postOwnerId={profile.id} currentUserId={userId} />
+                </div>
               )}
             </div>
           </div>
@@ -146,7 +168,8 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
           {/* HYPEバッジ */}
           {post.hype_theme && isToday(post.created_at) && (
             <Link href="/hype" className="inline-flex items-center gap-1 mb-1.5 px-2 py-0.5 rounded-full transition-opacity active:opacity-70"
-              style={{ background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.3)' }}>
+              style={{ background: 'rgba(236,72,153,0.12)', border: '1px solid rgba(236,72,153,0.3)' }}
+              onClick={e => e.stopPropagation()}>
               <svg viewBox="0 0 60 60" width={10} height={10} aria-hidden>
                 <path d="M30 13 L44 30 L30 47 L16 30Z" fill="#FBCFE8" opacity={0.9} />
                 <path d="M30 21 L38 30 L30 39 L22 30Z" fill="white" opacity={0.95} />
@@ -158,11 +181,9 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
 
           {/* キャプション */}
           {post.caption && (
-            <Link href={`/post/${post.id}`}>
-              <p className="text-sm leading-relaxed mb-2" style={{ color: 'var(--text)' }}>
-                {post.caption}
-              </p>
-            </Link>
+            <p className="text-sm leading-relaxed mb-2" style={{ color: 'var(--text)' }}>
+              {post.caption}
+            </p>
           )}
 
           {/* 画像 */}
@@ -232,7 +253,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
 
           {/* アクションバー */}
           <div className="flex items-center gap-5 mt-1">
-            <button onClick={toggleLike} disabled={!userId} className="flex items-center gap-1.5">
+            <button onClick={e => { e.stopPropagation(); toggleLike() }} disabled={!userId} className="flex items-center gap-1.5">
               <svg viewBox="0 0 24 24" className="w-5 h-5 transition-colors"
                 style={{ color: liked ? '#A855F7' : 'var(--text-muted)' }}
                 fill={liked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={liked ? 0 : 2}>
@@ -243,7 +264,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
               )}
             </button>
 
-            <button onClick={() => setShowComments(p => !p)} className="flex items-center gap-1.5">
+            <button onClick={e => { e.stopPropagation(); setShowComments(p => !p) }} className="flex items-center gap-1.5">
               <svg viewBox="0 0 24 24" className="w-5 h-5 transition-colors"
                 style={{ color: showComments ? 'var(--purple)' : 'var(--text-muted)' }}
                 fill="none" stroke="currentColor" strokeWidth={2}>
@@ -254,7 +275,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
               )}
             </button>
 
-            <button onClick={toggleSave} disabled={!userId}>
+            <button onClick={e => { e.stopPropagation(); toggleSave() }} disabled={!userId}>
               <svg viewBox="0 0 24 24" className="w-5 h-5 transition-colors"
                 style={{ color: saved ? 'var(--purple)' : 'var(--text-muted)' }}
                 fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={saved ? 0 : 2}>
@@ -267,11 +288,21 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
       </div>
 
       {showComments && (
-        <InlineComments
-          postId={post.id}
-          userId={userId}
-          onCommentAdded={() => setCommentsCount(c => c + 1)}
-          onCommentDeleted={() => setCommentsCount(c => Math.max(0, c - 1))}
+        <div onClick={e => e.stopPropagation()}>
+          <InlineComments
+            postId={post.id}
+            userId={userId}
+            onCommentAdded={() => setCommentsCount(c => c + 1)}
+            onCommentDeleted={() => setCommentsCount(c => Math.max(0, c - 1))}
+          />
+        </div>
+      )}
+
+      {viewerOpen && images.length > 0 && (
+        <ImageViewer
+          images={images}
+          initialIdx={viewerIdx}
+          onClose={() => setViewerOpen(false)}
         />
       )}
     </div>

@@ -5,7 +5,7 @@ import { BackButton } from '@/components/ui/BackButton'
 export default function StyleIdTopPage() {
   return (
     <>
-      <TopBar title="STYLE ID" left={<BackButton href="/search" />} />
+      <TopBar title="STYLE ID" left={<BackButton href="/contents" />} />
 
       <div className="px-5 pt-10 pb-12 flex flex-col gap-12">
         {/* Hero */}

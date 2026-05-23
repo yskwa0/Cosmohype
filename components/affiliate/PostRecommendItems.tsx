@@ -32,7 +32,7 @@ export function PostRecommendItems({ items }: { items: PostItem[] }) {
               )}
             </div>
 
-            {/* 将来 affiliate_url に差し替え予定 */}
+            {/* MVP: 商品リンクボタンは一時非表示（将来 affiliate_url 対応時に復活）
             {item.purchase_url && (
               <a
                 href={item.purchase_url}
@@ -47,6 +47,7 @@ export function PostRecommendItems({ items }: { items: PostItem[] }) {
                 商品を見る
               </a>
             )}
+            */}
           </div>
         ))}
       </div>

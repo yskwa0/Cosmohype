@@ -250,7 +250,7 @@ export default async function StyleMatchPage() {
           </div>
         )}
 
-        {/* あなたに合いそうなアイテム */}
+        {/* MVP: あなたに合いそうなアイテムセクション一時非表示（将来のアフィリエイト対応時に復活）
         {recommendItems && (
           <div className="w-full max-w-md mb-6">
             <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{ color: 'var(--purple)' }}>
@@ -315,8 +315,9 @@ export default async function StyleMatchPage() {
             </div>
           </div>
         )}
+        */}
 
-        {/* おすすめアイテム */}
+        {/* MVP: おすすめアイテム（アフィリエイト）セクション一時非表示（将来のアフィリエイト対応時に復活）
         {affiliateItems && (
           <div className="w-full max-w-md mb-6">
             <div className="flex items-center gap-2 mb-4">
@@ -331,7 +332,6 @@ export default async function StyleMatchPage() {
                   className="rounded-2xl overflow-hidden"
                   style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
                 >
-                  {/* 画像プレースホルダー */}
                   <div
                     className="h-24 flex items-center justify-center text-5xl"
                     style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.1) 0%, rgba(236,72,153,0.08) 100%)' }}
@@ -340,30 +340,21 @@ export default async function StyleMatchPage() {
                   </div>
 
                   <div className="p-4">
-                    {/* カテゴリ */}
                     <span
                       className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
                       style={{ background: 'var(--bg-subtle)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
                     >
                       {item.category}
                     </span>
-
-                    {/* 商品名 */}
                     <h3 className="text-sm font-bold mt-2 mb-1.5" style={{ color: 'var(--text)' }}>
                       {item.itemName}
                     </h3>
-
-                    {/* おすすめ理由 */}
                     <p className="text-xs leading-relaxed mb-1.5" style={{ color: 'var(--text-sub)' }}>
                       {item.reason}
                     </p>
-
-                    {/* 選ぶポイント */}
                     <p className="text-[11px] leading-relaxed mb-3" style={{ color: 'var(--text-muted)' }}>
                       <span className="font-semibold">選ぶポイント：</span>{item.point}
                     </p>
-
-                    {/* タグ */}
                     <div className="flex flex-wrap gap-1.5 mb-3">
                       {item.tags.map(tag => (
                         <span
@@ -375,8 +366,6 @@ export default async function StyleMatchPage() {
                         </span>
                       ))}
                     </div>
-
-                    {/* 商品を見るボタン */}
                     <AffiliateItemButton
                       itemId={item.id}
                       itemName={item.itemName}
@@ -390,6 +379,7 @@ export default async function StyleMatchPage() {
             </div>
           </div>
         )}
+        */}
 
         {/* CTAs: show only missing diagnoses */}
         <div className="w-full max-w-md flex flex-col gap-3">

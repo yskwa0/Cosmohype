@@ -44,7 +44,7 @@ export default async function CosmoPage() {
 
   return (
     <>
-      <TopBar title="COSMO" left={<BackButton href="/search" />} />
+      <TopBar title="COSMO" left={<BackButton href="/contents" />} />
 
       {/* Hero */}
       <div className="px-5 pt-7 pb-1 text-center">
