@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: 'Cosmohype — ファッションSNS',
   description: 'コーデをシェアして、ファッションでつながろう',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icon.jpg',
+    apple: '/apple-icon.jpg',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
