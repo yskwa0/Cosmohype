@@ -9,6 +9,7 @@ import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { StyleId } from '@/lib/style-id/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatRelativeTime } from '@/lib/utils'
+import { saveFeedScroll, armFeedScrollRestore } from '@/lib/feedScrollStore'
 import { InlineComments } from './InlineComments'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
@@ -96,16 +97,29 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
       singleTapTimerRef.current = setTimeout(() => {
         setViewerIdx(currentImage)
         setViewerOpen(true)
-      }, 300)
+      }, 160)
     }
     lastTapRef.current = now
   }
 
   return (
     <div
+      data-post-id={post.id}
       className="px-4 py-3"
-      style={{ borderBottom: '1px solid var(--border)' }}
-      onClick={() => router.push(`/post/${post.id}`)}
+      style={{ borderBottom: '1px solid var(--border)', position: 'relative' }}
+      onClick={(e) => {
+        let node: HTMLElement | null = e.currentTarget as HTMLElement
+        while (node && getComputedStyle(node).overflowY !== 'auto') {
+          node = node.parentElement
+        }
+        const panelIdx = Number(node?.dataset?.feedPanel ?? '0')
+        const scrollTop = node?.scrollTop ?? 0
+
+        saveFeedScroll(scrollTop, panelIdx)
+        armFeedScrollRestore()
+        sessionStorage.setItem('post_slide_from_feed', '1')
+        router.push(`/post/${post.id}`, { scroll: false })
+      }}
     >
       <div className="flex gap-3">
 

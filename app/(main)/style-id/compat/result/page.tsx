@@ -32,7 +32,7 @@ export default async function CompatResultPage({
       {/* ヘッダー */}
       <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'var(--nav-bg)' }}>
         <div className="max-w-md mx-auto flex items-center px-5 h-14">
-          <BackButton />
+          <BackButton variant="purple" />
           <span className="ml-2 text-base font-semibold" style={{ color: 'var(--text)' }}>相性診断結果</span>
         </div>
         <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border), transparent)' }} />

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
@@ -9,23 +10,34 @@ import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { Profile } from '@/types/database'
 import type { StyleId } from '@/lib/style-id/types'
 
+type FollowState = 'not_following' | 'following' | 'pending'
+
 interface Props {
   profile: Profile
   postsCount: number
   isOwner: boolean
   currentUserId?: string
   initialFollowing: boolean
+  initialPending?: boolean
+  isMutualFollow?: boolean
+  isFollowedBy?: boolean
 }
 
 const STAR_COUNT = 8
 
-export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, initialFollowing }: Props) {
-  const [following, setFollowing] = useState(initialFollowing)
+export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, initialFollowing, initialPending = false, isMutualFollow = false, isFollowedBy: initialIsFollowedBy = false }: Props) {
+  const [followState, setFollowState] = useState<FollowState>(
+    initialFollowing ? 'following' : initialPending ? 'pending' : 'not_following'
+  )
   const [followersCount, setFollowersCount] = useState(profile.followers_count)
+  const [isFollowedBy, setIsFollowedBy] = useState(initialIsFollowedBy)
   const [loading, setLoading] = useState(false)
+  const [editPressing, setEditPressing] = useState(false)
   const [sparkling, setSparkling] = useState(false)
+  const [showUnfollowModal, setShowUnfollowModal] = useState(false)
   const starsRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
+  const router = useRouter()
 
   useEffect(() => {
     if (!sparkling || !starsRef.current) return
@@ -50,23 +62,59 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
     return () => clearTimeout(timeout)
   }, [sparkling])
 
-  async function toggleFollow() {
+  async function doUnfollow(alsoRemoveFollower: boolean) {
     if (!currentUserId) return
     setLoading(true)
-    const next = !following
-    setFollowing(next)
-    setFollowersCount(c => next ? c + 1 : c - 1)
+    setShowUnfollowModal(false)
 
-    if (next) {
-      setSparkling(true)
-      setTimeout(() => setSparkling(false), 700)
-      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: profile.id })
-    } else {
-      await supabase.from('follows').delete()
-        .eq('follower_id', currentUserId)
-        .eq('following_id', profile.id)
+    await supabase.from('follows').delete()
+      .eq('follower_id', currentUserId)
+      .eq('following_id', profile.id)
+
+    if (alsoRemoveFollower) {
+      await supabase.rpc('remove_follower', { p_follower_id: profile.id })
+      setIsFollowedBy(false)
     }
+
+    setFollowState('not_following')
+    setFollowersCount(c => c - 1)
     setLoading(false)
+    router.refresh()
+  }
+
+  async function toggleFollow() {
+    if (!currentUserId) return
+
+    if (followState === 'following') {
+      if (isFollowedBy) {
+        setShowUnfollowModal(true)
+      } else {
+        await doUnfollow(false)
+      }
+    } else if (followState === 'pending') {
+      setFollowState('not_following')
+      await supabase.from('follow_requests').delete()
+        .eq('requester_id', currentUserId)
+        .eq('target_id', profile.id)
+    } else {
+      if (profile.is_private) {
+        setFollowState('pending')
+        await supabase.from('follow_requests').insert({
+          requester_id: currentUserId,
+          target_id: profile.id,
+        })
+      } else {
+        setSparkling(true)
+        setTimeout(() => setSparkling(false), 700)
+        setFollowState('following')
+        setFollowersCount(c => c + 1)
+        await supabase.from('follows').insert({
+          follower_id: currentUserId,
+          following_id: profile.id,
+        })
+        router.refresh()
+      }
+    }
   }
 
   return (
@@ -98,8 +146,14 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
       {/* Stats: full-width, 3 equal columns */}
       <div className="grid grid-cols-3 text-center mb-3">
         <Stat value={postsCount} label="投稿" />
-        <Stat value={followersCount} label="フォロワー" />
-        <Stat value={profile.following_count} label="フォロー" />
+        <Link href={`/profile/${profile.username}/followers`} className="flex flex-col items-center active:opacity-70">
+          <span className="text-base font-bold" style={{ color: 'var(--text)' }}>{followersCount}</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>フォロワー</span>
+        </Link>
+        <Link href={`/profile/${profile.username}/following`} className="flex flex-col items-center active:opacity-70">
+          <span className="text-base font-bold" style={{ color: 'var(--text)' }}>{profile.following_count}</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>フォロー</span>
+        </Link>
       </div>
 
       {profile.bio && (
@@ -123,8 +177,16 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
       {isOwner ? (
         <Link
           href="/profile/edit"
-          className="w-full flex items-center justify-center h-9 rounded-xl border text-sm font-medium transition-colors"
-          style={{ borderColor: 'var(--border)', color: 'var(--text-sub)' }}
+          className="w-full flex items-center justify-center h-9 rounded-xl border text-sm font-medium"
+          style={{
+            borderColor: 'var(--border)',
+            color: 'var(--text-sub)',
+            transform: editPressing ? 'scale(0.95)' : 'scale(1)',
+            transition: 'transform 150ms ease-out',
+          }}
+          onPointerDown={() => setEditPressing(true)}
+          onPointerUp={() => setEditPressing(false)}
+          onPointerLeave={() => setEditPressing(false)}
         >
           プロフィールを編集
         </Link>
@@ -135,12 +197,15 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
               onClick={toggleFollow}
               disabled={loading}
               className="w-full h-9 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
-              style={following
-                ? { background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }
-                : { background: 'var(--purple-glow)', color: '#fff' }
+              style={
+                followState === 'following'
+                  ? { background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }
+                  : followState === 'pending'
+                  ? { background: 'var(--bg-subtle)', color: 'var(--text-muted)', border: '1px solid var(--border)' }
+                  : { background: 'var(--purple-glow)', color: '#fff' }
               }
             >
-              {following ? 'フォロー中' : 'フォローする'}
+              {followState === 'following' ? 'フォロー中' : followState === 'pending' ? '承認待ち' : isFollowedBy ? 'フォローバック' : 'フォローする'}
             </button>
             {sparkling && (
               <div ref={starsRef} className="absolute inset-0 pointer-events-none" style={{ overflow: 'visible', zIndex: 50 }}>
@@ -156,11 +221,59 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
               </div>
             )}
           </div>
-          <StartDmButton
-            targetUserId={profile.id}
-            currentUserId={currentUserId}
-            className="flex-1"
-          />
+          {isMutualFollow && (
+            <StartDmButton
+              targetUserId={profile.id}
+              currentUserId={currentUserId!}
+              className="flex-1"
+            />
+          )}
+        </div>
+      )}
+
+      {/* フォロー解除確認モーダル */}
+      {showUnfollowModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowUnfollowModal(false)}
+        >
+          <div
+            className="w-full rounded-t-2xl px-4 pt-5 pb-8"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="text-center text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>
+              フォロワーからも削除しますか？
+            </p>
+            <p className="text-center text-xs mb-5" style={{ color: 'var(--text-muted)' }}>
+              {profile.display_name ?? profile.username} さんはあなたをフォローしています
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => doUnfollow(true)}
+                className="w-full h-11 rounded-xl text-sm font-semibold"
+                style={{ background: '#EF4444', color: '#fff' }}
+              >
+                削除する
+              </button>
+              <button
+                onClick={() => doUnfollow(false)}
+                className="w-full h-11 rounded-xl text-sm font-medium"
+                style={{ background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }}
+              >
+                しない
+              </button>
+              <button
+                onClick={() => setShowUnfollowModal(false)}
+                className="w-full h-11 rounded-xl text-sm font-medium"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

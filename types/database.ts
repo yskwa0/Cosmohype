@@ -10,8 +10,10 @@ export type Profile = {
   body_type: string | null
   theme: string | null
   is_private: boolean
+  follow_activity_last_read_at: string | null
   followers_count: number
   following_count: number
+  cosmo_post_id: string | null
   created_at: string
   updated_at: string
 }
@@ -102,6 +104,13 @@ export type Block = {
   created_at: string
 }
 
+export type FollowRequest = {
+  id: string
+  requester_id: string
+  target_id: string
+  created_at: string
+}
+
 export type Conversation = {
   id: string
   created_at: string
@@ -158,8 +167,10 @@ export type Database = {
           body_type: string | null
           theme: string | null
           is_private: boolean
+          follow_activity_last_read_at: string | null
           followers_count: number
           following_count: number
+          cosmo_post_id: string | null
           created_at: string
           updated_at: string
         }
@@ -175,8 +186,10 @@ export type Database = {
           body_type?: string | null
           theme?: string | null
           is_private?: boolean
+          follow_activity_last_read_at?: string | null
           followers_count?: number
           following_count?: number
+          cosmo_post_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -192,8 +205,10 @@ export type Database = {
           body_type?: string | null
           theme?: string | null
           is_private?: boolean
+          follow_activity_last_read_at?: string | null
           followers_count?: number
           following_count?: number
+          cosmo_post_id?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -389,6 +404,41 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      follow_requests: {
+        Row: {
+          id: string
+          requester_id: string
+          target_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          requester_id: string
+          target_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          requester_id?: string
+          target_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_requests_target_id_fkey"
+            columns: ["target_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           }
         ]
@@ -685,11 +735,60 @@ export type Database = {
           }
         ]
       }
+      notification_settings: {
+        Row: {
+          user_id: string
+          likes: boolean
+          comments: boolean
+          follows: boolean
+          dms: boolean
+          hype_results: boolean
+          announcements: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          likes?: boolean
+          comments?: boolean
+          follows?: boolean
+          dms?: boolean
+          hype_results?: boolean
+          announcements?: boolean
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          likes?: boolean
+          comments?: boolean
+          follows?: boolean
+          dms?: boolean
+          hype_results?: boolean
+          announcements?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_settings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      approve_follow_request: {
+        Args: { p_request_id: string }
+        Returns: void
+      }
+      remove_follower: {
+        Args: { p_follower_id: string }
+        Returns: void
+      }
       get_my_conversation_ids: {
         Args: Record<never, never>
         Returns: string[]

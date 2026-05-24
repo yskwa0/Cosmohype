@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
+import { useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
-import { createClient } from '@/lib/supabase/client'
+import { decodeResult } from '@/lib/style-id/scoring'
+import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
+import type { StyleId } from '@/lib/style-id/types'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,12 @@ type BodyTypeInfo = {
   silhouette: string[]
   materials: string[]
   avoid: string[]
+}
+
+type OutfitSuggestion = {
+  name: string
+  items: string
+  tag: string
 }
 
 // ── Body type result data ──────────────────────────────────────────────────
@@ -103,6 +111,146 @@ const BODY_TYPE_DATA: Record<BodyType, BodyTypeInfo> = {
       '光沢素材（サテン・シルクなど）',
       '小花柄など細かいプリント',
     ],
+  },
+}
+
+const OUTFITS: Record<BodyType, OutfitSuggestion[]> = {
+  straight: [
+    { name: 'クリーンシック', items: 'Vネックトップス × ストレートデニム × トレンチコート', tag: '定番' },
+    { name: 'オフィスエレガント', items: 'テーラードジャケット × セットアップ', tag: '上品' },
+    { name: 'シンプルカジュアル', items: 'タートルネック × ストレートデニム', tag: 'デイリー' },
+  ],
+  wave: [
+    { name: 'フェミニンスイート', items: 'リボンブラウス × フレアスカート', tag: 'デート' },
+    { name: 'ガーリーワンピ', items: 'Aラインワンピース × ショートジャケット', tag: 'おでかけ' },
+    { name: 'ウエストマークルック', items: 'フィットトップス × ハイウエストボトムス', tag: 'トレンド' },
+  ],
+  natural: [
+    { name: 'こなれカジュアル', items: 'オーバーサイズトップス × ワイドパンツ', tag: '定番' },
+    { name: 'レイヤードスタイル', items: 'ビッグシャツ × ロングカーディガン', tag: 'こなれ感' },
+    { name: 'ボヘミアンチック', items: 'デニムジャケット × マキシ丈スカート', tag: 'おしゃれ' },
+  ],
+}
+
+// ── Combined STYLE ID × Body type recommendations ─────────────────────────
+
+type CombinedRec = {
+  point: string
+  outfits: string[]
+}
+
+const COMBINED_RECS: Record<StyleId, Record<BodyType, CombinedRec>> = {
+  COSMIC_REBEL: {
+    straight: {
+      point: 'ストリート感はそのままに、縦のIラインを意識するとメリハリがさらに際立ちます',
+      outfits: ['クロップドフーディ × ストレートデニム × スタジアムジャケット', 'グラフィックTシャツ × カーゴパンツ × スニーカー'],
+    },
+    wave: {
+      point: 'ウエストをマークしたストリートスタイルで、曲線美とエッジ感を融合させて',
+      outfits: ['タイトリブトップス × バギーパンツ × スニーカー', 'ショートブルゾン × ハイウエストスカート'],
+    },
+    natural: {
+      point: 'オーバーサイズシルエットが骨格のフレーム感と相性抜群。自然にこなれるストリートを',
+      outfits: ['ビッグパーカー × ワイドカーゴパンツ', 'ビッグジャケット × ベイカーパンツ × スニーカー'],
+    },
+  },
+  SOFT_DREAMER: {
+    straight: {
+      point: '装飾を足すよりも素材で夢見る世界観を。シンプルかつロマンチックに仕上げて',
+      outfits: ['シルクブラウス × ストレートスカート', 'Vネックニット × フロアレングスフレアスカート'],
+    },
+    wave: {
+      point: 'フリルと曲線的シルエットが最大限に映える組み合わせ。ドリーミーを全開に',
+      outfits: ['フリルブラウス × フレアスカート × ウエストマーク', 'Aラインワンピース × パールアクセサリー'],
+    },
+    natural: {
+      point: 'ゆったりとした素材感でボヘミアンドリーマーの世界観に。レイヤードで奥行きを',
+      outfits: ['ビッグシャツワンピース × ロングカーディガン', 'リネンブラウス × マキシスカート × シアーアウター'],
+    },
+  },
+  URBAN_EDGE: {
+    straight: {
+      point: 'シャープなIラインが都会的なエッジ感をさらに高めます。上質素材で洗練感を',
+      outfits: ['テーラードジャケット × スリムトラウザー', 'モノトーンセットアップ × ショートブーツ'],
+    },
+    wave: {
+      point: 'ウエストマークのエッジなシルエットでフェミニンアーバンを表現',
+      outfits: ['ショートジャケット × ハイウエストスカート × ヒール', 'クロップドトップス × タイトスカート × ブーツ'],
+    },
+    natural: {
+      point: 'ストラクチャードなオーバーサイズで骨格の存在感を活かしたモードスタイルに',
+      outfits: ['ビッグコート × ワイドスラックス × ショートブーツ', 'ダブルジャケット × ワイドデニム × スニーカー'],
+    },
+  },
+  CLASSIC_ELITE: {
+    straight: {
+      point: '上質な素材×Iラインの組み合わせが正統派の完成形。引き算の美学を徹底して',
+      outfits: ['カシミアニット × ストレートスラックス × トレンチコート', 'シルクブラウス × テーラードパンツ'],
+    },
+    wave: {
+      point: 'クラシックなフェミニンシルエットに素材の上品さを加えて優雅に仕上げて',
+      outfits: ['Aラインスカート × タックインブラウス × バレエフラット', 'ニットトップス × フレアスカート × パールアクセ'],
+    },
+    natural: {
+      point: 'ゆとりのあるシルエット×上質素材でこなれたエレガンスを実現',
+      outfits: ['ロングコート × ワイドスラックス × ローファー', 'オーバーサイズシャツ × フレアパンツ'],
+    },
+  },
+  FREE_SPIRIT: {
+    straight: {
+      point: 'リネンや綿のナチュラル素材でシンプルに。ストレートシルエットで軽やかに表現',
+      outfits: ['リネンシャツ × ストレートデニム × バスケットバッグ', '白Tシャツ × コットンワイドパンツ × サンダル'],
+    },
+    wave: {
+      point: 'ウエストをリボンやベルトでマークしてボヘミアン×フェミニンの融合を楽しんで',
+      outfits: ['スモックトップス × ウエストマークロングスカート', 'リボンブラウス × フレアスカート × ウェッジサンダル'],
+    },
+    natural: {
+      point: 'オーバーサイズ×ナチュラル素材が最も自然に決まります。レイヤードで自由に',
+      outfits: ['マキシワンピース × デニムジャケット', 'ビッグリネンシャツ × ワイドパンツ × 布バッグ'],
+    },
+  },
+  DARK_POET: {
+    straight: {
+      point: 'ブラック×Iラインのモードスタイルでダークポエトの美学を完璧に体現して',
+      outfits: ['ブラックセットアップ × ヒールブーツ', 'タートルネック × スラックス × レザージャケット'],
+    },
+    wave: {
+      point: 'コルセットやウエストマークでゴシックフェミニンを。曲線美をダークに活かして',
+      outfits: ['コルセットトップス × ベルベットフレアスカート', 'レースブラウス × フレアスカート × アンクルブーツ'],
+    },
+    natural: {
+      point: 'ビッグシルエット×ダークカラーで骨格の存在感を最大限に活かす',
+      outfits: ['オーバーサイズブラックコート × ワイドパンツ × ブーツ', 'ビッグジャケット × ロングスカート'],
+    },
+  },
+  RETRO_WAVE: {
+    straight: {
+      point: 'クリーンなレトロスタイルでシンプルに70sを表現。ハリのある素材がよく合う',
+      outfits: ['ハイネックリブ × ストレートデニム × ローファー', 'ストライプシャツ × ハイウエストスラックス'],
+    },
+    wave: {
+      point: 'フレア×ウエストマークでレトロフェミニンの真髄を。Aラインシルエットが鍵',
+      outfits: ['フレアワンピース × ウエストマーク × メリージェーン', 'ニットトップス × ミディフレアスカート × スカーフ'],
+    },
+    natural: {
+      point: 'オーバーサイズヴィンテージで自然なこなれ感。デニム×リネンとの相性が抜群',
+      outfits: ['ビッグデニムシャツ × フレアパンツ × スニーカー', 'コーデュロイジャケット × ワイドデニム × ブーツ'],
+    },
+  },
+  MINIMAL_SOUL: {
+    straight: {
+      point: 'モノトーン×Iラインがミニマリストの完成形。上質な素材だけを厳選して',
+      outfits: ['ホワイトシャツ × ブラックスラックス × レザーシューズ', 'モノトーンセットアップ × クリーンスニーカー'],
+    },
+    wave: {
+      point: 'シンプルながらウエストをマークして女性らしいミニマルラインを作る',
+      outfits: ['フィットニット × フレアスカート × フラットシューズ', 'タックインカットソー × ハイウエストスカート'],
+    },
+    natural: {
+      point: 'ゆとりあるシルエット×骨格のフレームでこなれた洗練感を自然に表現',
+      outfits: ['ビッグリネンシャツ × ワイドパンツ × サンダル', 'オーバーサイズニット × テーパードパンツ'],
+    },
   },
 }
 
@@ -215,29 +363,45 @@ function calcResult(answers: BodyType[]): BodyType {
   const scores: Record<BodyType, number> = { straight: 0, wave: 0, natural: 0 }
   for (const t of answers) scores[t]++
 
-  // 同点時は最後に選んだタイプを優先するため後ろから走査
   const lastAnswer = [...answers].reverse().find(Boolean) ?? 'straight'
   const maxScore = Math.max(scores.straight, scores.wave, scores.natural)
 
   const tied = (Object.keys(scores) as BodyType[]).filter(t => scores[t] === maxScore)
   if (tied.length === 1) return tied[0]
 
-  // 同点 → 最後に選んだタイプが tied に含まれればそちら
   return tied.includes(lastAnswer) ? lastAnswer : tied[0]
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
-function QuizBackIcon({ onClick }: { onClick: () => void }) {
+function QuizBackButton({ onClick }: { onClick: () => void }) {
+  const [pressed, setPressed] = useState(false)
   return (
     <button
       onClick={onClick}
-      className="flex items-center justify-center w-9 h-9 rounded-full"
-      style={{ color: 'var(--text)' }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
       aria-label="前の質問に戻る"
+      style={{
+        width: '44px',
+        height: '44px',
+        borderRadius: '50%',
+        background: 'rgba(124,58,237,0.18)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        userSelect: 'none',
+        transform: pressed ? 'scale(0.82)' : 'scale(1)',
+        transition: pressed
+          ? 'transform 70ms ease-in'
+          : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+      }}
     >
-      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+      <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 18l-6-6 6-6" />
       </svg>
     </button>
   )
@@ -277,18 +441,11 @@ function TagRow({
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
-export default function BodyTypePage() {
+function BodyTypePageContent() {
+  const searchParams = useSearchParams()
   const [phase, setPhase] = useState<'intro' | 'quiz' | 'result'>('intro')
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState<BodyType[]>([])
-  const [userId, setUserId] = useState<string | null | undefined>(undefined)
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-
-  useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null)
-    })
-  }, [])
 
   function handleStart() {
     setCurrentIndex(0)
@@ -318,19 +475,8 @@ export default function BodyTypePage() {
   function handleRetry() {
     setCurrentIndex(0)
     setAnswers([])
-    setSaveStatus('idle')
     setPhase('intro')
-  }
-
-  async function handleSave(bodyType: BodyType) {
-    if (!userId) return
-    setSaveStatus('saving')
-    const supabase = createClient()
-    const { error } = await supabase
-      .from('profiles')
-      .update({ body_type: bodyType })
-      .eq('id', userId)
-    setSaveStatus(error ? 'error' : 'saved')
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
   const progress = ((currentIndex + 1) / TOTAL) * 100
@@ -339,29 +485,18 @@ export default function BodyTypePage() {
   if (phase === 'intro') {
     return (
       <>
-        <TopBar title="骨格診断" left={<BackButton href="/search" />} />
+        <TopBar title="骨格診断" left={<BackButton variant="purple" />} />
 
         <div className="flex flex-col items-center px-5 pb-24">
           <div className="w-full max-w-md mt-8 mb-6 text-center">
-            <div
-              className="inline-flex items-center justify-center w-20 h-20 rounded-3xl mb-6"
-              style={{ background: 'linear-gradient(135deg, #4C1D95 0%, #7C3AED 50%, #EC4899 100%)' }}
-            >
-              <span className="text-4xl" role="img" aria-label="body type">🪄</span>
-            </div>
-
             <p className="text-[10px] font-bold tracking-widest uppercase mb-3" style={{ color: 'var(--purple)' }}>
               BODY TYPE DIAGNOSIS
             </p>
-
             <h1 className="text-2xl font-black tracking-tight mb-4" style={{ color: 'var(--text)' }}>
               骨格診断
             </h1>
-
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-sub)' }}>
-              12問の質問に答えて、
-              <br />
-              あなたに似合いやすい着こなしを見つけよう
+              12問の質問に答えて、<br />あなたに似合いやすい着こなしを見つけよう
             </p>
           </div>
 
@@ -373,7 +508,7 @@ export default function BodyTypePage() {
               {[
                 { step: '01', label: '12問に答える', desc: '体型・質感・関節など' },
                 { step: '02', label: '骨格タイプを判定', desc: 'ストレート・ウェーブ・ナチュラル' },
-                { step: '03', label: '着こなしアドバイスを受け取る', desc: '似合うアイテム・避けるアイテム' },
+                { step: '03', label: 'おすすめコーデを確認', desc: '似合うアイテム・コーデ提案' },
               ].map(({ step, label, desc }) => (
                 <div key={step} className="flex items-start gap-4">
                   <div
@@ -399,7 +534,6 @@ export default function BodyTypePage() {
             >
               診断をはじめる
             </button>
-
             <p className="text-center text-[11px] mt-4 leading-relaxed px-4" style={{ color: 'var(--text-muted)' }}>
               ※ この診断は医学的な診断ではなく、ファッションの参考診断です
             </p>
@@ -413,10 +547,16 @@ export default function BodyTypePage() {
   if (phase === 'result') {
     const resultType = calcResult(answers)
     const info = BODY_TYPE_DATA[resultType]
+    const outfits = OUTFITS[resultType]
+
+    const styleParam = searchParams.get('r')
+    const styleResult = styleParam ? decodeResult(styleParam) : null
+    const styleInfo = styleResult ? STYLE_TYPES[styleResult.primaryStyle] : null
+    const combinedRec = styleResult ? COMBINED_RECS[styleResult.primaryStyle][resultType] : null
 
     return (
       <>
-        <TopBar title="診断結果" left={<BackButton href="/body-type" />} />
+        <TopBar title="診断結果" left={<BackButton variant="purple" />} />
 
         {/* Hero */}
         <div
@@ -450,7 +590,94 @@ export default function BodyTypePage() {
             </p>
           </div>
 
-          {/* Advice card */}
+          {/* Outfit suggestions */}
+          <div className="flex flex-col gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest px-1" style={{ color: 'var(--purple)' }}>
+              RECOMMENDED OUTFITS
+            </p>
+            {outfits.map((outfit, i) => (
+              <div
+                key={i}
+                className="rounded-2xl p-4 flex items-center gap-4"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-sm font-black"
+                  style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}
+                >
+                  {String.fromCharCode(65 + i)}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-bold truncate" style={{ color: 'var(--text)' }}>{outfit.name}</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ background: 'var(--purple-dim)', color: 'var(--purple)' }}>
+                      {outfit.tag}
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{outfit.items}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Combined STYLE ID × Body type */}
+          {styleInfo && combinedRec && (
+            <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+              <div
+                className="px-5 py-4"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(236,72,153,0.15) 100%)',
+                  borderBottom: '1px solid var(--border)',
+                }}
+              >
+                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--purple)' }}>
+                  STYLE ID × 骨格診断
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className="text-xs px-2.5 py-1 rounded-full font-bold"
+                    style={{ background: 'var(--purple-dim)', color: 'var(--purple)', border: '1px solid var(--border)' }}
+                  >
+                    {styleInfo.name}
+                  </span>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>×</span>
+                  <span
+                    className="text-xs px-2.5 py-1 rounded-full font-bold"
+                    style={{ background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }}
+                  >
+                    {info.name}
+                  </span>
+                </div>
+              </div>
+              <div
+                className="px-5 py-4 flex flex-col gap-4"
+                style={{ background: 'var(--bg-elevated)' }}
+              >
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text-sub)' }}>
+                  {combinedRec.point}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {combinedRec.outfits.map((outfit, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 px-3.5 py-3 rounded-xl"
+                      style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)' }}
+                    >
+                      <span
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5"
+                        style={{ background: 'linear-gradient(135deg, #7C3AED, #EC4899)', color: '#fff' }}
+                      >
+                        {i + 1}
+                      </span>
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--text-sub)' }}>{outfit}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Style advice */}
           <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
             <div
               className="px-5 py-4"
@@ -466,7 +693,6 @@ export default function BodyTypePage() {
                 {info.name}タイプの着こなし
               </h2>
             </div>
-
             <div className="divide-y" style={{ background: 'var(--bg-elevated)', borderColor: 'var(--border)' }}>
               <TagRow label="似合いやすいアイテム" tags={info.items} variant="accent" />
               <TagRow label="得意なシルエット" tags={info.silhouette} />
@@ -477,44 +703,6 @@ export default function BodyTypePage() {
 
           {/* Actions */}
           <div className="flex flex-col gap-3 pt-1">
-            {/* Save button */}
-            {userId === null ? (
-              <p className="text-center text-xs py-3" style={{ color: 'var(--text-muted)' }}>
-                ログインすると保存できます
-              </p>
-            ) : saveStatus === 'saved' ? (
-              <>
-                <div
-                  className="w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-semibold"
-                  style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', color: 'rgb(34,197,94)' }}
-                >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                  骨格タイプを保存しました
-                </div>
-                <Link
-                  href="/style-match"
-                  className="w-full py-4 rounded-2xl font-bold text-sm text-white transition-all active:scale-[0.97] flex items-center justify-center"
-                  style={{
-                    background: 'linear-gradient(135deg, #7C3AED 0%, #EC4899 100%)',
-                    boxShadow: '0 4px 16px rgba(124,58,237,0.3)',
-                  }}
-                >
-                  STYLE ID × 骨格の結果を見る
-                </Link>
-              </>
-            ) : (
-              <button
-                onClick={() => handleSave(resultType)}
-                disabled={saveStatus === 'saving' || userId === undefined}
-                className="w-full py-4 rounded-2xl font-semibold text-sm transition-all active:scale-[0.97] disabled:opacity-50"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text)' }}
-              >
-                {saveStatus === 'saving' ? '保存中...' : saveStatus === 'error' ? '保存に失敗しました。もう一度' : 'この骨格タイプを保存する'}
-              </button>
-            )}
-
             <button
               onClick={handleRetry}
               className="w-full py-4 rounded-2xl font-semibold text-sm transition-all active:scale-[0.97]"
@@ -533,7 +721,7 @@ export default function BodyTypePage() {
 
   return (
     <>
-      <TopBar title="骨格診断" left={<QuizBackIcon onClick={handleBack} />} />
+      <TopBar title="骨格診断" left={<QuizBackButton onClick={handleBack} />} />
 
       <div className="flex flex-col px-5 pb-24">
         {/* Progress */}
@@ -590,5 +778,13 @@ export default function BodyTypePage() {
         </div>
       </div>
     </>
+  )
+}
+
+export default function BodyTypePage() {
+  return (
+    <Suspense>
+      <BodyTypePageContent />
+    </Suspense>
   )
 }

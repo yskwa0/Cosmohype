@@ -2,11 +2,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
-export function SpringCard({ href, gradient, dots, label, infoButton, children }: {
+export function SpringCard({ href, gradient, dots, label, description, infoButton, children }: {
   href: string
   gradient: string
   dots: [number, number][]
   label: string
+  description?: string
   infoButton?: React.ReactNode
   children: React.ReactNode
 }) {
@@ -59,7 +60,10 @@ export function SpringCard({ href, gradient, dots, label, infoButton, children }
           <div className="relative flex items-center justify-center">
             {children}
           </div>
-          <p className="relative text-[11px] font-semibold text-center tracking-wide text-white opacity-90">{label}</p>
+          <p className="relative text-[13px] font-semibold text-center tracking-wide text-white opacity-90 leading-tight">{label}</p>
+          {description && (
+            <p className="relative mt-1 text-[7.5px] text-center text-white/55 leading-snug px-1 line-clamp-2">{description}</p>
+          )}
         </div>
       </div>
       {infoButton && (

@@ -43,15 +43,19 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
 
-  // 自動スクロール（prepend 時はスキップ）
+  // 自動スクロール（prepend 時・ユーザーが上部を読んでいる時はスキップ）
   useEffect(() => {
     if (isPrepending.current) {
       isPrepending.current = false
       return
     }
-    bottomRef.current?.scrollIntoView({
-      behavior: isInitial.current ? 'instant' : 'smooth',
-    })
+    const el = scrollRef.current
+    const isNearBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 150
+    if (isInitial.current || isNearBottom) {
+      bottomRef.current?.scrollIntoView({
+        behavior: isInitial.current ? 'instant' : 'smooth',
+      })
+    }
     isInitial.current = false
   }, [messages])
 
@@ -193,8 +197,8 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   return (
     <>
-      {/* TopBar(56px) + BottomNav clearance(80px) を引いた高さで固定レイアウト */}
-      <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px - 80px)' }}>
+      {/* TopBar(56px) + safe-area を引いた高さで固定レイアウト（BottomNavなし） */}
+      <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))' }}>
 
         {/* スクロール可能なメッセージ領域 */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
@@ -281,7 +285,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             WebkitBackdropFilter: 'blur(16px)',
           }}
         >
-          <div className="flex items-center gap-2 px-4 py-3">
+          <div className="flex items-center gap-2 px-4 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
             <input
               type="text"
               value={input}

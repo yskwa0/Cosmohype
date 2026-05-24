@@ -105,18 +105,19 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       .from('profiles')
       .select('*')
       .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+      .eq('is_private', false)
       .neq('id', user.id)
       .order('followers_count', { ascending: false })
       .limit(10),
     supabase
       .from('posts')
-      .select('*, profiles(*), post_images(*)')
+      .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
       .contains('tags', [query])
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('posts')
-      .select('*, profiles(*), post_images(*)')
+      .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
       .ilike('caption', `%${query}%`)
       .order('created_at', { ascending: false })
       .limit(10),
@@ -130,7 +131,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   for (const p of [...(postsByTag.data ?? []), ...(postsByCaption.data ?? [])]) {
     postMap.set(p.id, p as Post)
   }
-  posts = Array.from(postMap.values())
+  posts = Array.from(postMap.values()).filter(p => !(p.profiles as { is_private?: boolean } | null)?.is_private)
   likedPostIds = new Set((likedData.data ?? []).map(l => l.post_id))
   savedPostIds = new Set((savedData.data ?? []).map(s => s.post_id))
 

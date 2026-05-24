@@ -39,6 +39,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'blocked' }, { status: 403 })
     }
 
+    // 相互フォロー確認
+    const [{ data: iFollow }, { data: theyFollow }] = await Promise.all([
+      db.from('follows').select('id')
+        .eq('follower_id', user.id).eq('following_id', targetUserId).maybeSingle(),
+      db.from('follows').select('id')
+        .eq('follower_id', targetUserId).eq('following_id', user.id).maybeSingle(),
+    ])
+
+    if (!iFollow || !theyFollow) {
+      return NextResponse.json({ error: 'not_mutual_follow' }, { status: 403 })
+    }
+
     // 既存会話を検索
     const { data: myConvs } = await db
       .from('conversation_participants')

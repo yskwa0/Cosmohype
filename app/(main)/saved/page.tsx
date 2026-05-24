@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
+import { BackButton } from '@/components/ui/BackButton'
 import { PostCard } from '@/components/post/PostCard'
 import type { Post } from '@/types/database'
 
@@ -12,7 +13,7 @@ export default async function SavedPage() {
   const [{ data: savedData }, { data: likedData }] = await Promise.all([
     supabase
       .from('saved_posts')
-      .select('post_id, posts(*, profiles(*), post_images(*))')
+      .select('post_id, posts(*, profiles!posts_user_id_fkey(*), post_images(*))')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
     supabase.from('likes').select('post_id').eq('user_id', user.id),
@@ -24,7 +25,7 @@ export default async function SavedPage() {
 
   return (
     <>
-      <TopBar title="保存済み" />
+      <TopBar title="保存済み" left={<BackButton variant="purple" />} />
       {posts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
           <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4"

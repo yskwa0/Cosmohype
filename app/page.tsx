@@ -20,6 +20,14 @@ export default async function HomePage() {
       */}
       <style>{`
         html, body { background-color: #0A0A1A !important; }
+        .top-spring-btn {
+          transition: transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1);
+          display: block;
+        }
+        .top-spring-btn:active {
+          transform: scale(0.93);
+          transition: transform 70ms ease-in;
+        }
       `}</style>
       <HtmlBackground value="#0A0A1A" />
 
@@ -50,7 +58,7 @@ export default async function HomePage() {
         </div>
 
         <div className="w-full max-w-sm flex flex-col gap-3 relative z-10">
-          <Link href="/register" className="w-full">
+          <Link href="/register" className="top-spring-btn w-full">
             <Button
               fullWidth
               className="h-14 text-base bg-gradient-to-r from-[#7C3AED] to-[#EC4899] hover:opacity-90 border-0"
@@ -58,7 +66,7 @@ export default async function HomePage() {
               新規登録
             </Button>
           </Link>
-          <Link href="/login" className="w-full">
+          <Link href="/login" className="top-spring-btn w-full">
             <Button
               fullWidth
               variant="ghost"

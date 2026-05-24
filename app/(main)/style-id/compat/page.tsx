@@ -142,7 +142,7 @@ export default function CompatPage() {
         }
       `}</style>
 
-      <TopBar title="相性診断" left={<BackButton href={preR ? `/style-id/result?r=${preR}` : '/style-id'} />} />
+      <TopBar title="相性診断" left={<BackButton href={preR ? `/style-id/result?r=${preR}` : '/style-id'} variant="purple" />} />
 
       {/* コンテンツ — ボタン分の余白を下に確保 */}
       <div className={`px-5 pt-6 flex flex-col gap-5 ${styleB ? 'pb-36' : 'pb-16'}`}>
@@ -182,7 +182,7 @@ export default function CompatPage() {
               boxShadow: '0 4px 28px rgba(124,58,237,0.55)',
             }}
           >
-            相性を診断する ✨
+            相性を診断する
           </button>
         </div>
       )}

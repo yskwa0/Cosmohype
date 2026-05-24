@@ -3,20 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { TopBar } from '@/components/layout/TopBar'
-
-function BackButton() {
-  return (
-    <Link
-      href="/contents"
-      className="flex items-center justify-center w-9 h-9 -ml-1 rounded-full active:opacity-60 transition-opacity"
-      aria-label="戻る"
-    >
-      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} style={{ color: 'var(--text)' }}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-      </svg>
-    </Link>
-  )
-}
+import { BackButton } from '@/components/ui/BackButton'
 
 type Column = {
   category: string
@@ -103,7 +90,7 @@ export default function ColumnsPage() {
 
   return (
     <>
-      <TopBar title="コラム" left={<BackButton />} />
+      <TopBar title="コラム" left={<BackButton href="/contents" variant="purple" />} />
       <div className="max-w-md mx-auto pb-24">
 
         {/* 検索バー */}

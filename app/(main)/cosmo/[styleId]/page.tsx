@@ -32,41 +32,83 @@ export default async function CosmoStylePage({
 
   const supabase = await createClient()
 
-  // このスタイルの公開ユーザーIDを取得
+  // このスタイルの全公開ユーザーを取得
   const { data: profileData } = await supabase
     .from('profiles')
-    .select('id')
+    .select('id, username, display_name, avatar_url, cosmo_post_id')
     .eq('style_id', styleId)
     .eq('is_private', false)
 
-  const profileIds = (profileData ?? []).map(p => p.id)
+  const profiles = profileData ?? []
+  const profileMap = new Map(profiles.map(p => [p.id, p]))
 
-  // 投稿を取得（画像あり・最新順）
+  type RawImage = { url: string; display_order: number }
+  type RawPost = { id: string; caption: string | null; user_id: string; post_images: RawImage[] }
+
+  function toGridPost(p: RawPost): GridPost | null {
+    const images = [...(p.post_images ?? [])].sort((a, b) => a.display_order - b.display_order)
+    const imageUrl = images[0]?.url
+    const profile = profileMap.get(p.user_id)
+    if (!imageUrl || !profile) return null
+    return {
+      id: p.id,
+      caption: p.caption,
+      imageUrl,
+      profile: { id: profile.id, username: profile.username, display_name: profile.display_name, avatar_url: profile.avatar_url },
+    }
+  }
+
   let gridPosts: GridPost[] = []
-  if (profileIds.length > 0) {
-    const { data: rawPosts } = await supabase
-      .from('posts')
-      .select('id, caption, user_id, profiles(id, username, display_name, avatar_url), post_images(url, display_order)')
-      .in('user_id', profileIds)
-      .order('created_at', { ascending: false })
-      .limit(30)
 
-    gridPosts = (rawPosts ?? [])
-      .map(p => {
-        const images = (p.post_images ?? []) as { url: string; display_order: number }[]
-        images.sort((a, b) => a.display_order - b.display_order)
-        const imageUrl = images[0]?.url
-        const profile = p.profiles as { id: string; username: string; display_name: string | null; avatar_url: string | null } | null
-        if (!imageUrl || !profile) return null
-        return { id: p.id, caption: p.caption, imageUrl, profile }
-      })
-      .filter((p): p is GridPost => p !== null)
-      .slice(0, 20)
+  if (profiles.length > 0) {
+    const addedUserIds = new Set<string>()
+
+    // ① cosmo_post_id を設定しているユーザー → 選んだ投稿を表示
+    const cosmoPostIds = profiles.map(p => p.cosmo_post_id).filter(Boolean) as string[]
+    if (cosmoPostIds.length > 0) {
+      const { data: featured } = await supabase
+        .from('posts')
+        .select('id, caption, user_id, post_images(url, display_order)')
+        .in('id', cosmoPostIds)
+        .eq('is_archived', false)
+
+      for (const p of (featured ?? []) as RawPost[]) {
+        const gp = toGridPost(p)
+        if (!gp) continue
+        gridPosts.push(gp)
+        addedUserIds.add(p.user_id)
+      }
+    }
+
+    // ② cosmo_post_id 未設定、またはアーカイブで取得できなかったユーザー → 最新投稿を表示
+    const fallbackUserIds = profiles
+      .filter(p => !addedUserIds.has(p.id))
+      .map(p => p.id)
+
+    if (fallbackUserIds.length > 0) {
+      const { data: latest } = await supabase
+        .from('posts')
+        .select('id, caption, user_id, post_images(url, display_order)')
+        .in('user_id', fallbackUserIds)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
+        .limit(fallbackUserIds.length * 5)
+
+      const seen = new Set<string>()
+      for (const p of (latest ?? []) as RawPost[]) {
+        if (seen.has(p.user_id)) continue
+        seen.add(p.user_id)
+        const gp = toGridPost(p)
+        if (gp) gridPosts.push(gp)
+      }
+    }
+
+    gridPosts = gridPosts.slice(0, 20)
   }
 
   return (
     <>
-      <TopBar title={style.name} left={<BackButton href="/cosmo" />} />
+      <TopBar title={style.name} left={<BackButton href="/cosmo" variant="purple" />} />
 
       {/* キャラクター＋説明 */}
       <div

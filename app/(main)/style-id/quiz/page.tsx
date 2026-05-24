@@ -1,5 +1,39 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+
+function QuizBackButton({ onClick }: { onClick: () => void }) {
+  const [pressed, setPressed] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      aria-label="戻る"
+      style={{
+        width: '44px',
+        height: '44px',
+        borderRadius: '50%',
+        background: 'rgba(124,58,237,0.18)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        userSelect: 'none',
+        WebkitUserSelect: 'none' as React.CSSProperties['WebkitUserSelect'],
+        transform: pressed ? 'scale(0.82)' : 'scale(1)',
+        transition: pressed
+          ? 'transform 70ms ease-in'
+          : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+      }}
+    >
+      <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 18l-6-6 6-6" />
+      </svg>
+    </button>
+  )
+}
 import { useRouter } from 'next/navigation'
 import { QUESTIONS } from '@/lib/style-id/questions'
 import { calculateResult, encodeResult } from '@/lib/style-id/scoring'
@@ -62,16 +96,7 @@ export default function QuizPage() {
         style={{ background: 'var(--nav-bg)' }}
       >
         <div className="max-w-md mx-auto flex items-center justify-between px-5 h-14">
-          <button
-            onClick={handleBack}
-            className="flex items-center justify-center w-9 h-9 rounded-full transition-transform duration-75 active:scale-90"
-            style={{ color: 'var(--text)' }}
-            aria-label="戻る"
-          >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-          </button>
+          <QuizBackButton onClick={handleBack} />
           <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--text-muted)' }}>
             {currentQ + 1} <span style={{ color: 'var(--border)' }}>/</span> {QUESTIONS.length}
           </span>

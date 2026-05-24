@@ -1,14 +1,15 @@
 'use client'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { ImageViewer } from '@/components/ui/ImageViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
 import { createClient } from '@/lib/supabase/client'
 import { formatRelativeTime } from '@/lib/utils'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
+import { ImageCarousel } from './ImageCarousel'
 import { PostRecommendItems } from '@/components/affiliate/PostRecommendItems'
 import type { Post } from '@/types/database'
 
@@ -33,7 +34,10 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
   const [likeCount, setLikeCount] = useState(post.likes_count)
   const [saved, setSaved] = useState(isSaved)
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerIdx, setViewerIdx] = useState(0)
   const lastTapRef = useRef(0)
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
   const supabase = createClient()
   const images = post.post_images ?? []
@@ -76,10 +80,19 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
   function handleImageTap(e: React.MouseEvent<HTMLDivElement>) {
     const now = Date.now()
     if (now - lastTapRef.current < 300) {
+      if (singleTapTimerRef.current) {
+        clearTimeout(singleTapTimerRef.current)
+        singleTapTimerRef.current = null
+      }
       const rect = e.currentTarget.getBoundingClientRect()
       setHeartPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
       setTimeout(() => setHeartPos(null), 800)
       if (!liked) toggleLike()
+    } else {
+      singleTapTimerRef.current = setTimeout(() => {
+        setViewerIdx(currentImage)
+        setViewerOpen(true)
+      }, 160)
     }
     lastTapRef.current = now
   }
@@ -124,65 +137,24 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
 
       {/* 全幅画像 */}
       {images.length > 0 && (
-        <div className="relative select-none" onClick={handleImageTap}>
-          <Image
-            src={images[currentImage].url}
+        <div className="select-none">
+          <ImageCarousel
+            images={images}
             alt={post.caption ?? 'コーデ'}
-            width={0}
-            height={0}
             sizes="100vw"
-            style={{ width: '100%', height: 'auto', display: 'block' }}
             priority
-          />
-
-          {heartPos && (
-            <div className="absolute pointer-events-none"
-              style={{ left: heartPos.x - 32, top: heartPos.y - 32, animation: 'heart-burst 0.75s ease-out forwards' }}>
-              <svg viewBox="0 0 24 24" className="w-16 h-16" fill="#F87171">
-                <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-              </svg>
-            </div>
-          )}
-
-          {images.length > 1 && (
-            <>
-              {currentImage > 0 && (
-                <button
-                  onClick={e => { e.stopPropagation(); setCurrentImage(i => i - 1) }}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center"
-                >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                  </svg>
-                </button>
-              )}
-              {currentImage < images.length - 1 && (
-                <button
-                  onClick={e => { e.stopPropagation(); setCurrentImage(i => i + 1) }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center"
-                >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                  </svg>
-                </button>
-              )}
-              {/* ドットインジケーター */}
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={e => { e.stopPropagation(); setCurrentImage(i) }}
-                    className="rounded-full transition-all"
-                    style={{
-                      width: i === currentImage ? 20 : 6,
-                      height: 6,
-                      background: i === currentImage ? 'white' : 'rgba(255,255,255,0.5)',
-                    }}
-                  />
-                ))}
+            onTap={handleImageTap}
+            onIndexChange={setCurrentImage}
+          >
+            {heartPos && (
+              <div className="absolute pointer-events-none"
+                style={{ left: heartPos.x - 32, top: heartPos.y - 32, animation: 'heart-burst 0.75s ease-out forwards' }}>
+                <svg viewBox="0 0 24 24" className="w-16 h-16" fill="#F87171">
+                  <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                </svg>
               </div>
-            </>
-          )}
+            )}
+          </ImageCarousel>
         </div>
       )}
 
@@ -274,6 +246,14 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
           </button>
         </div>
       </div>
+
+      {viewerOpen && images.length > 0 && (
+        <ImageViewer
+          images={images}
+          initialIdx={viewerIdx}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
 
       {/* MVP: 着用アイテムセクション一時非表示（将来のアフィリエイト対応時に復活）
       {post.post_items && post.post_items.length > 0 && (

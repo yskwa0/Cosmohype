@@ -22,6 +22,7 @@ export default function ContentsPage() {
             gradient="linear-gradient(145deg, #1A0844 0%, #5B21B6 50%, #A855F7 100%)"
             dots={DOTS_A}
             label="STYLE ID"
+            description="あなたらしいスタイルタイプを診断"
             infoButton={<StyleIdInfoModal />}
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>
@@ -46,6 +47,7 @@ export default function ContentsPage() {
             gradient="linear-gradient(145deg, #0C1A3A 0%, #1E3A6E 50%, #3B82F6 100%)"
             dots={DOTS_A}
             label="AIコーデ診断"
+            description="あなたのコーデをAIがチェック"
             infoButton={<StyleCheckInfoModal />}
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>
@@ -66,6 +68,7 @@ export default function ContentsPage() {
             gradient="linear-gradient(145deg, #0F0A2E 0%, #1E1B4B 50%, #4C1D95 100%)"
             dots={DOTS_B}
             label="COSMO"
+            description="同じスタイルの仲間を探す"
             infoButton={<CosmoInfoModal />}
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>
@@ -85,6 +88,7 @@ export default function ContentsPage() {
             gradient="linear-gradient(145deg, #1C0030 0%, #7C1D6F 50%, #EC4899 100%)"
             dots={DOTS_A}
             label="HYPE"
+            description="テーマ別コーデをみんなで投稿"
             infoButton={<HypeInfoModal />}
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>
@@ -108,6 +112,7 @@ export default function ContentsPage() {
             gradient="linear-gradient(145deg, #1C1200 0%, #78350F 50%, #D97706 100%)"
             dots={DOTS_B}
             label="コラム"
+            description="ファッション知識を楽しく学ぶ"
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden fill="none">
               <rect x={10} y={8} width={26} height={36} rx={3} fill="#FDE68A" opacity={0.9} />

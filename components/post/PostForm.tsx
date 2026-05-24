@@ -184,7 +184,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
               addTag(brandInput, setBrandTags, brandTags, () => setBrandInput(''))
             }
           }}
-          placeholder="ZARA, UNIQLO... (Enterで追加)"
+          placeholder="ZARA, UNIQLO... (改行で追加)"
           hint="着用ブランドを追加（最大10個）"
         />
         {brandTags.length > 0 && (
@@ -215,7 +215,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
               addTag(tagInput, setTags, tags, () => setTagInput(''))
             }
           }}
-          placeholder="カジュアル, ストリート... (Enterで追加)"
+          placeholder="カジュアル, ストリート... (改行で追加)"
         />
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">

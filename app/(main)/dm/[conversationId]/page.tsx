@@ -62,9 +62,9 @@ export default async function ChatPage({
   const initialHasMore = rawMessages.length === 30
 
   return (
-    <>
+    <div style={{ marginBottom: '-80px' }}>
       <TopBar
-        left={<BackButton href="/dm" />}
+        left={<BackButton href="/dm" variant="purple" />}
         title={
           otherUser ? (
             <div className="flex items-center gap-2">
@@ -89,6 +89,6 @@ export default async function ChatPage({
         initialMessages={initialMessages}
         initialHasMore={initialHasMore}
       />
-    </>
+    </div>
   )
 }

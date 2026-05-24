@@ -11,7 +11,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   const supabase = await createClient()
 
   const [{ data: post }, { data: { user } }, { data: commentsRaw }] = await Promise.all([
-    supabase.from('posts').select(`*, profiles(*), post_images(*)`).eq('id', id).single(),
+    supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).eq('id', id).single(),
     supabase.auth.getUser(),
     supabase.from('comments').select(`*, profiles(*)`).eq('post_id', id).order('created_at', { ascending: true }),
   ])
@@ -30,7 +30,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <>
-      <TopBar title="投稿" left={<BackButton />} />
+      <TopBar title="投稿" left={<BackButton variant="purple" />} />
       <PostDetail post={{ ...post, post_items: postItems ?? [] } as Post} userId={user?.id} isLiked={isLiked} isSaved={isSaved} />
       <CommentSection
         postId={id}

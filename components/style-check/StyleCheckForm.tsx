@@ -112,26 +112,11 @@ export function StyleCheckForm({ todayResult }: { todayResult: string | null }) 
   return (
     <div className="px-4 pt-6 pb-10 flex flex-col gap-6">
       {/* Intro */}
-      <div className="flex flex-col items-center text-center gap-3">
-        <div
-          className="w-16 h-16 rounded-2xl flex items-center justify-center"
-          style={{
-            background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 50%, #EC4899 100%)',
-            boxShadow: '0 8px 24px rgba(124,58,237,0.35)',
-          }}
-        >
-          <svg viewBox="0 0 32 32" width={32} height={32} aria-hidden>
-            <circle cx={16} cy={12} r={7} fill="white" opacity={0.9} />
-            <path d="M8 26 Q16 20 24 26" stroke="white" strokeWidth={1.5} fill="none" strokeLinecap="round" opacity={0.7} />
-            <text x={22} y={6} fontSize={8} fill="#FCD34D">✦</text>
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>AIスタイル診断</h1>
-          <p className="text-sm mt-1 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            コーデ写真を1枚アップロードすると<br />AIがあなたのスタイルを診断します
-          </p>
-        </div>
+      <div className="flex flex-col items-center text-center gap-2">
+        <h1 className="text-xl font-bold" style={{ color: 'var(--text)' }}>AIスタイル診断</h1>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          コーデ写真を1枚アップロードすると<br />AIがあなたのスタイルを診断します
+        </p>
       </div>
 
       {/* Today's result (already diagnosed — from page load or cached API response) */}

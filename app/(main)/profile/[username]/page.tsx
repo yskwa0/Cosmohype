@@ -6,10 +6,18 @@ import { TopBar } from '@/components/layout/TopBar'
 import { ProfileHeader } from '@/components/profile/ProfileHeader'
 import { ProfileMenu } from '@/components/profile/ProfileMenu'
 import { ProfileOwnerMenu } from '@/components/profile/ProfileOwnerMenu'
+import { BackButton } from '@/components/ui/BackButton'
 import type { Post, Profile } from '@/types/database'
 
-export default async function ProfilePage({ params }: { params: Promise<{ username: string }> }) {
+export default async function ProfilePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ username: string }>
+  searchParams: Promise<{ from?: string; ref?: string }>
+}) {
   const { username } = await params
+  const { from, ref } = await searchParams
   const supabase = await createClient()
 
   const resolvedUsername = username === 'me'
@@ -24,24 +32,17 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
 
   const { data: profileRaw } = await supabase
     .from('profiles')
-    .select('*')
+    .select('*, follow_activity_last_read_at')
     .eq('username', resolvedUsername)
     .single()
 
   if (!profileRaw) notFound()
   const profile = profileRaw as Profile
 
-  const { data: posts } = await supabase
-    .from('posts')
-    .select(`*, post_images(*)`)
-    .eq('user_id', profile.id)
-    .eq('is_archived', false)
-    .order('created_at', { ascending: false })
-
   const { data: { user: currentUser } } = await supabase.auth.getUser()
   const isOwner = currentUser?.id === profile.id
 
-  const [isFollowing, isBlocked] = await Promise.all([
+  const [isFollowing, isBlocked, isPending, isFollowedBy] = await Promise.all([
     currentUser && !isOwner
       ? supabase
           .from('follows')
@@ -60,11 +61,67 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
           .maybeSingle()
           .then(({ data }) => !!data)
       : Promise.resolve(false),
+    currentUser && !isOwner && profile.is_private
+      ? supabase
+          .from('follow_requests')
+          .select('id')
+          .eq('requester_id', currentUser.id)
+          .eq('target_id', profile.id)
+          .maybeSingle()
+          .then(({ data }) => !!data)
+      : Promise.resolve(false),
+    currentUser && !isOwner
+      ? supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', profile.id)
+          .eq('following_id', currentUser.id)
+          .maybeSingle()
+          .then(({ data }) => !!data)
+      : Promise.resolve(false),
   ])
+
+  const isMutualFollow = isFollowing && isFollowedBy
+
+  const hasPendingRequests = await (async () => {
+    if (!isOwner) return false
+    if (profile.is_private) {
+      const { count } = await supabase
+        .from('follow_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('target_id', profile.id)
+      return (count ?? 0) > 0
+    }
+    // 公開アカウント：未読の新規フォローがあるかチェック
+    const lastRead = profile.follow_activity_last_read_at
+    const query = supabase
+      .from('follows')
+      .select('id', { count: 'exact', head: true })
+      .eq('following_id', profile.id)
+    if (lastRead) query.gt('created_at', lastRead)
+    const { count } = await query
+    return (count ?? 0) > 0
+  })()
+
+  const canViewPosts = !profile.is_private || isOwner || isFollowing
+  const { data: posts } = canViewPosts
+    ? await supabase
+        .from('posts')
+        .select(`*, post_images(*)`)
+        .eq('user_id', profile.id)
+        .eq('is_archived', false)
+        .order('created_at', { ascending: false })
+    : { data: [] }
 
   return (
     <>
       <TopBar
+        left={(() => {
+          if (from === 'follow-activity') return <BackButton href="/profile/follow-activity" variant="purple" />
+          if (from === 'followers' && ref) return <BackButton href={`/profile/${ref}/followers`} variant="purple" />
+          if (from === 'following' && ref) return <BackButton href={`/profile/${ref}/following`} variant="purple" />
+          return undefined
+        })()}
         title={
           <span className="flex items-center gap-1.5">
             @{profile.username}
@@ -76,7 +133,22 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
           </span>
         }
         right={isOwner ? (
-          <ProfileOwnerMenu />
+          <div className="flex items-center gap-1">
+            <Link
+              href="/profile/follow-activity"
+              className="relative p-1 transition-transform duration-75 active:scale-75"
+              aria-label="フォローリクエスト・通知"
+              style={{ color: 'var(--text)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+              </svg>
+              {hasPendingRequests && (
+                <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-red-500" />
+              )}
+            </Link>
+            <ProfileOwnerMenu />
+          </div>
         ) : currentUser ? (
           <ProfileMenu
             targetUserId={profile.id}
@@ -88,19 +160,33 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
       <div>
         <ProfileHeader
           profile={profile}
-          postsCount={posts?.length ?? 0}
+          postsCount={canViewPosts ? (posts?.length ?? 0) : 0}
           isOwner={isOwner}
           currentUserId={currentUser?.id}
           initialFollowing={isFollowing}
+          initialPending={isPending}
+          isMutualFollow={isMutualFollow}
+          isFollowedBy={isFollowedBy}
         />
 
         <div style={{ borderTop: '1px solid var(--border)' }}>
-          {(posts?.length ?? 0) === 0 ? (
+          {!canViewPosts ? (
+            <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+                style={{ background: 'var(--purple-dim)', border: '1px solid var(--border)' }}>
+                <svg viewBox="0 0 24 24" className="w-7 h-7" style={{ color: 'var(--purple)' }} fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+              </div>
+              <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>このアカウントは非公開アカウントです</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>フォローすると投稿を見られます</p>
+            </div>
+          ) : (posts?.length ?? 0) === 0 ? (
             <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
               まだ投稿がありません
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-[1px]" style={{ background: 'var(--bg)' }}>
+            <div className="grid grid-cols-3 gap-[1px]" style={{ background: 'transparent' }}>
               {(posts as Post[]).map(post => {
                 const thumb = post.post_images?.[0]?.url
                 return (

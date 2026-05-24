@@ -1,10 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-type View = 'closed' | 'dropdown' | 'delete-confirm' | 'deleting' | 'deleted' | 'archiving' | 'archived' | 'unarchived'
+type View = 'closed' | 'dropdown' | 'delete-confirm' | 'deleting' | 'deleted' | 'archiving' | 'archived' | 'unarchived' | 'cosmo-setting' | 'cosmo-set'
 
 export function PostOwnerMenu({
   postId,
@@ -22,6 +22,7 @@ export function PostOwnerMenu({
   const [view, setView] = useState<View>('closed')
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
 
   useEffect(() => { setMounted(true) }, [])
@@ -55,7 +56,26 @@ export function PostOwnerMenu({
     const { error } = await supabase.from('posts').update({ is_archived: false }).eq('id', postId)
     if (error) { setView('dropdown'); return }
     setView('unarchived')
-    setTimeout(() => { router.refresh(); setView('closed') }, 1400)
+    setTimeout(() => {
+      if (pathname.startsWith('/archive/')) {
+        router.refresh()
+        router.push('/archive')
+      } else {
+        router.refresh()
+        setView('closed')
+      }
+    }, 1400)
+  }
+
+  async function handleSetCosmo() {
+    setView('cosmo-setting')
+    const { error } = await supabase
+      .from('profiles')
+      .update({ cosmo_post_id: postId })
+      .eq('id', userId)
+    if (error) { setView('dropdown'); return }
+    setView('cosmo-set')
+    setTimeout(() => setView('closed'), 1600)
   }
 
   async function handleDelete() {
@@ -119,6 +139,16 @@ export function PostOwnerMenu({
               編集
             </button>
             <button
+              onClick={handleSetCosmo}
+              className="flex items-center gap-2.5 w-full px-4 py-3.5 text-sm font-medium text-left transition-all duration-75 active:scale-[0.96] active:opacity-80"
+              style={{ color: 'var(--purple)', borderBottom: '1px solid var(--border)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+              </svg>
+              COSMOに表示
+            </button>
+            <button
               onClick={isArchived ? handleUnarchive : handleArchive}
               className="flex items-center gap-2.5 w-full px-4 py-3.5 text-sm font-medium text-left transition-all duration-75 active:scale-[0.96] active:opacity-80"
               style={{ color: 'var(--text)', borderBottom: '1px solid var(--border)' }}
@@ -140,6 +170,26 @@ export function PostOwnerMenu({
             </button>
           </div>
         </>
+      )}
+
+      {mounted && view === 'cosmo-set' && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/30">
+          <div
+            className="flex flex-col items-center gap-3 px-10 py-7 rounded-2xl"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', boxShadow: '0 8px 32px rgba(0,0,0,0.28)' }}
+          >
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center"
+              style={{ background: 'var(--purple-dim)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6" style={{ color: 'var(--purple)' }} fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>COSMOに設定しました</p>
+          </div>
+        </div>,
+        document.body
       )}
 
       {mounted && (view === 'archived' || view === 'unarchived') && createPortal(

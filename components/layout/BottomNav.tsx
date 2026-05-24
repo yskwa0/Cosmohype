@@ -1,7 +1,9 @@
 'use client'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { clearFeedScroll } from '@/lib/feedScrollStore'
 
 const navItems = [
   {
@@ -56,6 +58,10 @@ const navItems = [
 
 export function BottomNav() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [pressedLabel, setPressedLabel] = useState<string | null>(null)
+
+  if (/^\/dm\/.+/.test(pathname)) return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl select-none" style={{ background: 'var(--nav-bg)', WebkitUserSelect: 'none' }}>
@@ -64,13 +70,25 @@ export function BottomNav() {
         {navItems.map(({ href, label, icon }) => {
           const active = pathname === href || (href !== '/post/new' && pathname.startsWith(href))
           const isPost = href === '/post/new'
+          const pressed = pressedLabel === label
           return (
             <Link
               key={label}
               href={href}
-              className={cn('flex flex-col items-center gap-1 min-w-[56px] transition-all')}
-              style={isPost ? {} : { color: active ? 'var(--purple)' : 'var(--text-muted)' }}
+              className={cn('flex flex-col items-center gap-1 min-w-[56px]')}
+              style={{
+                ...(isPost ? {} : { color: active ? 'var(--purple)' : 'var(--text-muted)' }),
+                transform: pressed ? 'scale(0.82)' : 'scale(1)',
+                transition: pressed
+                  ? 'transform 70ms ease-in'
+                  : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+              }}
               aria-label={label}
+              onPointerDown={() => setPressedLabel(label)}
+              onPointerUp={() => setPressedLabel(null)}
+              onPointerLeave={() => setPressedLabel(null)}
+              onPointerCancel={() => setPressedLabel(null)}
+              onClick={href === '/feed' ? () => { clearFeedScroll(); router.refresh() } : undefined}
             >
               {icon(active)}
               {!isPost && (

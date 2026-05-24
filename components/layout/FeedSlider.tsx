@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from 'react'
+import { readFeedScroll, clearFeedScroll } from '@/lib/feedScrollStore'
 import { useRouter } from 'next/navigation'
 
 const TABS = [
@@ -196,6 +197,58 @@ export function FeedSlider({
     }
   }, [])
 
+  useLayoutEffect(() => {
+    function signalReady() {
+      window.dispatchEvent(new Event('cosmohype:feed-ready'))
+    }
+
+    function applyRestore() {
+      const restore = readFeedScroll()
+      if (!restore) return
+
+      const { scrollTop: target, panelIdx } = restore
+
+      if (panelIdx !== activeIdxRef.current) {
+        setTransform(panelIdx, 0, false)
+        activeIdxRef.current = panelIdx
+        setActiveIdx(panelIdx)
+        setTabVisible(panelIdx < TABS.length)
+      }
+
+      if (target === 0) { clearFeedScroll(); signalReady(); return }
+
+      let cancelled = false
+      const attempt = () => {
+        if (cancelled) return
+        const panel = [p0.current, p1.current][panelIdx]
+        if (!panel) { requestAnimationFrame(attempt); return }
+        panel.scrollTop = target
+        if (Math.abs(panel.scrollTop - target) > 5) {
+          requestAnimationFrame(attempt)
+        } else {
+          clearFeedScroll()
+          scrollPositions.current[panelIdx] = panel.scrollTop
+          signalReady()
+        }
+      }
+      attempt()
+      const tid = setTimeout(() => { cancelled = true; clearFeedScroll(); signalReady() }, 2000)
+      return () => { cancelled = true; clearTimeout(tid) }
+    }
+
+    const cleanup = applyRestore()
+
+    const onPopState = () => {
+      applyRestore()
+    }
+    window.addEventListener('popstate', onPopState)
+
+    return () => {
+      cleanup?.()
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [])
+
   function handlePanelScroll(e: React.UIEvent<HTMLDivElement>) {
     if (activeIdxRef.current >= TABS.length) return
     const el = e.currentTarget
@@ -371,6 +424,7 @@ export function FeedSlider({
         >
           <div
             ref={p0}
+            data-feed-panel="0"
             className="shrink-0 overflow-y-auto"
             style={{
               width: `${100 / PANEL_COUNT}%`,
@@ -385,6 +439,7 @@ export function FeedSlider({
           </div>
           <div
             ref={p1}
+            data-feed-panel="1"
             className="shrink-0 overflow-y-auto"
             style={{
               width: `${100 / PANEL_COUNT}%`,

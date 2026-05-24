@@ -1,8 +1,10 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { ReactNode } from 'react'
+
+const SCROLL_KEY = 'dm_list_scroll'
 
 // Adds right-swipe-back gesture to the DM page when navigated via the DM icon.
 export function DmPageShell({ children }: { children: ReactNode }) {
@@ -12,9 +14,24 @@ export function DmPageShell({ children }: { children: ReactNode }) {
   const isHoriz = useRef<boolean | null>(null)
   const navigating = useRef(false)
 
+  // 戻り時: 保存済みのスクロール位置を復元
+  useEffect(() => {
+    const saved = sessionStorage.getItem(SCROLL_KEY)
+    if (saved !== null) {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: Number(saved), behavior: 'instant' })
+      })
+      sessionStorage.removeItem(SCROLL_KEY)
+    }
+  }, [])
+
   return (
     <div
       style={{ touchAction: 'pan-y' }}
+      onClick={() => {
+        // 会話を開く前にスクロール位置を保存
+        sessionStorage.setItem(SCROLL_KEY, String(window.scrollY))
+      }}
       onTouchStart={e => {
         if (navigating.current) return
         startX.current = e.touches[0].clientX

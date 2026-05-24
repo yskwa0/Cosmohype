@@ -14,6 +14,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [backPressed, setBackPressed] = useState(false)
+  const [loginPressed, setLoginPressed] = useState(false)
 
   useEffect(() => {
     const html = document.documentElement
@@ -70,7 +72,27 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <Link
         href="/"
         aria-label="トップに戻る"
-        style={{ position: 'absolute', top: '16px', left: '16px', width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(124,58,237,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+        onPointerDown={() => setBackPressed(true)}
+        onPointerUp={() => setBackPressed(false)}
+        onPointerLeave={() => setBackPressed(false)}
+        onPointerCancel={() => setBackPressed(false)}
+        style={{
+          position: 'fixed',
+          top: 'calc(env(safe-area-inset-top, 0px) + 36px)',
+          left: '16px',
+          width: '44px',
+          height: '44px',
+          borderRadius: '50%',
+          background: 'rgba(124,58,237,0.18)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10,
+          transform: backPressed ? 'scale(0.82)' : 'scale(1)',
+          transition: backPressed
+            ? 'transform 70ms ease-in'
+            : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+        }}
       >
         <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
           <path d="M15 18l-6-6 6-6" />
@@ -136,6 +158,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
             type="button"
             disabled={loading}
             onClick={handleAction}
+            onPointerDown={() => !loading && setLoginPressed(true)}
+            onPointerUp={() => setLoginPressed(false)}
+            onPointerLeave={() => setLoginPressed(false)}
+            onPointerCancel={() => setLoginPressed(false)}
             style={{
               width: '100%',
               height: '48px',
@@ -150,6 +176,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
               opacity: loading ? 0.5 : 1,
               position: 'relative',
               zIndex: 100,
+              transform: loginPressed ? 'scale(0.93)' : 'scale(1)',
+              transition: loginPressed
+                ? 'transform 70ms ease-in'
+                : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
           >
             {loading ? '...' : mode === 'register' ? 'アカウントを作成' : 'ログイン'}

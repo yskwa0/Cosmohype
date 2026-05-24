@@ -243,7 +243,7 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
           />
 
           <Input
-            label="表示名"
+            label="名前"
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
             placeholder="あなたの名前"
