@@ -12,11 +12,13 @@ export default function ProfileLoading() {
     <>
       {/* TopBar skeleton */}
       <div
-        className="sticky top-0 z-40 flex items-center px-5 gap-3"
-        style={{ height: 56, background: 'var(--nav-bg)', borderBottom: '1px solid var(--border)' }}
+        className="sticky top-0 z-40"
+        style={{ background: 'var(--nav-bg)', borderBottom: '1px solid var(--border)', paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
-        <S w={32} h={32} r={16} />
-        <S w={120} h={16} r={6} />
+        <div className="flex items-center px-5 gap-3" style={{ height: 56 }}>
+          <S w={32} h={32} r={16} />
+          <S w={120} h={16} r={6} />
+        </div>
       </div>
 
       {/* ProfileHeader skeleton */}

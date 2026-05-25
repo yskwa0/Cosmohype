@@ -30,7 +30,7 @@ export default async function CompatResultPage({
     <div className="slide-up-enter min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
 
       {/* ヘッダー */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'var(--nav-bg)' }}>
+      <header className="sticky top-0 z-40 backdrop-blur-xl" style={{ background: 'var(--nav-bg)', paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-md mx-auto flex items-center px-5 h-14">
           <BackButton variant="purple" />
           <span className="ml-2 text-base font-semibold" style={{ color: 'var(--text)' }}>相性診断結果</span>

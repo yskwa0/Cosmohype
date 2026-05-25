@@ -2,9 +2,16 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-export function BackButton({ href, variant }: { href?: string; variant?: 'purple' } = {}) {
+export function BackButton({
+  href,
+  variant,
+}: { href?: string; variant?: 'purple' } = {}) {
   const router = useRouter()
   const [pressed, setPressed] = useState(false)
+
+  function handleBack() {
+    href ? router.replace(href) : router.back()
+  }
 
   if (variant === 'purple') {
     return (
@@ -13,7 +20,7 @@ export function BackButton({ href, variant }: { href?: string; variant?: 'purple
         onPointerUp={() => setPressed(false)}
         onPointerLeave={() => setPressed(false)}
         onPointerCancel={() => setPressed(false)}
-        onClick={() => href ? router.replace(href) : router.back()}
+        onClick={handleBack}
         aria-label="戻る"
         style={{
           width: '44px',
@@ -45,7 +52,7 @@ export function BackButton({ href, variant }: { href?: string; variant?: 'purple
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
       onPointerCancel={() => setPressed(false)}
-      onClick={() => href ? router.replace(href) : router.back()}
+      onClick={handleBack}
       className="flex items-center justify-center w-9 h-9 rounded-full"
       style={{
         color: 'var(--text)',

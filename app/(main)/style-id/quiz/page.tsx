@@ -93,7 +93,7 @@ export default function QuizPage() {
       {/* Sticky header */}
       <header
         className="sticky top-0 z-40 backdrop-blur-xl"
-        style={{ background: 'var(--nav-bg)' }}
+        style={{ background: 'var(--nav-bg)', paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="max-w-md mx-auto flex items-center justify-between px-5 h-14">
           <QuizBackButton onClick={handleBack} />

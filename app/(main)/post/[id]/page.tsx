@@ -29,7 +29,7 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   ])
 
   return (
-    <>
+    <div className="feed-animate-in">
       <TopBar title="投稿" left={<BackButton variant="purple" />} />
       <PostDetail post={{ ...post, post_items: postItems ?? [] } as Post} userId={user?.id} isLiked={isLiked} isSaved={isSaved} />
       <CommentSection
@@ -37,6 +37,6 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
         userId={user?.id ?? null}
         initialComments={(commentsRaw ?? []) as Comment[]}
       />
-    </>
+    </div>
   )
 }

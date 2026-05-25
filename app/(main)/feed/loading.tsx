@@ -27,11 +27,13 @@ export default function FeedLoading() {
     <>
       {/* TopBar skeleton */}
       <div
-        className="sticky top-0 z-40 flex items-center justify-between px-5"
-        style={{ height: 56, background: 'var(--nav-bg)', borderBottom: '1px solid var(--border)' }}
+        className="sticky top-0 z-40"
+        style={{ background: 'var(--nav-bg)', borderBottom: '1px solid var(--border)', paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
-        <S w={128} h={18} r={6} />
-        <S w={32} h={32} r={16} />
+        <div className="flex items-center justify-between px-5" style={{ height: 56 }}>
+          <S w={128} h={18} r={6} />
+          <S w={32} h={32} r={16} />
+        </div>
       </div>
 
       {/* FeedTabs skeleton */}

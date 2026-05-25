@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { clearFeedScroll } from '@/lib/feedScrollStore'
 
@@ -60,35 +60,55 @@ export function BottomNav() {
   const pathname = usePathname()
   const router = useRouter()
   const [pressedLabel, setPressedLabel] = useState<string | null>(null)
+  // Tracks the tapped href immediately so active state updates before pathname changes
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+
+  // Clear pending once navigation resolves
+  useEffect(() => {
+    setPendingHref(null)
+  }, [pathname])
 
   if (/^\/dm\/.+/.test(pathname)) return null
+
+  const effectivePath = pendingHref ?? pathname
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl select-none" style={{ background: 'var(--nav-bg)', WebkitUserSelect: 'none' }}>
       <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border), transparent)' }} />
       <div className="max-w-md mx-auto flex items-end justify-around px-6 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
         {navItems.map(({ href, label, icon }) => {
-          const active = pathname === href || (href !== '/post/new' && pathname.startsWith(href))
+          const active = effectivePath === href || (href !== '/post/new' && effectivePath.startsWith(href))
           const isPost = href === '/post/new'
           const pressed = pressedLabel === label
           return (
             <Link
               key={label}
               href={href}
+              prefetch={true}
               className={cn('flex flex-col items-center gap-1 min-w-[56px]')}
               style={{
                 ...(isPost ? {} : { color: active ? 'var(--purple)' : 'var(--text-muted)' }),
                 transform: pressed ? 'scale(0.82)' : 'scale(1)',
                 transition: pressed
-                  ? 'transform 70ms ease-in'
-                  : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  ? 'transform 60ms ease-in'
+                  : 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
               aria-label={label}
-              onPointerDown={() => setPressedLabel(label)}
+              onPointerDown={() => {
+                setPressedLabel(label)
+                // Show active state immediately on tap
+                if (!isPost) setPendingHref(href)
+              }}
               onPointerUp={() => setPressedLabel(null)}
               onPointerLeave={() => setPressedLabel(null)}
-              onPointerCancel={() => setPressedLabel(null)}
-              onClick={href === '/feed' ? () => { clearFeedScroll(); router.refresh() } : undefined}
+              onPointerCancel={() => { setPressedLabel(null); setPendingHref(null) }}
+              onClick={href === '/feed'
+                ? () => {
+                    clearFeedScroll()
+                    // Only refresh data when already on the feed page
+                    if (pathname === '/feed') router.refresh()
+                  }
+                : undefined}
             >
               {icon(active)}
               {!isPost && (

@@ -192,9 +192,9 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
         {/* Actions */}
         <div className="flex flex-col gap-3 pt-2">
           <ShareButton
-            title={`私のSTYLE IDは ${primary.name}！`}
-            text={`${primary.emoji} ${primary.name} — ${primary.subtitle}\n${primary.description.slice(0, 50)}...`}
-            url={shareUrl}
+            styleId={result.primaryStyle}
+            primary={primary}
+            shareUrl={shareUrl}
           />
           <Link
             href={`/style-id/compat?a=${result.primaryStyle}&r=${r}`}
