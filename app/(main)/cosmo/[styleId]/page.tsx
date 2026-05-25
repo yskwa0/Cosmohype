@@ -108,7 +108,7 @@ export default async function CosmoStylePage({
 
   return (
     <>
-      <TopBar title={style.name} left={<BackButton href="/cosmo" variant="purple" />} />
+      <TopBar title={style.name} left={<BackButton variant="purple" />} />
 
       {/* キャラクター＋説明 */}
       <div

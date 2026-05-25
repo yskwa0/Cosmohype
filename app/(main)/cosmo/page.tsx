@@ -46,7 +46,6 @@ function StyleCard({ style }: { style: typeof ALL_STYLES[number] }) {
   return (
     <Link
       href={`/cosmo/${style.id}`}
-      replace
       className="block active:scale-95 active:opacity-90 transition-all duration-150 ease-out"
     >
       <div
@@ -54,7 +53,7 @@ function StyleCard({ style }: { style: typeof ALL_STYLES[number] }) {
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
       >
         <div className="h-[3px] w-full" style={{ background: style.gradient }} />
-        <div className="flex flex-col items-center gap-1.5 px-2 pt-3 pb-3">
+        <div className="flex flex-col items-center gap-1.5 px-1.5 pt-3 pb-3">
           <StyleAlien styleId={style.id as StyleId} size={64} />
           <p
             className="text-[10px] font-bold text-center leading-tight"

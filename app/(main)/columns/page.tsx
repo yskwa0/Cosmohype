@@ -248,7 +248,7 @@ function ColumnCard({ col }: { col: Column }) {
   const config = CATEGORY_CONFIG[col.category] ?? CATEGORY_CONFIG['基礎知識']
 
   return (
-    <Link href={`/columns/${col.slug}`} replace className="block active:opacity-80 transition-opacity">
+    <Link href={`/columns/${col.slug}`} className="block active:opacity-80 transition-opacity">
       <div className="rounded-3xl overflow-hidden" style={{ background: config.gradient }}>
         <div className="relative flex items-center gap-4 px-5 py-5">
           <svg

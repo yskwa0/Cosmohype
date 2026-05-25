@@ -1,6 +1,8 @@
+'use client'
 import Link from 'next/link'
 import { Avatar } from '@/components/ui/Avatar'
 import { formatRelativeTime } from '@/lib/utils'
+import { saveFeedScroll, armFeedScrollRestore } from '@/lib/feedScrollStore'
 
 export type DmConversation = {
   id: string
@@ -25,6 +27,7 @@ export function DmPanel({ conversations }: { conversations: DmConversation[] }) 
                 href={`/dm/${conv.id}`}
                 className="flex items-center gap-3 px-4 py-3 transition-opacity active:opacity-60"
                 style={{ borderBottom: '1px solid var(--border)' }}
+                onClick={() => { saveFeedScroll(0, 2); armFeedScrollRestore() }}
               >
                 <Avatar
                   src={conv.otherUser?.avatar_url}

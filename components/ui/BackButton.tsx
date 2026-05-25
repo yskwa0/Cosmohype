@@ -17,8 +17,8 @@ export function BackButton({
     const mainEl = document.querySelector('main') as HTMLElement | null
     const navEl  = document.querySelector('nav')  as HTMLElement | null
 
-    const DURATION = 210
-    const easing   = 'cubic-bezier(0.4, 0, 0.6, 1)'  // ease-in-out: smooth start, quick exit
+    const DURATION = 150
+    const easing   = 'cubic-bezier(0.4, 0, 0.6, 1)'
 
     if (mainEl) {
       mainEl.style.transition = `transform ${DURATION}ms ${easing}, opacity ${DURATION}ms ${easing}`
@@ -31,7 +31,7 @@ export function BackButton({
       navEl.style.opacity    = '0'
     }
 
-    await new Promise(r => setTimeout(r, DURATION + 15))
+    await new Promise(r => setTimeout(r, DURATION + 8))
 
     // Insert a solid overlay BEFORE navigation so the style reset is never visible.
     // The overlay matches the app background and is removed after React renders the new page.
@@ -56,7 +56,7 @@ export function BackButton({
           if (navEl)  { navEl.style.opacity  = '' }
           overlay.remove()
           animatingRef.current = false
-        }, 120)
+        }, 60)
       })
     )
   }

@@ -14,7 +14,7 @@ export default async function ColumnDetailPage({ params }: { params: Promise<{ s
 
   return (
     <>
-      <TopBar left={<BackButton href="/columns" />} title="コラム" />
+      <TopBar left={<BackButton />} title="コラム" />
       <div className="max-w-md mx-auto px-4 pt-6 pb-24">
         {slug === 'supreme' && <SupremeArticle />}
         {slug === 'comme-des-garcons' && <CommeDesGarconsArticle />}

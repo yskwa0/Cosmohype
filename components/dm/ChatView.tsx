@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 import { formatRelativeTime } from '@/lib/utils'
@@ -31,6 +31,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const isInitial = useRef(true)
   const isPrepending = useRef(false)
   const confirmedIds = useRef(new Set(initialMessages.map(m => m.id)))
@@ -42,6 +43,37 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
+
+  // iOS キーボード対応
+  // iOS では position:fixed の bottom は visual viewport 基準で自動補正される。
+  // JS で bottom を更新するとその補正と二重になり入力欄が上がりすぎるため、
+  // ここでは top のみ実測値で設定し、bottom の移動は iOS に完全に任せる。
+  useLayoutEffect(() => {
+    const header = document.querySelector('header')
+    const headerHeight = header?.getBoundingClientRect().height ?? 56
+    const el = containerRef.current
+    if (!el) return
+    el.style.top = `${headerHeight}px`
+    el.style.bottom = '0'
+
+    const vv = window.visualViewport
+    if (!vv) return
+    let prevVvHeight = vv.height
+
+    function onResize() {
+      const decreased = vv!.height < prevVvHeight - 50
+      prevVvHeight = vv!.height
+      // キーボード出現時に最新メッセージへスクロール（位置補正は iOS に任せる）
+      if (decreased && scrollRef.current) {
+        requestAnimationFrame(() => {
+          scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight
+        })
+      }
+    }
+
+    vv.addEventListener('resize', onResize)
+    return () => vv.removeEventListener('resize', onResize)
+  }, [])
 
   // 自動スクロール（prepend 時・ユーザーが上部を読んでいる時はスキップ）
   useEffect(() => {
@@ -197,8 +229,12 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   return (
     <>
-      {/* TopBar(56px) + safe-area を引いた高さで固定レイアウト（BottomNavなし） */}
-      <div className="flex flex-col" style={{ height: 'calc(100dvh - 56px - env(safe-area-inset-bottom, 0px))' }}>
+      {/* top/bottom は useLayoutEffect で管理。React style prop に入れないことで再レンダリング時リセットを防ぐ */}
+      <div
+        ref={containerRef}
+        className="flex flex-col"
+        style={{ position: 'fixed', left: 0, right: 0 }}
+      >
 
         {/* スクロール可能なメッセージ領域 */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto">

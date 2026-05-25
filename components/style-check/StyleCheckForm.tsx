@@ -60,8 +60,8 @@ export function StyleCheckForm({ todayResult }: { todayResult: string | null }) 
       e.target.value = ''
       return
     }
-    if (f.size > 5 * 1024 * 1024) {
-      setError('5MB 以下の画像を選択してください')
+    if (f.size > 15 * 1024 * 1024) {
+      setError('15MB 以下の画像を選択してください')
       e.target.value = ''
       return
     }
@@ -240,26 +240,38 @@ export function StyleCheckForm({ todayResult }: { todayResult: string | null }) 
   )
 }
 
-type DiagnosisEntry = { position: string; comment: string }
+type LegacyEntry = { position: string; comment: string }
+type NewEntry = {
+  position: string
+  good_points: string[]
+  improve_points: string[]
+  next_items: string[]
+  color_advice: string
+}
+type ParsedResult =
+  | { format: 'legacy'; entries: LegacyEntry[] }
+  | { format: 'new'; entries: NewEntry[]; post_comment: string }
 
-function parseResult(result: string): DiagnosisEntry[] | null {
+function parseResult(result: string): ParsedResult | null {
   try {
-    const parsed = JSON.parse(result)
-    if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0].comment === 'string') {
-      return parsed as DiagnosisEntry[]
+    const p = JSON.parse(result)
+    if (p?.v === 2 && Array.isArray(p.diagnoses)) {
+      return { format: 'new', entries: p.diagnoses as NewEntry[], post_comment: p.post_comment ?? '' }
+    }
+    if (Array.isArray(p) && p.length > 0 && typeof p[0].comment === 'string') {
+      return { format: 'legacy', entries: p as LegacyEntry[] }
     }
   } catch {
-    // legacy plain text
+    // plain text fallback
   }
   return null
 }
 
 function ResultCard({ result }: { result: string }) {
-  const diagnoses = parseResult(result)
+  const parsed = parseResult(result)
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-      {/* Header */}
       <div
         className="px-4 py-3 flex items-center gap-2"
         style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)' }}
@@ -273,28 +285,84 @@ function ResultCard({ result }: { result: string }) {
         </p>
       </div>
 
-      {/* Body */}
-      <div className="px-4 py-4 flex flex-col gap-3" style={{ background: 'var(--purple-dim)' }}>
-        {diagnoses ? (
-          diagnoses.map((d, i) => (
-            <div key={i} className="flex flex-col gap-1">
-              {d.position && (
-                <p className="text-xs font-semibold" style={{ color: 'var(--purple)' }}>
-                  {d.position}の人
-                </p>
-              )}
-              <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
-                {d.comment}
-              </p>
-              {i < diagnoses.length - 1 && (
-                <div className="mt-2 h-px" style={{ background: 'var(--border)' }} />
-              )}
-            </div>
-          ))
-        ) : (
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>
-            {result}
-          </p>
+      <div className="px-4 py-4 flex flex-col gap-4" style={{ background: 'var(--purple-dim)' }}>
+        {!parsed && (
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{result}</p>
+        )}
+
+        {parsed?.format === 'legacy' && parsed.entries.map((d, i) => (
+          <div key={i} className="flex flex-col gap-1">
+            {d.position && (
+              <p className="text-xs font-semibold" style={{ color: 'var(--purple)' }}>{d.position}の人</p>
+            )}
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{d.comment}</p>
+            {i < parsed.entries.length - 1 && <div className="h-px mt-2" style={{ background: 'var(--border)' }} />}
+          </div>
+        ))}
+
+        {parsed?.format === 'new' && (
+          <>
+            {parsed.entries.map((entry, i) => (
+              <div key={i} className="flex flex-col gap-3">
+                {i > 0 && <div className="h-px" style={{ background: 'var(--border)' }} />}
+                {entry.position && (
+                  <p className="text-xs font-bold" style={{ color: 'var(--purple)' }}>{entry.position}の人</p>
+                )}
+
+                {entry.good_points?.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>良いところ</p>
+                    {entry.good_points.map((pt, j) => (
+                      <div key={j} className="flex gap-2">
+                        <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full mt-[5px]" style={{ background: 'var(--purple)' }} />
+                        <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{pt}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {entry.improve_points?.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>次のステップ</p>
+                    {entry.improve_points.map((pt, j) => (
+                      <div key={j} className="flex gap-2">
+                        <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full mt-[5px]" style={{ background: '#A855F7' }} />
+                        <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{pt}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {entry.next_items?.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>試してみたいアイテム</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {entry.next_items.map((item, j) => (
+                        <span key={j} className="text-xs px-2.5 py-1 rounded-full font-medium"
+                          style={{ background: 'var(--bg-subtle)', color: 'var(--text-sub)', border: '1px solid var(--border)' }}>
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {entry.color_advice && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>色・シルエットのポイント</p>
+                    <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{entry.color_advice}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {parsed.post_comment && (
+              <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--purple)' }}>投稿用ひとこと</p>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{parsed.post_comment}</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -45,10 +45,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   } catch { /* 未認証ページでは無視 */ }
 
   const themeClass = theme !== 'cosmic-black' ? `theme-${theme}` : ''
+  const bgColor = theme === 'cream-white' ? '#FAFAFA' : '#090714'
 
   return (
-    <html lang="ja" className={`h-full ${themeClass}`}>
-      <body className="min-h-full antialiased">
+    <html lang="ja" className={`h-full ${themeClass}`} style={{ background: bgColor }}>
+      <body className="min-h-full antialiased" style={{ background: bgColor }}>
         <SplashScreen />
         {children}
       </body>

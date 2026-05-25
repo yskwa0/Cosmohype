@@ -64,7 +64,7 @@ export default async function ChatPage({
   return (
     <div style={{ marginBottom: '-80px' }}>
       <TopBar
-        left={<BackButton href="/dm" variant="purple" />}
+        left={<BackButton variant="purple" />}
         title={
           otherUser ? (
             <div className="flex items-center gap-2">

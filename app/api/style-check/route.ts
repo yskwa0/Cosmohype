@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        max_tokens: 300,
+        max_tokens: 1200,
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
             content: [
               {
                 type: 'text',
-                text: 'あなたはポジティブなファッションスタイリストです。アップロードされた画像を見て、必ず以下のJSONフォーマットだけで回答してください。\n\n【is_fashion を false にするケース】\n- ファッション要素（トップス・ボトムス・アウター・シューズ・バッグ・アクセサリーなど）が写っていない\n- 服が小さすぎる・暗すぎる・ブレている・大部分が隠れていてコーデを判断できない\n- 露出が多い・性的または不適切な内容が含まれる\n- 食べ物・風景・動物・文字のみなど、ファッション要素が確認できない\n上記以外でファッション要素が確認できる場合は is_fashion を true にする（全身でなくてもOK）。\n\n【主役の特定と人数カウント】\n画像全体を見て、最も大きく・前に写っている主役の人物を特定する。背景に映り込んでいる人・小さく写っている人は診断対象に含めない。主役と判断できる前景の人物が1〜3人いる場合はその全員を診断対象とし、その人数を person_count に入れる。背景のみに人がいて主役不明の場合や主役が4人以上の場合は person_count を4とする。\n\n【診断ルール（is_fashion が true かつ person_count が 1〜3 の場合のみ）】\n- 服装・色・素材・シルエット・全体の雰囲気についてコメントする\n- 顔・体型・年齢・性別・容姿には一切触れない\n- ブランド名は断定しない（「〜系」「〜風」はOK）\n- やさしく前向きな表現にする\n- 1人：position は空文字、80〜140文字の短いコメント\n- 2人：position は「左」「右」、それぞれ80〜140文字の短いコメント\n- 3人：position は「左」「中央」「右」、それぞれ80〜140文字の短いコメント\n- 比較・順位づけ・上から目線はNG\n- 「似合っていない」「悪い」「微妙」などの否定表現は使わない。前向きで自然な言い方にする\n\n{"is_fashion": true または false, "person_count": 0から4の整数, "diagnoses": [{"position": "位置", "comment": "コメント"}]}',
+                text: 'あなたはポジティブなファッションスタイリストです。アップロードされた画像を見て、必ず以下のJSONフォーマットだけで回答してください。\n\n【is_fashion を false にするケース】\n- ファッション要素（トップス・ボトムス・アウター・シューズ・バッグ・アクセサリーなど）が写っていない\n- 服が小さすぎる・暗すぎる・ブレている・大部分が隠れていてコーデを判断できない\n- 露出が多い・性的または不適切な内容が含まれる\n- 食べ物・風景・動物・文字のみなど、ファッション要素が確認できない\n上記以外でファッション要素が確認できる場合は is_fashion を true にする（全身でなくてもOK）。\n\n【主役の特定と人数カウント】\n画像全体を見て、最も大きく・前に写っている主役の人物を特定する。背景に映り込んでいる人・小さく写っている人は診断対象に含めない。主役と判断できる前景の人物が1〜3人いる場合はその全員を診断対象とし、その人数を person_count に入れる。背景のみに人がいて主役不明の場合や主役が4人以上の場合は person_count を4とする。\n\n【診断ルール（is_fashion が true かつ person_count が 1〜3 の場合のみ）】\n顔・体型・年齢・性別・容姿には絶対に触れない。ブランド名は断定しない（「〜系」「〜風」はOK）。上から目線・ダメ出し・比較・順位づけは厳禁。前向きでワクワクする表現を使う。NG例：「似合っていない」「残念」「微妙」「ダメ」。\n位置指定：1人→position=""、2人→"左"/"右"、3人→"左"/"中央"/"右"\n\n【各 diagnosis フィールド（全エントリに含める）】\ngood_points: コーデの好きなポイント・素敵な部分を2〜3つ。各30〜50文字。\nimprove_points: 次のチャレンジとして試すと更に素敵になるヒントを1〜2つ（前向きに）。各30〜50文字。\nnext_items: 相性の良いアイテム名を2〜3つ。各5〜15文字（例："ローファー","レザートート","チェック柄スカーフ"）。\ncolor_advice: 色合わせ・シルエット・バランスへの前向きなアドバイス。40〜70文字。\n\npost_comment: SNS投稿用のひとこと（絵文字1〜2個含む・40〜60文字）。diagnoses の外にトップレベルのフィールドとして1つだけ含める。\n\n出力JSON形式:\n{"is_fashion":true/false,"person_count":0〜4,"post_comment":"...","diagnoses":[{"position":"","good_points":["...","..."],"improve_points":["..."],"next_items":["...","..."],"color_advice":"..."}]}',
               },
               {
                 type: 'image_url',
@@ -87,7 +87,8 @@ export async function POST(req: NextRequest) {
   const openaiData = await openaiRes.json()
   const rawContent: string = openaiData.choices?.[0]?.message?.content ?? '{}'
 
-  let parsed: { is_fashion?: boolean; person_count?: number; diagnoses?: Array<{ position: string; comment: string }> }
+  type DiagnosisEntry = { position: string; good_points: string[]; improve_points: string[]; next_items: string[]; color_advice: string }
+  let parsed: { is_fashion?: boolean; person_count?: number; post_comment?: string; diagnoses?: DiagnosisEntry[] }
   try {
     parsed = JSON.parse(rawContent)
   } catch {
@@ -108,8 +109,9 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const diagnoses = parsed.diagnoses ?? [{ position: '', comment: '診断結果を取得できませんでした' }]
-  const result = JSON.stringify(diagnoses)
+  const diagnoses = parsed.diagnoses ?? [{ position: '', good_points: [], improve_points: [], next_items: [], color_advice: '診断結果を取得できませんでした' }]
+  const post_comment = typeof parsed.post_comment === 'string' ? parsed.post_comment : ''
+  const result = JSON.stringify({ v: 2, post_comment, diagnoses })
   await supabase.from('style_diagnoses').insert({ user_id: user.id, result })
 
   return NextResponse.json({ result, cached: false })
