@@ -32,6 +32,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   async function handleAction() {
     setLoading(true)
+    setLoginPressed(false)
     setError(null)
     setMessage(null)
 
@@ -44,10 +45,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
         })
         if (error) throw error
         setMessage('確認メールを送信しました。メールをご確認ください。')
+        setLoading(false)
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         window.location.href = '/feed'
+        // ナビゲーション完了まで loading を維持する（意図的に setLoading(false) しない）
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -58,7 +61,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
       } else {
         setError(msg)
       }
-    } finally {
       setLoading(false)
     }
   }
@@ -172,17 +174,36 @@ export function AuthForm({ mode }: { mode: Mode }) {
               marginTop: '8px',
               background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
               border: 'none',
-              cursor: 'pointer',
-              opacity: loading ? 0.5 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.75 : 1,
               position: 'relative',
               zIndex: 100,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
               transform: loginPressed ? 'scale(0.93)' : 'scale(1)',
               transition: loginPressed
                 ? 'transform 70ms ease-in'
                 : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
             }}
           >
-            {loading ? '...' : mode === 'register' ? 'アカウントを作成' : 'ログイン'}
+            {loading && (
+              <svg
+                className="animate-spin"
+                width={18}
+                height={18}
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden
+              >
+                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            )}
+            {loading
+              ? (mode === 'register' ? '登録中...' : 'ログイン中...')
+              : (mode === 'register' ? 'アカウントを作成' : 'ログイン')}
           </button>
         </div>
 

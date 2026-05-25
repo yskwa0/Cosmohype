@@ -25,7 +25,7 @@ export async function createClient() {
         setAll(cookiesToSet) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, { ...options, maxAge: 60 * 60 * 24 * 90 })
             )
           } catch {
             // Server Component内では無視可（middlewareで処理済み）

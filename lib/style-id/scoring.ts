@@ -12,22 +12,43 @@ export function calculateResult(answers: QuizAnswer[]): DiagnosisResult {
     if (!question) continue
     const option = question.options[answer.optionIndex]
     if (!option) continue
-    for (const [styleId, points] of Object.entries(option.scores) as [StyleId, number][]) {
-      scores[styleId] += points
+
+    const entries = Object.entries(option.scores) as [StyleId, number][]
+    if (entries.length === 0) {
+      // 「当てはまらない」: 全スタイルに均等1点（中立な分布として扱う）
+      ALL_STYLE_IDS.forEach(id => { scores[id] += 1 })
+    } else {
+      for (const [styleId, points] of entries) {
+        scores[styleId] += points
+      }
     }
   }
 
   const sorted = (Object.entries(scores) as [StyleId, number][]).sort((a, b) => b[1] - a[1])
+  const total = sorted.reduce((sum, [, s]) => sum + s, 0)
+
+  // 全スタイルが同点（全問「当てはまらない」など）の場合は中立スタイルを返す
+  const maxScore = sorted[0][1]
+  const minScore = sorted[sorted.length - 1][1]
+  if (maxScore === minScore) {
+    return {
+      primaryStyle: 'FREE_SPIRIT',
+      secondaryStyle: 'MINIMAL_SOUL',
+      scores,
+      percentage: Math.round(100 / ALL_STYLE_IDS.length),
+      isNeutral: true,
+    }
+  }
+
   const [primaryStyle, primaryScore] = sorted[0]
   const [secondaryStyle] = sorted[1]
-  const total = sorted.reduce((sum, [, s]) => sum + s, 0)
-  const percentage = total > 0 ? Math.round((primaryScore / total) * 100) : 0
+  const percentage = Math.round((primaryScore / total) * 100)
 
   return { primaryStyle, secondaryStyle, scores, percentage }
 }
 
 export function encodeResult(result: DiagnosisResult): string {
-  const payload = JSON.stringify({ p: result.primaryStyle, s: result.secondaryStyle, pct: result.percentage })
+  const payload = JSON.stringify({ p: result.primaryStyle, s: result.secondaryStyle, pct: result.percentage, ...(result.isNeutral ? { n: true } : {}) })
   return btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
@@ -41,7 +62,7 @@ export function decodeResult(encoded: string): DiagnosisResult | null {
     if (!STYLE_TYPES[primaryStyle] || !STYLE_TYPES[secondaryStyle]) return null
     const scores = Object.fromEntries(ALL_STYLE_IDS.map(id => [id, 0])) as Record<StyleId, number>
     scores[primaryStyle] = payload.pct ?? 0
-    return { primaryStyle, secondaryStyle, scores, percentage: payload.pct ?? 0 }
+    return { primaryStyle, secondaryStyle, scores, percentage: payload.pct ?? 0, isNeutral: payload.n === true }
   } catch {
     return null
   }

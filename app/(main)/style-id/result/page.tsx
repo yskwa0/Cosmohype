@@ -89,6 +89,17 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           </p>
         </div>
 
+        {result.isNeutral && (
+          <div
+            className="rounded-2xl p-4"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+          >
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              まだスタイルが定まっていないかもしれません。もう少し直感で選んでみると、より精度の高い結果が出ます。
+            </p>
+          </div>
+        )}
+
         {/* Traits */}
         <div>
           <p className="text-xs font-semibold mb-3 tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>特徴</p>

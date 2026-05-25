@@ -41,6 +41,7 @@ export interface DiagnosisResult {
   secondaryStyle: StyleId
   scores: Record<StyleId, number>
   percentage: number
+  isNeutral?: boolean
 }
 
 export interface CompatibilityResult {

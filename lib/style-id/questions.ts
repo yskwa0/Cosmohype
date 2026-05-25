@@ -9,6 +9,7 @@ export const QUESTIONS: Question[] = [
       { text: 'きれいめ',   scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2 } },
       { text: 'カジュアル', scores: { FREE_SPIRIT: 3, SOFT_DREAMER: 2 } },
       { text: 'モード',     scores: { DARK_POET: 3, MINIMAL_SOUL: 2, COSMIC_REBEL: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -19,6 +20,7 @@ export const QUESTIONS: Question[] = [
       { text: 'おしゃれ感', scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2, RETRO_WAVE: 1 } },
       { text: '個性',       scores: { COSMIC_REBEL: 3, DARK_POET: 2 } },
       { text: '清潔感',     scores: { MINIMAL_SOUL: 3, CLASSIC_ELITE: 2, SOFT_DREAMER: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -29,6 +31,7 @@ export const QUESTIONS: Question[] = [
       { text: 'ベージュ・ブラウン', scores: { FREE_SPIRIT: 3, CLASSIC_ELITE: 2, SOFT_DREAMER: 1 } },
       { text: 'カラフル',          scores: { RETRO_WAVE: 3, COSMIC_REBEL: 2, SOFT_DREAMER: 1 } },
       { text: 'ネイビー・ブルー系', scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2, URBAN_EDGE: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -39,6 +42,7 @@ export const QUESTIONS: Question[] = [
       { text: 'ジャストサイズ', scores: { MINIMAL_SOUL: 3, CLASSIC_ELITE: 2 } },
       { text: '細め',           scores: { DARK_POET: 3, CLASSIC_ELITE: 2, MINIMAL_SOUL: 1 } },
       { text: 'メリハリがある', scores: { COSMIC_REBEL: 3, RETRO_WAVE: 2, SOFT_DREAMER: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -49,6 +53,7 @@ export const QUESTIONS: Question[] = [
       { text: 'パンツ・スカート', scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2, SOFT_DREAMER: 1 } },
       { text: '靴',               scores: { DARK_POET: 3, URBAN_EDGE: 2, COSMIC_REBEL: 1 } },
       { text: '小物・バッグ',     scores: { COSMIC_REBEL: 3, RETRO_WAVE: 2, SOFT_DREAMER: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -59,6 +64,7 @@ export const QUESTIONS: Question[] = [
       { text: 'レザー',                  scores: { DARK_POET: 3, URBAN_EDGE: 2, COSMIC_REBEL: 1 } },
       { text: 'ニット',                  scores: { SOFT_DREAMER: 3, FREE_SPIRIT: 2, CLASSIC_ELITE: 1 } },
       { text: 'ナイロン・スポーティー素材', scores: { URBAN_EDGE: 3, COSMIC_REBEL: 2, MINIMAL_SOUL: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -69,6 +75,7 @@ export const QUESTIONS: Question[] = [
       { text: 'トレンド感',       scores: { URBAN_EDGE: 3, RETRO_WAVE: 2, SOFT_DREAMER: 1 } },
       { text: 'ブランド感',       scores: { CLASSIC_ELITE: 3, DARK_POET: 2, MINIMAL_SOUL: 1 } },
       { text: '人と被らないこと', scores: { COSMIC_REBEL: 3, DARK_POET: 2, FREE_SPIRIT: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -79,6 +86,7 @@ export const QUESTIONS: Question[] = [
       { text: '大人っぽい',     scores: { CLASSIC_ELITE: 3, DARK_POET: 2, MINIMAL_SOUL: 1 } },
       { text: '目を引く',       scores: { COSMIC_REBEL: 3, URBAN_EDGE: 2, RETRO_WAVE: 1 } },
       { text: 'シンプルで洗練', scores: { MINIMAL_SOUL: 3, CLASSIC_ELITE: 2 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -89,6 +97,7 @@ export const QUESTIONS: Question[] = [
       { text: 'シャツやジャケット',      scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2 } },
       { text: '古着・個性派アイテム',    scores: { RETRO_WAVE: 3, COSMIC_REBEL: 2, DARK_POET: 1 } },
       { text: 'ワンピースやセットアップ', scores: { SOFT_DREAMER: 3, FREE_SPIRIT: 2 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -99,6 +108,7 @@ export const QUESTIONS: Question[] = [
       { text: 'ローファー・革靴',         scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2, DARK_POET: 1 } },
       { text: 'ブーツ',                   scores: { DARK_POET: 3, COSMIC_REBEL: 2, RETRO_WAVE: 1 } },
       { text: 'サンダル・抜け感のある靴', scores: { FREE_SPIRIT: 3, SOFT_DREAMER: 2 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -109,6 +119,7 @@ export const QUESTIONS: Question[] = [
       { text: 'さりげなく使う',           scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2, FREE_SPIRIT: 1 } },
       { text: 'コーデのポイントにする',   scores: { URBAN_EDGE: 3, RETRO_WAVE: 2, SOFT_DREAMER: 1 } },
       { text: '帽子やアクセで個性を出す', scores: { COSMIC_REBEL: 3, DARK_POET: 2, RETRO_WAVE: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -119,6 +130,7 @@ export const QUESTIONS: Question[] = [
       { text: '鏡越しコーデ',       scores: { URBAN_EDGE: 3, RETRO_WAVE: 2 } },
       { text: '街中スナップ風',     scores: { FREE_SPIRIT: 3, URBAN_EDGE: 2 } },
       { text: 'アイテム寄りの写真', scores: { MINIMAL_SOUL: 3, DARK_POET: 2, COSMIC_REBEL: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -129,6 +141,7 @@ export const QUESTIONS: Question[] = [
       { text: '海外ストリート',          scores: { URBAN_EDGE: 3, RETRO_WAVE: 2, FREE_SPIRIT: 1 } },
       { text: '雑誌っぽいモード',        scores: { DARK_POET: 3, COSMIC_REBEL: 2, CLASSIC_ELITE: 1 } },
       { text: 'ナチュラルで親しみやすい', scores: { FREE_SPIRIT: 3, SOFT_DREAMER: 2 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -139,6 +152,7 @@ export const QUESTIONS: Question[] = [
       { text: '地味すぎる',         scores: { RETRO_WAVE: 3, COSMIC_REBEL: 2, URBAN_EDGE: 1 } },
       { text: '子どもっぽく見える', scores: { CLASSIC_ELITE: 3, DARK_POET: 2, MINIMAL_SOUL: 1 } },
       { text: '量産型っぽく見える', scores: { COSMIC_REBEL: 3, FREE_SPIRIT: 2, DARK_POET: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
   {
@@ -149,6 +163,7 @@ export const QUESTIONS: Question[] = [
       { text: '都会的', scores: { URBAN_EDGE: 3, CLASSIC_ELITE: 2, MINIMAL_SOUL: 1 } },
       { text: '個性的', scores: { COSMIC_REBEL: 3, DARK_POET: 2, RETRO_WAVE: 1 } },
       { text: '上品',   scores: { CLASSIC_ELITE: 3, MINIMAL_SOUL: 2, SOFT_DREAMER: 1 } },
+      { text: '当てはまらない', scores: {} },
     ],
   },
 ]

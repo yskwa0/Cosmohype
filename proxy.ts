@@ -19,7 +19,7 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, { ...options, maxAge: 60 * 60 * 24 * 90 })
           )
         },
       },
@@ -33,11 +33,15 @@ export async function proxy(request: NextRequest) {
   const isAuthPath = AUTH_PATHS.some(p => pathname.startsWith(p))
 
   if (isProtected && !user) {
-    return NextResponse.redirect(new URL('/login', request.url))
+    const redirectResponse = NextResponse.redirect(new URL('/login', request.url))
+    supabaseResponse.cookies.getAll().forEach(cookie => redirectResponse.cookies.set(cookie))
+    return redirectResponse
   }
 
   if (isAuthPath && user) {
-    return NextResponse.redirect(new URL('/feed', request.url))
+    const redirectResponse = NextResponse.redirect(new URL('/feed', request.url))
+    supabaseResponse.cookies.getAll().forEach(cookie => redirectResponse.cookies.set(cookie))
+    return redirectResponse
   }
 
   return supabaseResponse
