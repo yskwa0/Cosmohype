@@ -157,7 +157,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
       </div>
 
       {profile.bio && (
-        <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--text-sub)' }}>{profile.bio}</p>
+        <p className="text-sm leading-relaxed mb-3 text-center" style={{ color: 'var(--text-sub)', whiteSpace: 'pre-line' }}>{profile.bio}</p>
       )}
 
       {profile.style_tags?.length > 0 && (

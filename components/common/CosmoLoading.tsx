@@ -70,7 +70,7 @@ export function CosmoLoading({ delay = 0 }: { delay?: number }) {
           animation: 'cosmo-fade 2.4s ease-in-out infinite',
         }}
       >
-        Tuning your Cosmo ID...
+        Connecting to Cosmohype...
       </p>
 
       <style>{`

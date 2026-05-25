@@ -80,11 +80,31 @@ export function PostOwnerMenu({
 
   async function handleDelete() {
     setView('deleting')
+
+    // Storage の画像パスを先に取得（DB削除後は参照できなくなるため）
+    const { data: images } = await supabase
+      .from('post_images')
+      .select('url')
+      .eq('post_id', postId)
+
     const { error } = await supabase.from('posts').delete().eq('id', postId)
     if (error) {
       console.error(error)
       setView('delete-confirm')
       return
+    }
+
+    // Storage から画像ファイルを削除（エラーはサイレント）
+    if (images && images.length > 0) {
+      const paths = images
+        .map(img => {
+          const m = (img.url as string).match(/\/object\/(?:public|sign)\/posts\/(.+?)(?:\?|$)/)
+          return m ? decodeURIComponent(m[1]) : null
+        })
+        .filter(Boolean) as string[]
+      if (paths.length > 0) {
+        supabase.storage.from('posts').remove(paths).catch(() => {})
+      }
     }
 
     const { data: prevPost } = await supabase

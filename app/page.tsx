@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/Button'
 import { HtmlBackground } from '@/components/ui/HtmlBackground'
+import { OnboardingRedirect } from '@/components/onboarding/OnboardingRedirect'
 
 export default async function HomePage() {
   const supabase = await createClient()
@@ -18,6 +19,7 @@ export default async function HomePage() {
         globals.css の html { background: var(--bg) } と同じ考え方。
         overflow は一切触らない。バウンス・スクロールの動きはそのまま残す。
       */}
+      <OnboardingRedirect />
       <style>{`
         html, body { background-color: #0A0A1A !important; }
         .top-spring-btn {

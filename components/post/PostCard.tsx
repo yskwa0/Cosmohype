@@ -63,7 +63,6 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) setLikeCount(count)
-      router.refresh()
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)

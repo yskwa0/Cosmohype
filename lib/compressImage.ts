@@ -24,19 +24,29 @@ export async function compressImage(
       canvas.width = newW
       canvas.height = newH
 
+      const isPng = file.type === 'image/png'
+      const outputType = isPng ? 'image/jpeg' : file.type
+      const outputName = isPng ? file.name.replace(/\.png$/i, '.jpg') : file.name
+
       const ctx = canvas.getContext('2d')!
       ctx.imageSmoothingEnabled = true
       ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(img, 0, 0, newW, newH)
 
-      const isPng = file.type === 'image/png'
+      // JPEG has no alpha channel — fill white before drawing to prevent
+      // transparent areas becoming black.
+      if (outputType === 'image/jpeg') {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, newW, newH)
+      }
+
+      ctx.drawImage(img, 0, 0, newW, newH)
       canvas.toBlob(
         (blob) => {
           if (!blob) { resolve(file); return }
-          resolve(new File([blob], file.name, { type: file.type, lastModified: Date.now() }))
+          resolve(new File([blob], outputName, { type: outputType, lastModified: Date.now() }))
         },
-        file.type,
-        isPng ? undefined : quality
+        outputType,
+        quality
       )
     }
 
