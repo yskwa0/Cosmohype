@@ -69,7 +69,7 @@ export default function QuizPage() {
         setSelected(null)
       } else {
         setIsFinishing(true)
-        router.push(`/style-id/result?r=${encodeResult(calculateResult(newAnswers))}`)
+        router.replace(`/style-id/result?r=${encodeResult(calculateResult(newAnswers))}`)
       }
     }, 380)
   }

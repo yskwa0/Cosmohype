@@ -1,25 +1,12 @@
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
-import Image from 'next/image'
 import { BackButton } from '@/components/ui/BackButton'
 import { TopBar } from '@/components/layout/TopBar'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
-import { Avatar } from '@/components/ui/Avatar'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import { createClient } from '@/lib/supabase/server'
 import type { StyleId } from '@/lib/style-id/types'
-
-type GridPost = {
-  id: string
-  caption: string | null
-  imageUrl: string
-  profile: {
-    id: string
-    username: string
-    display_name: string | null
-    avatar_url: string | null
-  }
-}
+import { CosmoGrid } from '@/components/cosmo/CosmoGrid'
+import type { GridPost } from '@/components/cosmo/CosmoGrid'
 
 export default async function CosmoStylePage({
   params,
@@ -150,56 +137,7 @@ export default async function CosmoStylePage({
           このスタイルの人
         </p>
 
-        {gridPosts.length === 0 ? (
-          <div
-            className="rounded-2xl p-8 flex flex-col items-center gap-2"
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-          >
-            <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-              まだ投稿がありません
-            </p>
-            <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-              STYLE IDを設定して投稿すると<br />ここに表示されます
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-1.5">
-            {gridPosts.map(post => (
-              <Link
-                key={post.id}
-                href={`/profile/${post.profile.username}`}
-                className="block active:opacity-80 transition-opacity"
-              >
-                <div
-                  className="relative rounded-2xl overflow-hidden"
-                  style={{ aspectRatio: '3/4' }}
-                >
-                  <Image
-                    src={post.imageUrl}
-                    alt={post.caption ?? 'コーデ'}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 448px) 50vw, 224px"
-                  />
-                  {/* グラデーションオーバーレイ */}
-                  <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent" />
-                  {/* ユーザー情報 */}
-                  <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 flex items-center gap-1.5">
-                    <Avatar
-                      src={post.profile.avatar_url}
-                      username={post.profile.username}
-                      size="sm"
-                      className="ring-1 ring-white/30 flex-shrink-0"
-                    />
-                    <p className="text-white text-xs font-semibold truncate leading-none">
-                      {post.profile.display_name ?? post.profile.username}
-                    </p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+        <CosmoGrid posts={gridPosts} />
       </div>
     </>
   )
