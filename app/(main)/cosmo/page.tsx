@@ -9,8 +9,8 @@ const ALL_STYLES = Object.values(STYLE_TYPES)
 
 export default function CosmoPage() {
   return (
-    <>
-      <TopBar title="COSMO" left={<BackButton href="/contents" variant="purple" />} />
+    <div className="feed-animate-in">
+      <TopBar title="COSMO" left={<BackButton variant="purple" />} />
 
       <div
         className="flex flex-col"
@@ -38,7 +38,7 @@ export default function CosmoPage() {
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -46,6 +46,7 @@ function StyleCard({ style }: { style: typeof ALL_STYLES[number] }) {
   return (
     <Link
       href={`/cosmo/${style.id}`}
+      replace
       className="block active:scale-95 active:opacity-90 transition-all duration-150 ease-out"
     >
       <div

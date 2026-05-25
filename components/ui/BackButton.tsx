@@ -1,6 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 export function BackButton({
   href,
@@ -8,9 +8,57 @@ export function BackButton({
 }: { href?: string; variant?: 'purple' } = {}) {
   const router = useRouter()
   const [pressed, setPressed] = useState(false)
+  const animatingRef = useRef(false)
 
-  function handleBack() {
+  async function handleBack() {
+    if (animatingRef.current) return
+    animatingRef.current = true
+
+    const mainEl = document.querySelector('main') as HTMLElement | null
+    const navEl  = document.querySelector('nav')  as HTMLElement | null
+
+    const DURATION = 210
+    const easing   = 'cubic-bezier(0.4, 0, 0.6, 1)'  // ease-in-out: smooth start, quick exit
+
+    if (mainEl) {
+      mainEl.style.transition = `transform ${DURATION}ms ${easing}, opacity ${DURATION}ms ${easing}`
+      mainEl.style.transform  = 'translateX(100vw)'
+      mainEl.style.opacity    = '0'
+    }
+    if (navEl) {
+      navEl.style.transition = `transform ${DURATION}ms ${easing}, opacity ${DURATION}ms ${easing}`
+      navEl.style.transform  = 'translateX(100vw)'
+      navEl.style.opacity    = '0'
+    }
+
+    await new Promise(r => setTimeout(r, DURATION + 15))
+
+    // Insert a solid overlay BEFORE navigation so the style reset is never visible.
+    // The overlay matches the app background and is removed after React renders the new page.
+    const overlay = document.createElement('div')
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg, #090714);'
+    document.body.appendChild(overlay)
+
     href ? router.replace(href) : router.back()
+
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        // Reset position/transition under overlay, but keep opacity:0 so old content
+        // is never visible even if React hasn't committed the new page yet.
+        if (mainEl) { mainEl.style.transform = ''; mainEl.style.transition = '' }
+        if (navEl)  { navEl.style.transform  = ''; navEl.style.transition  = '' }
+
+        // Restore opacity and remove overlay in the same callback so the browser
+        // paints them in one frame — eliminating any window where old content flashes.
+        setTimeout(() => {
+          if (mainEl) { mainEl.style.opacity = '' }
+          if (navEl)  { navEl.style.opacity  = '' }
+          overlay.remove()
+          animatingRef.current = false
+        }, 120)
+      })
+    )
   }
 
   if (variant === 'purple') {

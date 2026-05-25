@@ -12,8 +12,8 @@ const STYLE_IDS: StyleId[] = [
 
 export default function StyleIdTopPage() {
   return (
-    <>
-      <TopBar title="STYLE ID" left={<BackButton href="/contents" variant="purple" />} />
+    <div className="feed-animate-in">
+      <TopBar title="STYLE ID" left={<BackButton variant="purple" />} />
 
       <div className="px-5 pt-6 pb-12 flex flex-col gap-8">
 
@@ -57,6 +57,7 @@ export default function StyleIdTopPage() {
         <div className="flex flex-col gap-3">
           <Link
             href="/style-id/quiz"
+            replace
             className="w-full h-14 rounded-2xl flex items-center justify-center text-base font-semibold text-white transition-transform duration-75 active:scale-[0.97]"
             style={{
               background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
@@ -79,6 +80,6 @@ export default function StyleIdTopPage() {
         </div>
 
       </div>
-    </>
+    </div>
   )
 }

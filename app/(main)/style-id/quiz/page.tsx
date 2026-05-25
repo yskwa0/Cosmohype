@@ -77,7 +77,7 @@ export default function QuizPage() {
   function handleBack() {
     clearTimeout(timerRef.current)
     if (currentQ === 0) {
-      router.push('/style-id')
+      router.replace('/style-id')
     } else {
       setSelected(null)
       setAnswers(prev => prev.slice(0, -1))

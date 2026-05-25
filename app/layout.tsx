@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { createClient } from '@/lib/supabase/server'
+import { SplashScreen } from '@/components/ui/SplashScreen'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ja" className={`h-full ${themeClass}`}>
       <body className="min-h-full antialiased">
+        <SplashScreen />
         {children}
       </body>
     </html>

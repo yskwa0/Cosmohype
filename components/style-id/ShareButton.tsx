@@ -11,6 +11,7 @@ interface Props {
 
 const W = 600
 const H = 750
+const SCALE = 2  // retina: actual canvas buffer is W*SCALE × H*SCALE
 
 function loadImg(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -46,9 +47,10 @@ export function ShareButton({ styleId, primary, shareUrl }: Props) {
     }
 
     const canvas = document.createElement('canvas')
-    canvas.width = W
-    canvas.height = H
+    canvas.width = W * SCALE
+    canvas.height = H * SCALE
     const ctx = canvas.getContext('2d')!
+    ctx.scale(SCALE, SCALE)  // all draw calls use logical W×H coords
 
     // Rounded card clip
     ctx.save()
@@ -107,16 +109,15 @@ export function ShareButton({ styleId, primary, shareUrl }: Props) {
     ctx.lineTo(W * 0.8, H - 82)
     ctx.stroke()
 
-    // Cosmohype logo (white version)
+    // Cosmohype logo (white version, 2048×768 source → drawn large for clarity)
     if (logoImg) {
-      const logoH = 26
+      const logoH = 44
       const logoW = logoH * (logoImg.naturalWidth / logoImg.naturalHeight)
-      ctx.drawImage(logoImg, (W - logoW) / 2, H - 56, logoW, logoH)
+      ctx.drawImage(logoImg, (W - logoW) / 2, H - 62, logoW, logoH)
     } else {
-      // Text fallback if logo fails to load
-      ctx.font = '600 14px system-ui, -apple-system, sans-serif'
+      ctx.font = '600 18px system-ui, -apple-system, sans-serif'
       ctx.fillStyle = 'rgba(255,255,255,0.45)'
-      ctx.fillText('Cosmohype', W / 2, H - 40)
+      ctx.fillText('Cosmohype', W / 2, H - 38)
     }
 
     ctx.restore()
@@ -186,7 +187,7 @@ export function ShareButton({ styleId, primary, shareUrl }: Props) {
         aria-hidden
         style={{ position: 'fixed', top: '-9999px', left: '-9999px' }}
       >
-        <StyleAlien styleId={styleId} size={100} />
+        <StyleAlien styleId={styleId} size={600} />
       </div>
 
       <button

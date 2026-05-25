@@ -68,8 +68,8 @@ export default async function HypePage() {
   const totalLikes = ranking.reduce((sum, r) => sum + r.likes, 0)
 
   return (
-    <>
-      <TopBar title="今日のHYPE" left={<BackButton href="/contents" variant="purple" />} />
+    <div className="feed-animate-in">
+      <TopBar title="今日のHYPE" left={<BackButton variant="purple" />} />
 
       <div className="flex flex-col pb-24">
         {/* Hero */}
@@ -160,6 +160,6 @@ export default async function HypePage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   )
 }

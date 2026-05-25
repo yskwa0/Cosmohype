@@ -27,9 +27,9 @@ export default async function StyleCheckPage() {
     .maybeSingle()
 
   return (
-    <>
-      <TopBar title="AIスタイル診断" left={<BackButton href="/contents" variant="purple" />} />
+    <div className="feed-animate-in">
+      <TopBar title="AIスタイル診断" left={<BackButton variant="purple" />} />
       <StyleCheckForm todayResult={todayDiag?.result ?? null} />
-    </>
+    </div>
   )
 }

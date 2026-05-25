@@ -54,7 +54,7 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <TopBar title="診断結果" left={<BackButton variant="purple" />} />
+      <TopBar title="診断結果" left={<BackButton href="/style-id" variant="purple" />} />
 
       {/* Hero */}
       <div
