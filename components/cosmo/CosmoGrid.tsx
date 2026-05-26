@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback } from 'react'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Avatar } from '@/components/ui/Avatar'
 
 export type GridPost = {
@@ -18,8 +18,22 @@ export type GridPost = {
 
 export function CosmoGrid({ posts }: { posts: GridPost[] }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
   const [viewing, setViewing] = useState<GridPost | null>(null)
 
+  // Restore viewer from URL on mount — handles back navigation from profile
+  // useLayoutEffect: runs before first paint so viewer appears without flash
+  useLayoutEffect(() => {
+    const postId = searchParams.get('post')
+    if (postId) {
+      const post = posts.find(p => p.id === postId)
+      if (post) setViewing(post)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally mount-only: explicit open/close manage state after that
+
+  // Lock body scroll when viewing
   useEffect(() => {
     if (!viewing) return
     const prev = document.body.style.overflow
@@ -27,14 +41,30 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
     return () => { document.body.style.overflow = prev }
   }, [viewing])
 
+  const closeViewer = useCallback(() => {
+    setViewing(null)
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete('post')
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [searchParams, pathname, router])
+
+  // Escape key to close viewer
   useEffect(() => {
     if (!viewing) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setViewing(null)
+      if (e.key === 'Escape') closeViewer()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [viewing])
+  }, [viewing, closeViewer])
+
+  function openViewer(post: GridPost) {
+    setViewing(post)
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('post', post.id)
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   if (posts.length === 0) {
     return (
@@ -60,8 +90,8 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
             role="button"
             tabIndex={0}
             aria-label="画像を拡大"
-            onClick={() => setViewing(post)}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setViewing(post) }}
+            onClick={() => openViewer(post)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openViewer(post) }}
             className="relative rounded-2xl overflow-hidden cursor-pointer select-none"
             style={{ aspectRatio: '3/4' }}
           >
@@ -110,7 +140,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
         <div
           className="fixed inset-0 z-50 flex flex-col"
           style={{ background: 'rgba(0,0,0,0.93)' }}
-          onClick={() => setViewing(null)}
+          onClick={closeViewer}
         >
           {/* Top: close button */}
           <div
@@ -121,7 +151,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
             <button
               type="button"
               aria-label="閉じる"
-              onClick={() => setViewing(null)}
+              onClick={closeViewer}
               className="w-10 h-10 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(255,255,255,0.14)' }}
             >
