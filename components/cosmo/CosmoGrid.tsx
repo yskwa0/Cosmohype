@@ -160,7 +160,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
               <button
                 type="button"
                 aria-label={`${viewing.profile.display_name ?? viewing.profile.username}のプロフィールへ`}
-                onClick={e => { e.stopPropagation(); setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
+                onClick={e => { e.stopPropagation(); router.push(`/profile/${viewing.profile.username}`) }}
                 className="absolute bottom-0 left-0 flex items-center gap-2.5 px-3 pb-3 active:opacity-70 transition-opacity"
                 style={{ zIndex: 10 }}
               >
