@@ -1,5 +1,6 @@
 import { BottomNav } from '@/components/layout/BottomNav'
 import { StarField } from '@/components/ui/StarField'
+import { EdgeSwipeBack } from '@/components/ui/EdgeSwipeBack'
 import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   return (
     <div className={`min-h-screen ${themeClass}`} style={{ background: 'var(--bg)' }}>
+      <EdgeSwipeBack />
       {theme === 'cosmic-black' && <StarField />}
       <main className="relative z-10 max-w-md mx-auto pb-20">
         {children}
