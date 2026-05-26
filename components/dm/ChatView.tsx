@@ -46,6 +46,24 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
 
+  // iOS focus時のページ全体スクロールを防ぐ。
+  // iOSはinputフォーカス時にwindow.scrollYを増やして入力欄を表示しようとするが、
+  // headerが画面外に押し出される。overflow:hiddenでページスクロールをロックする。
+  // メッセージのスクロールはscrollRef内部(overflow-y:auto)が担うので影響なし。
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prevHtml = html.style.overflow
+    const prevBody = body.style.overflow
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    window.scrollTo(0, 0)
+    return () => {
+      html.style.overflow = prevHtml
+      body.style.overflow = prevBody
+    }
+  }, [])
+
   // iOS キーボード対応
   // visualViewport の resize/scroll に合わせてコンテナ bottom を毎回再計算する。
   // bottom = window.innerHeight - vv.height - vv.offsetTop = キーボード高さ
