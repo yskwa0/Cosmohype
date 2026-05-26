@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useLayoutEffect, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { Avatar } from '@/components/ui/Avatar'
@@ -21,6 +21,8 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
   const searchParams = useSearchParams()
   const pathname = usePathname()
   const [viewing, setViewing] = useState<GridPost | null>(null)
+  // Holds the scroll target while images are still loading so onLoad can re-correct
+  const scrollTargetRef = useRef<number | null>(null)
 
   const SCROLL_KEY = `cosmo-scroll:${pathname}`
 
@@ -41,14 +43,19 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
     if (!raw) return
     const y = parseInt(raw, 10)
     sessionStorage.removeItem(SCROLL_KEY)
-    // 1st rAF: initial layout done → scroll to target
-    // 2nd rAF: correct for any reflow from the first scroll
-    // setTimeout 300ms: catch images that load slowly and shift content
+    scrollTargetRef.current = y
+    // 1st rAF: initial layout → scroll
+    // 2nd rAF: reflow correction
+    // 300ms: catch slow-loading images; onLoad handles stragglers individually
     requestAnimationFrame(() => {
       window.scrollTo(0, y)
       requestAnimationFrame(() => {
         window.scrollTo(0, y)
-        setTimeout(() => window.scrollTo(0, y), 300)
+        setTimeout(() => {
+          window.scrollTo(0, y)
+          // Clear the ref after 3s — images that load later don't need correction
+          setTimeout(() => { scrollTargetRef.current = null }, 3000)
+        }, 300)
       })
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,6 +134,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
               src={post.imageUrl}
               alt={post.caption ?? 'コーデ'}
               fill
+              onLoad={() => { if (scrollTargetRef.current !== null) window.scrollTo(0, scrollTargetRef.current) }}
               className="object-cover pointer-events-none"
               sizes="(max-width: 448px) 50vw, 224px"
             />
