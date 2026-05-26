@@ -10,6 +10,12 @@ export function SlideIn({ children }: { children: React.ReactNode }) {
     const mainEl = document.querySelector('main') as HTMLElement | null
     if (!mainEl) return
 
+    // Skip enter animation when navigating back (flagged by BackButton).
+    if (sessionStorage.getItem('skipSlideIn') === '1') {
+      sessionStorage.removeItem('skipSlideIn')
+      return
+    }
+
     animRef.current = mainEl.animate(
       [
         { transform: 'translateX(100%)', opacity: 0 },

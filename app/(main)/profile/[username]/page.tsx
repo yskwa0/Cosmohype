@@ -111,17 +111,19 @@ export default async function ProfilePage({
         .select(`*, post_images(*)`)
         .eq('user_id', profile.id)
         .eq('is_archived', false)
+        .eq('is_hidden', false)
         .order('created_at', { ascending: false })
     : { data: [] }
 
-  return (
-    <SlideIn>
+  const pageContent = (
+    <>
       <TopBar
         left={(() => {
           if (from === 'follow-activity') return <BackButton href="/profile/follow-activity" variant="purple" />
           if (from === 'followers' && ref) return <BackButton href={`/profile/${ref}/followers`} variant="purple" />
           if (from === 'following' && ref) return <BackButton href={`/profile/${ref}/following`} variant="purple" />
-          return <BackButton />
+          if (isOwner) return undefined
+          return <BackButton variant="purple" />
         })()}
         title={
           <span className="flex items-center gap-1.5">
@@ -191,7 +193,9 @@ export default async function ProfilePage({
           )}
         </div>
       </div>
-    </SlideIn>
+    </>
   )
+
+  return isOwner ? pageContent : <SlideIn>{pageContent}</SlideIn>
 }
 

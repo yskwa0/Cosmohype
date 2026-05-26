@@ -49,23 +49,26 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { setMounted(true) }, [])
 
   // iOS キーボード対応
-  // コンテナを top:0 から画面全体にかぶせ、TopBarも内包することでiOSスクロールの影響を受けない。
-  // bottom = window.innerHeight - vv.height - vv.offsetTop = キーボード高さ
+  // height = vv.height, top = vv.offsetTop でコンテナをビジュアルビューポートに正確に合わせる。
+  // bottom ベースだと iOS Safari の fixed 座標系と二重補正になり入力欄が高くなりすぎるため使わない。
   useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
 
     const vv = window.visualViewport
-    let prevVvHeight = vv ? vv.height : window.innerHeight
+    const baselineHeight = vv ? vv.height : window.innerHeight
+    let prevVvHeight = baselineHeight
 
     function update() {
-      const vvHeight  = vv ? vv.height    : window.innerHeight
-      const vvOffset  = vv ? vv.offsetTop : 0
-      const offsetFromBottom = Math.max(0, window.innerHeight - vvHeight - vvOffset)
+      const vvHeight = vv ? vv.height    : window.innerHeight
+      const vvOffset = vv ? vv.offsetTop : 0
 
-      el!.style.top    = '0'
-      el!.style.bottom = `${offsetFromBottom}px`
-      setKbBottom(offsetFromBottom)
+      el!.style.top    = `${vvOffset}px`
+      el!.style.height = `${vvHeight}px`
+      el!.style.bottom = ''
+
+      // baselineHeight との差分 = キーボード高さ相当
+      setKbBottom(Math.max(0, baselineHeight - vvHeight))
     }
 
     function onVvChange() {
@@ -85,7 +88,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
     if (vv) {
       vv.addEventListener('resize', onVvChange)
-      vv.addEventListener('scroll', onVvChange) // 一部端末でスクロール方向の補正
+      vv.addEventListener('scroll', onVvChange)
       return () => {
         vv.removeEventListener('resize', onVvChange)
         vv.removeEventListener('scroll', onVvChange)

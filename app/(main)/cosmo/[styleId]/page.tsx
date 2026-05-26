@@ -58,6 +58,7 @@ export default async function CosmoStylePage({
         .select('id, caption, user_id, post_images(url, display_order)')
         .in('id', cosmoPostIds)
         .eq('is_archived', false)
+        .eq('is_hidden', false)
 
       for (const p of (featured ?? []) as RawPost[]) {
         const gp = toGridPost(p)
@@ -78,6 +79,7 @@ export default async function CosmoStylePage({
         .select('id, caption, user_id, post_images(url, display_order)')
         .in('user_id', fallbackUserIds)
         .eq('is_archived', false)
+        .eq('is_hidden', false)
         .order('created_at', { ascending: false })
         .limit(fallbackUserIds.length * 5)
 

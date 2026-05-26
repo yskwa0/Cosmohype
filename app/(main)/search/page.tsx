@@ -113,12 +113,14 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       .from('posts')
       .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
       .contains('tags', [query])
+      .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .limit(20),
     supabase
       .from('posts')
       .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
       .ilike('caption', `%${query}%`)
+      .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .limit(10),
     supabase.from('likes').select('post_id').eq('user_id', user.id),

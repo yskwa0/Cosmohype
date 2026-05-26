@@ -205,6 +205,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
               ? (mode === 'register' ? '登録中...' : 'ログイン中...')
               : (mode === 'register' ? 'アカウントを作成' : 'ログイン')}
           </button>
+
+          {/* 新規登録時：ボタン直下に同意文 */}
+          {mode === 'register' && (
+            <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.38)', lineHeight: 1.7 }}>
+              登録することで、
+              <Link href="/terms" style={{ color: '#A855F7', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}>利用規約</Link>
+              と
+              <Link href="/privacy" style={{ color: '#A855F7', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}>プライバシーポリシー</Link>
+              に同意したものとみなされます。
+            </p>
+          )}
         </div>
 
         <p style={{ textAlign: 'center', fontSize: '14px', color: 'rgba(255,255,255,0.5)', marginTop: '24px' }}>
@@ -218,6 +229,15 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </>
           )}
         </p>
+
+        {/* ログイン時：最下部にリンク */}
+        {mode === 'login' && (
+          <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '20px' }}>
+            <Link href="/terms" style={{ color: 'rgba(168,85,247,0.7)' }}>利用規約</Link>
+            <span style={{ margin: '0 8px', color: 'rgba(255,255,255,0.2)' }}>·</span>
+            <Link href="/privacy" style={{ color: 'rgba(168,85,247,0.7)' }}>プライバシーポリシー</Link>
+          </p>
+        )}
       </div>
 
     </div>

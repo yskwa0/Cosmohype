@@ -62,12 +62,12 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   // Phase 2: parallel — feed posts and DM details
   const buildRecQ = () => {
-    let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).eq('is_archived', false)
+    let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).eq('is_archived', false).eq('is_hidden', false)
     if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
     return q.order('created_at', { ascending: false }).limit(20)
   }
   const buildFollowQ = () => {
-    let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).in('user_id', validFollowingIds).eq('is_archived', false)
+    let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).in('user_id', validFollowingIds).eq('is_archived', false).eq('is_hidden', false)
     if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
     return q.order('created_at', { ascending: false }).limit(20)
   }

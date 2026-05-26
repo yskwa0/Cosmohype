@@ -40,20 +40,20 @@ export function BackButton({
       'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg, #090714);'
     document.body.appendChild(overlay)
 
+    // Signal SlideIn to skip its enter animation on the next mount.
+    sessionStorage.setItem('skipSlideIn', '1')
+
     href ? router.replace(href) : router.back()
 
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        // Reset position/transition under overlay, but keep opacity:0 so old content
-        // is never visible even if React hasn't committed the new page yet.
-        if (mainEl) { mainEl.style.transform = ''; mainEl.style.transition = '' }
-        if (navEl)  { navEl.style.transform  = ''; navEl.style.transition  = '' }
+        // Disable transition first so the transform reset is instant (no slide-back).
+        if (mainEl) { mainEl.style.transition = 'none'; mainEl.style.transform = '' }
+        if (navEl)  { navEl.style.transition  = 'none'; navEl.style.transform  = '' }
 
-        // Restore opacity and remove overlay in the same callback so the browser
-        // paints them in one frame — eliminating any window where old content flashes.
         setTimeout(() => {
-          if (mainEl) { mainEl.style.opacity = '' }
-          if (navEl)  { navEl.style.opacity  = '' }
+          if (mainEl) { mainEl.style.opacity = ''; mainEl.style.transition = '' }
+          if (navEl)  { navEl.style.opacity  = ''; navEl.style.transition  = '' }
           overlay.remove()
           animatingRef.current = false
         }, 60)

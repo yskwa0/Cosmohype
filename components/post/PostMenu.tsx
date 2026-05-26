@@ -1,11 +1,18 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@/lib/supabase/client'
 
 type View = 'closed' | 'dropdown' | 'report' | 'block-confirm' | 'done'
 
-const REASONS = ['スパム', '不適切なコンテンツ', 'ハラスメント', '偽情報']
+const REASONS = [
+  'スパム / 宣伝',
+  '嫌がらせ / 誹謗中傷',
+  '不適切な画像',
+  'なりすまし',
+  '出会い目的 / 外部誘導',
+  'その他',
+]
 
 export function PostMenu({ postId, postOwnerId, currentUserId }: {
   postId: string
@@ -14,25 +21,69 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
 }) {
   const [view, setView] = useState<View>('closed')
   const [reason, setReason] = useState('')
+  const [detail, setDetail] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [reportError, setReportError] = useState('')
   const [doneMsg, setDoneMsg] = useState('')
   const [mounted, setMounted] = useState(false)
+  // ドロップダウンの fixed 座標（ボタン直下 or 直上）
+  const [dropPos, setDropPos] = useState<{ top: number; right: number } | null>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
   const supabase = createClient()
 
   useEffect(() => { setMounted(true) }, [])
 
+  function openDropdown() {
+    if (!btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const menuHeight = 100 // 2アイテム分の概算高さ
+    // 下に収まるなら下、収まらなければ上に開く
+    const top = spaceBelow >= menuHeight
+      ? rect.bottom + 6
+      : rect.top - menuHeight - 6
+    setDropPos({ top, right: window.innerWidth - rect.right })
+    setView('dropdown')
+  }
+
   function close() {
     setView('closed')
     setReason('')
+    setDetail('')
+    setReportError('')
+    setDropPos(null)
   }
 
   async function submitReport() {
-    await supabase.from('reports').insert({
+    if (!currentUserId) return
+    if (!reason) return
+
+    setSubmitting(true)
+    setReportError('')
+
+    // detail/status は型定義未更新のため as any でキャスト
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('reports') as any).insert({
       reporter_id: currentUserId,
       target_type: 'post',
       target_id: postId,
       reason,
+      detail: detail.trim() || null,
+      status: 'pending',
     })
-    setDoneMsg('通報しました。ご協力ありがとうございます。')
+
+    setSubmitting(false)
+
+    if (error) {
+      if (error.code === '23505') {
+        setReportError('すでにこの投稿を通報済みです。')
+      } else {
+        setReportError('通報の送信に失敗しました。時間をおいて再度お試しください。')
+      }
+      return
+    }
+
+    setDoneMsg('通報を受け付けました。ご協力ありがとうございます。')
     setView('done')
   }
 
@@ -42,13 +93,16 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
     setView('done')
   }
 
+  const canSubmit = !!reason && !submitting
+  const showDetail = reason === 'その他'
   const showSheet = view === 'report' || view === 'block-confirm' || view === 'done'
 
   return (
-    <div className="relative">
+    <>
       {/* "..." ボタン */}
       <button
-        onClick={() => setView(v => v === 'dropdown' ? 'closed' : 'dropdown')}
+        ref={btnRef}
+        onClick={openDropdown}
         className="p-1 transition-transform duration-75 active:scale-75"
         aria-label="メニュー"
         style={{ color: view === 'dropdown' ? 'var(--purple)' : 'var(--text-muted)' }}
@@ -58,21 +112,24 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
         </svg>
       </button>
 
-      {/* ドロップダウン（ボタンの上に表示） */}
-      {view === 'dropdown' && (
+      {/* ドロップダウン — portal で fixed 描画し overflow/stacking context を回避 */}
+      {mounted && view === 'dropdown' && dropPos && createPortal(
         <>
           <div className="fixed inset-0 z-[90]" onClick={close} />
           <div
-            className="absolute bottom-full right-0 mb-2 z-[95] min-w-[172px] rounded-2xl"
+            className="z-[95] min-w-[180px] rounded-2xl"
             style={{
+              position: 'fixed',
+              top: dropPos.top,
+              right: dropPos.right,
               background: 'var(--bg-elevated)',
               border: '1px solid var(--border)',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
               overflow: 'hidden',
             }}
           >
             <button
-              onClick={() => setView('report')}
+              onClick={() => { setDropPos(null); setView('report') }}
               className="flex items-center gap-2.5 w-full px-4 py-3.5 text-sm font-medium text-left transition-all duration-75 active:scale-[0.96] active:opacity-80"
               style={{ color: 'var(--text)', borderBottom: '1px solid var(--border)' }}
             >
@@ -82,7 +139,7 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
               この投稿を通報
             </button>
             <button
-              onClick={() => setView('block-confirm')}
+              onClick={() => { setDropPos(null); setView('block-confirm') }}
               className="flex items-center gap-2.5 w-full px-4 py-3.5 text-sm font-medium text-left transition-all duration-75 active:scale-[0.96] active:opacity-80"
               style={{ color: '#EF4444' }}
             >
@@ -92,13 +149,14 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
               ユーザーをブロック
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {/* 確認・通報シート（portal） */}
       {mounted && showSheet && createPortal(
         <>
-          <div className="fixed inset-0 z-[100] bg-black/40" onClick={close} />
+          <div className="fixed inset-0 z-[100] bg-black/40" onClick={view === 'done' || submitting ? undefined : close} />
           <div
             className="fixed bottom-0 left-0 right-0 z-[100] max-w-md mx-auto rounded-t-2xl overflow-hidden"
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
@@ -106,13 +164,17 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
             {view === 'report' && (
               <div className="flex flex-col px-5 pb-6">
                 <div className="w-10 h-1 rounded-full mx-auto mt-3 mb-5" style={{ background: 'var(--border)' }} />
-                <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text)' }}>通報する理由</h3>
-                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>該当する理由を選択してください</p>
-                <div className="flex flex-col gap-2 mb-5">
+                <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text)' }}>投稿を通報</h3>
+                <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
+                  問題のある投稿を運営に報告できます。<br />
+                  該当する理由を選択してください。
+                </p>
+
+                <div className="flex flex-col gap-2 mb-4">
                   {REASONS.map(r => (
                     <button
                       key={r}
-                      onClick={() => setReason(r)}
+                      onClick={() => { setReason(r); setDetail(''); setReportError('') }}
                       className="flex items-center justify-between px-4 py-3 rounded-xl text-sm text-left transition-all duration-75 active:scale-[0.97]"
                       style={{
                         background: reason === r ? 'var(--purple-dim)' : 'var(--bg-subtle)',
@@ -122,24 +184,54 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
                     >
                       {r}
                       {reason === r && (
-                        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                        <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="currentColor">
                           <path fillRule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 011.04-.208z" clipRule="evenodd" />
                         </svg>
                       )}
                     </button>
                   ))}
                 </div>
+
+                {showDetail && (
+                  <textarea
+                    value={detail}
+                    onChange={e => setDetail(e.target.value)}
+                    placeholder="詳細を入力してください（任意）"
+                    rows={3}
+                    maxLength={500}
+                    className="w-full rounded-xl px-4 py-3 text-sm resize-none outline-none mb-4"
+                    style={{
+                      background: 'var(--bg-subtle)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text)',
+                    }}
+                  />
+                )}
+
+                {reportError && (
+                  <p className="text-xs mb-3 text-center" style={{ color: '#EF4444' }}>
+                    {reportError}
+                  </p>
+                )}
+
                 <button
                   onClick={submitReport}
-                  disabled={!reason}
-                  className="w-full h-11 rounded-xl text-sm font-semibold transition-all duration-75 active:scale-[0.97] disabled:opacity-40"
-                  style={{ background: 'var(--purple-glow)', color: '#fff' }}
+                  disabled={!canSubmit}
+                  className="w-full h-11 rounded-xl text-sm font-semibold transition-all duration-75 active:scale-[0.97] disabled:opacity-40 flex items-center justify-center gap-2"
+                  style={{ background: 'var(--purple)', color: '#fff' }}
                 >
-                  送信する
+                  {submitting && (
+                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  )}
+                  {submitting ? '送信中...' : '通報する'}
                 </button>
                 <button
                   onClick={close}
-                  className="w-full h-10 mt-2 text-sm transition-opacity active:opacity-60"
+                  disabled={submitting}
+                  className="w-full h-10 mt-2 text-sm transition-opacity active:opacity-60 disabled:opacity-40"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   キャンセル
@@ -193,6 +285,6 @@ export function PostMenu({ postId, postOwnerId, currentUserId }: {
         </>,
         document.body
       )}
-    </div>
+    </>
   )
 }

@@ -23,6 +23,7 @@ export default async function HypePage() {
     `)
     .eq('hype_theme', THEME_SLUG)
     .eq('profiles.is_private', false)
+    .eq('is_hidden', false)
     .order('created_at', { ascending: false })
     .limit(20)
 
