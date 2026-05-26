@@ -131,14 +131,15 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
             </button>
           </div>
 
-          {/* Center: image */}
+          {/* Center: image with user info overlaid at bottom-left */}
           <div
-            className="flex-1 flex items-center justify-center px-4 py-4"
+            className="flex-1 flex items-center justify-center px-4"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)', paddingTop: 8 }}
             onClick={e => e.stopPropagation()}
           >
             <div
               className="relative rounded-2xl overflow-hidden"
-              style={{ width: '100%', maxWidth: 'min(100%, calc(65vh * 3 / 4))', aspectRatio: '3/4' }}
+              style={{ width: '100%', maxWidth: 'min(100%, calc(70vh * 3 / 4))', aspectRatio: '3/4' }}
             >
               <Image
                 src={viewing.imageUrl}
@@ -148,45 +149,37 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
                 sizes="(max-width: 600px) 90vw, 400px"
                 priority
               />
-            </div>
-          </div>
 
-          {/* Bottom: user info + profile button */}
-          <div
-            className="flex-shrink-0 flex items-center justify-between gap-4 px-5 pt-4"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}
-            onClick={e => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              aria-label={`${viewing.profile.display_name ?? viewing.profile.username}のプロフィールへ`}
-              onClick={() => { setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
-              className="flex items-center gap-3 min-w-0 active:opacity-70 transition-opacity"
-            >
-              <Avatar
-                src={viewing.profile.avatar_url}
-                username={viewing.profile.username}
-                size="md"
-                className="ring-2 ring-white/20 flex-shrink-0"
+              {/* Gradient for readability */}
+              <div
+                className="absolute inset-x-0 bottom-0 h-28 pointer-events-none"
+                style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)' }}
               />
-              <div className="text-left min-w-0">
-                <p className="text-white text-sm font-semibold truncate leading-tight">
-                  {viewing.profile.display_name ?? viewing.profile.username}
-                </p>
-                <p className="text-xs truncate leading-tight" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  @{viewing.profile.username}
-                </p>
-              </div>
-            </button>
 
-            <button
-              type="button"
-              onClick={() => { setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
-              className="flex-shrink-0 h-9 px-5 rounded-full text-sm font-semibold active:opacity-70 transition-opacity"
-              style={{ background: 'rgba(124,58,237,0.85)', color: '#fff' }}
-            >
-              プロフィール
-            </button>
+              {/* User info — overlaid bottom-left of image */}
+              <button
+                type="button"
+                aria-label={`${viewing.profile.display_name ?? viewing.profile.username}のプロフィールへ`}
+                onClick={e => { e.stopPropagation(); setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
+                className="absolute bottom-0 left-0 flex items-center gap-2.5 px-3 pb-3 active:opacity-70 transition-opacity"
+                style={{ zIndex: 10 }}
+              >
+                <Avatar
+                  src={viewing.profile.avatar_url}
+                  username={viewing.profile.username}
+                  size="sm"
+                  className="ring-2 ring-white/30 flex-shrink-0"
+                />
+                <div className="text-left min-w-0">
+                  <p className="text-white text-sm font-semibold leading-tight" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
+                    {viewing.profile.display_name ?? viewing.profile.username}
+                  </p>
+                  <p className="text-xs leading-tight" style={{ color: 'rgba(255,255,255,0.65)', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
+                    @{viewing.profile.username}
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}
