@@ -52,20 +52,20 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
 
   return (
     <>
-      <p style={{ color: 'red', fontWeight: 'bold', fontSize: 12, marginBottom: 8 }}>COSMO GRID TEST v2</p>
+      {/* Grid */}
       <div className="grid grid-cols-2 gap-1.5">
         {posts.map(post => (
-          /* Card: tap image area → open viewer */
           <div
             key={post.id}
             role="button"
             tabIndex={0}
             aria-label="画像を拡大"
             onClick={() => setViewing(post)}
-            className="relative rounded-2xl overflow-hidden cursor-pointer active:opacity-80 transition-opacity select-none"
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setViewing(post) }}
+            className="relative rounded-2xl overflow-hidden cursor-pointer select-none"
             style={{ aspectRatio: '3/4' }}
           >
-            {/* Image */}
+            {/* Photo */}
             <Image
               src={post.imageUrl}
               alt={post.caption ?? 'コーデ'}
@@ -74,54 +74,56 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
               sizes="(max-width: 448px) 50vw, 224px"
             />
 
-            {/* Gradient overlay */}
+            {/* Bottom gradient */}
             <div
-              className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
-              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)' }}
+              className="absolute inset-x-0 bottom-0 h-20 pointer-events-none"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)' }}
             />
 
-            {/* User info: tap → profile (stopPropagation prevents card click) */}
+            {/* User info — stopPropagation so tap doesn't open viewer */}
             <button
               type="button"
+              aria-label={`${post.profile.display_name ?? post.profile.username}のプロフィールへ`}
               onClick={e => {
                 e.stopPropagation()
                 router.push(`/profile/${post.profile.username}`)
               }}
-              className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 flex items-center gap-1.5 active:opacity-70 transition-opacity"
-              aria-label={`${post.profile.display_name ?? post.profile.username}のプロフィール`}
+              className="absolute bottom-0 left-0 px-2.5 pb-2.5 flex items-center gap-1.5"
+              style={{ maxWidth: '100%' }}
             >
               <Avatar
                 src={post.profile.avatar_url}
                 username={post.profile.username}
-                size="sm"
-                className="ring-1 ring-white/30 flex-shrink-0"
+                size="xs"
+                className="ring-1 ring-white/40 flex-shrink-0"
               />
-              <p className="text-white text-xs font-semibold truncate leading-none">
+              <span className="text-white text-xs font-semibold truncate leading-none" style={{ maxWidth: 80 }}>
                 {post.profile.display_name ?? post.profile.username}
-              </p>
+              </span>
             </button>
           </div>
         ))}
       </div>
 
-      {/* Full-screen image viewer */}
+      {/* Fullscreen viewer */}
       {viewing && (
         <div
           className="fixed inset-0 z-50 flex flex-col"
-          style={{ background: 'rgba(0,0,0,0.92)' }}
+          style={{ background: 'rgba(0,0,0,0.93)' }}
           onClick={() => setViewing(null)}
         >
-          {/* Close */}
+          {/* Top: close button */}
           <div
-            className="flex justify-end px-4 flex-shrink-0"
+            className="flex-shrink-0 flex justify-end px-4"
             style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+            onClick={e => e.stopPropagation()}
           >
             <button
               type="button"
-              onClick={e => { e.stopPropagation(); setViewing(null) }}
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(255,255,255,0.12)' }}
               aria-label="閉じる"
+              onClick={() => setViewing(null)}
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: 'rgba(255,255,255,0.14)' }}
             >
               <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="white" strokeWidth={2.2} strokeLinecap="round">
                 <path d="M18 6L6 18M6 6l12 12" />
@@ -129,52 +131,58 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
             </button>
           </div>
 
-          {/* Image */}
+          {/* Center: image */}
           <div
             className="flex-1 flex items-center justify-center px-4 py-4"
             onClick={e => e.stopPropagation()}
           >
             <div
-              className="relative"
-              style={{ width: '100%', maxWidth: 'min(100%, calc(65vh * 3/4))', aspectRatio: '3/4' }}
+              className="relative rounded-2xl overflow-hidden"
+              style={{ width: '100%', maxWidth: 'min(100%, calc(65vh * 3 / 4))', aspectRatio: '3/4' }}
             >
               <Image
                 src={viewing.imageUrl}
                 alt={viewing.caption ?? 'コーデ'}
                 fill
-                className="object-contain rounded-2xl"
+                className="object-cover"
                 sizes="(max-width: 600px) 90vw, 400px"
                 priority
               />
             </div>
           </div>
 
-          {/* Bottom: user + profile button */}
+          {/* Bottom: user info + profile button */}
           <div
-            className="flex-shrink-0 px-5 pt-4 flex items-center justify-between gap-4"
+            className="flex-shrink-0 flex items-center justify-between gap-4 px-5 pt-4"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 min-w-0">
+            <button
+              type="button"
+              aria-label={`${viewing.profile.display_name ?? viewing.profile.username}のプロフィールへ`}
+              onClick={() => { setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
+              className="flex items-center gap-3 min-w-0 active:opacity-70 transition-opacity"
+            >
               <Avatar
                 src={viewing.profile.avatar_url}
                 username={viewing.profile.username}
                 size="md"
                 className="ring-2 ring-white/20 flex-shrink-0"
               />
-              <div className="min-w-0">
+              <div className="text-left min-w-0">
                 <p className="text-white text-sm font-semibold truncate leading-tight">
                   {viewing.profile.display_name ?? viewing.profile.username}
                 </p>
-                <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                <p className="text-xs truncate leading-tight" style={{ color: 'rgba(255,255,255,0.5)' }}>
                   @{viewing.profile.username}
                 </p>
               </div>
-            </div>
+            </button>
+
             <button
               type="button"
               onClick={() => { setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
-              className="flex-shrink-0 h-9 px-4 rounded-full text-sm font-semibold active:opacity-70 transition-opacity"
+              className="flex-shrink-0 h-9 px-5 rounded-full text-sm font-semibold active:opacity-70 transition-opacity"
               style={{ background: 'rgba(124,58,237,0.85)', color: '#fff' }}
             >
               プロフィール
