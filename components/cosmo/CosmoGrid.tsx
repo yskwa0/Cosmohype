@@ -22,18 +22,31 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
   const pathname = usePathname()
   const [viewing, setViewing] = useState<GridPost | null>(null)
 
-  // Restore viewer from URL on mount — handles back navigation from profile
-  // useLayoutEffect: runs before first paint so viewer appears without flash
+  const SCROLL_KEY = `cosmo-scroll:${pathname}`
+
+  // ── Mount: restore viewer before first paint (no flash)
   useLayoutEffect(() => {
     const postId = searchParams.get('post')
-    if (postId) {
-      const post = posts.find(p => p.id === postId)
-      if (post) setViewing(post)
-    }
+    if (!postId) return
+    const post = posts.find(p => p.id === postId)
+    if (post) setViewing(post)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // intentionally mount-only: explicit open/close manage state after that
+  }, []) // mount-only
 
-  // Lock body scroll when viewing
+  // ── Mount: restore scroll position after layout (so page height is computed)
+  useEffect(() => {
+    const postId = searchParams.get('post')
+    if (!postId) return
+    const raw = sessionStorage.getItem(SCROLL_KEY)
+    if (!raw) return
+    const y = parseInt(raw, 10)
+    sessionStorage.removeItem(SCROLL_KEY)
+    // rAF lets the browser finish layout before scrolling
+    requestAnimationFrame(() => window.scrollTo(0, y))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // mount-only
+
+  // ── Lock body scroll when viewer is open
   useEffect(() => {
     if (!viewing) return
     const prev = document.body.style.overflow
@@ -49,7 +62,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }, [searchParams, pathname, router])
 
-  // Escape key to close viewer
+  // ── Escape key to close viewer
   useEffect(() => {
     if (!viewing) return
     function onKey(e: KeyboardEvent) {
@@ -58,6 +71,12 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [viewing, closeViewer])
+
+  // Save scroll position then navigate to profile
+  const goToProfile = useCallback((username: string) => {
+    sessionStorage.setItem(SCROLL_KEY, window.scrollY.toString())
+    router.push(`/profile/${username}`)
+  }, [SCROLL_KEY, router])
 
   function openViewer(post: GridPost) {
     setViewing(post)
@@ -116,7 +135,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
               aria-label={`${post.profile.display_name ?? post.profile.username}のプロフィールへ`}
               onClick={e => {
                 e.stopPropagation()
-                router.push(`/profile/${post.profile.username}`)
+                goToProfile(post.profile.username)
               }}
               className="absolute bottom-0 left-0 px-2.5 pb-2.5 flex items-center gap-1.5"
               style={{ maxWidth: '100%' }}
@@ -190,7 +209,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
               <button
                 type="button"
                 aria-label={`${viewing.profile.display_name ?? viewing.profile.username}のプロフィールへ`}
-                onClick={e => { e.stopPropagation(); router.push(`/profile/${viewing.profile.username}`) }}
+                onClick={e => { e.stopPropagation(); goToProfile(viewing.profile.username) }}
                 className="absolute bottom-0 left-0 flex items-center gap-2.5 px-3 pb-3 active:opacity-70 transition-opacity"
                 style={{ zIndex: 10 }}
               >
