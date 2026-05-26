@@ -28,6 +28,8 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
+  // kbBottom: distance from bottom of visual viewport to bottom of layout viewport (= keyboard height, 0 when hidden)
+  const [kbBottom, setKbBottom] = useState(0)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -45,25 +47,34 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { setMounted(true) }, [])
 
   // iOS キーボード対応
-  // iOS では position:fixed の bottom は visual viewport 基準で自動補正される。
-  // JS で bottom を更新するとその補正と二重になり入力欄が上がりすぎるため、
-  // ここでは top のみ実測値で設定し、bottom の移動は iOS に完全に任せる。
+  // visualViewport の resize/scroll に合わせてコンテナ bottom を毎回再計算する。
+  // bottom = window.innerHeight - vv.height - vv.offsetTop = キーボード高さ
   useLayoutEffect(() => {
     const header = document.querySelector('header')
     const headerHeight = header?.getBoundingClientRect().height ?? 56
     const el = containerRef.current
     if (!el) return
-    el.style.top = `${headerHeight}px`
-    el.style.bottom = '0'
 
     const vv = window.visualViewport
-    if (!vv) return
-    let prevVvHeight = vv.height
+    let prevVvHeight = vv ? vv.height : window.innerHeight
 
-    function onResize() {
-      const decreased = vv!.height < prevVvHeight - 50
-      prevVvHeight = vv!.height
-      // キーボード出現時に最新メッセージへスクロール（位置補正は iOS に任せる）
+    function update() {
+      const vvHeight   = vv ? vv.height     : window.innerHeight
+      const vvOffset   = vv ? vv.offsetTop  : 0
+      const offsetFromBottom = Math.max(0, window.innerHeight - vvHeight - vvOffset)
+
+      el!.style.top    = `${headerHeight}px`
+      el!.style.bottom = `${offsetFromBottom}px`
+      // Drive input-bar safe-area padding via React state to avoid style-prop conflicts
+      setKbBottom(offsetFromBottom)
+    }
+
+    function onVvChange() {
+      const newHeight = vv ? vv.height : window.innerHeight
+      const decreased = newHeight < prevVvHeight - 50
+      prevVvHeight = newHeight
+      update()
+      // キーボード出現時は最新メッセージへスクロール
       if (decreased && scrollRef.current) {
         requestAnimationFrame(() => {
           scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight
@@ -71,8 +82,16 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       }
     }
 
-    vv.addEventListener('resize', onResize)
-    return () => vv.removeEventListener('resize', onResize)
+    update() // 初期配置
+
+    if (vv) {
+      vv.addEventListener('resize', onVvChange)
+      vv.addEventListener('scroll', onVvChange) // 一部端末でスクロール方向の補正
+      return () => {
+        vv.removeEventListener('resize', onVvChange)
+        vv.removeEventListener('scroll', onVvChange)
+      }
+    }
   }, [])
 
   // 自動スクロール（prepend 時・ユーザーが上部を読んでいる時はスキップ）
@@ -321,7 +340,15 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             WebkitBackdropFilter: 'blur(16px)',
           }}
         >
-          <div className="flex items-center gap-2 px-4 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>
+          <div
+            className="flex items-center gap-2 px-4 pt-3"
+            style={{
+              // キーボード表示中(kbBottom>50)はsafe-areaを外す。コンテナbottomがキーボード上端に揃うため二重加算を防ぐ
+              paddingBottom: kbBottom > 50
+                ? '12px'
+                : 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
+            }}
+          >
             <input
               type="text"
               value={input}
