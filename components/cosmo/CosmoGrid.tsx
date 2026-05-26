@@ -42,9 +42,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
         className="rounded-2xl p-8 flex flex-col items-center gap-2"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
       >
-        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
-          まだ投稿がありません
-        </p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>まだ投稿がありません</p>
         <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
           STYLE IDを設定して投稿すると<br />ここに表示されます
         </p>
@@ -54,33 +52,36 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
 
   return (
     <>
-      {/* Grid */}
       <div className="grid grid-cols-2 gap-1.5">
         {posts.map(post => (
+          /* Card: tap image area → open viewer */
           <div
             key={post.id}
-            className="relative rounded-2xl overflow-hidden"
+            role="button"
+            tabIndex={0}
+            aria-label="画像を拡大"
+            onClick={() => setViewing(post)}
+            className="relative rounded-2xl overflow-hidden cursor-pointer active:opacity-80 transition-opacity select-none"
             style={{ aspectRatio: '3/4' }}
           >
-            {/* Image tap → open viewer */}
-            <button
-              onClick={() => setViewing(post)}
-              className="absolute inset-0 w-full h-full active:opacity-80 transition-opacity"
-              aria-label="画像を拡大"
-            >
-              <Image
-                src={post.imageUrl}
-                alt={post.caption ?? 'コーデ'}
-                fill
-                className="object-cover"
-                sizes="(max-width: 448px) 50vw, 224px"
-              />
-              {/* gradient for readability */}
-              <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent" />
-            </button>
+            {/* Image */}
+            <Image
+              src={post.imageUrl}
+              alt={post.caption ?? 'コーデ'}
+              fill
+              className="object-cover pointer-events-none"
+              sizes="(max-width: 448px) 50vw, 224px"
+            />
 
-            {/* User info tap → navigate to profile */}
+            {/* Gradient overlay */}
+            <div
+              className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)' }}
+            />
+
+            {/* User info: tap → profile (stopPropagation prevents card click) */}
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation()
                 router.push(`/profile/${post.profile.username}`)
@@ -102,19 +103,20 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
         ))}
       </div>
 
-      {/* Image viewer modal */}
+      {/* Full-screen image viewer */}
       {viewing && (
         <div
           className="fixed inset-0 z-50 flex flex-col"
           style={{ background: 'rgba(0,0,0,0.92)' }}
           onClick={() => setViewing(null)}
         >
-          {/* Close button */}
+          {/* Close */}
           <div
             className="flex justify-end px-4 flex-shrink-0"
             style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
           >
             <button
+              type="button"
               onClick={e => { e.stopPropagation(); setViewing(null) }}
               className="w-10 h-10 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(255,255,255,0.12)' }}
@@ -131,7 +133,10 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
             className="flex-1 flex items-center justify-center px-4 py-4"
             onClick={e => e.stopPropagation()}
           >
-            <div className="relative w-full" style={{ maxHeight: '65vh', aspectRatio: '3/4', maxWidth: 'min(100%, calc(65vh * 3/4))' }}>
+            <div
+              className="relative"
+              style={{ width: '100%', maxWidth: 'min(100%, calc(65vh * 3/4))', aspectRatio: '3/4' }}
+            >
               <Image
                 src={viewing.imageUrl}
                 alt={viewing.caption ?? 'コーデ'}
@@ -143,7 +148,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
             </div>
           </div>
 
-          {/* Bottom: user info + profile button */}
+          {/* Bottom: user + profile button */}
           <div
             className="flex-shrink-0 px-5 pt-4 flex items-center justify-between gap-4"
             style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)' }}
@@ -160,15 +165,15 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
                 <p className="text-white text-sm font-semibold truncate leading-tight">
                   {viewing.profile.display_name ?? viewing.profile.username}
                 </p>
-                <p className="text-white/50 text-xs truncate">@{viewing.profile.username}</p>
+                <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  @{viewing.profile.username}
+                </p>
               </div>
             </div>
             <button
-              onClick={() => {
-                setViewing(null)
-                router.push(`/profile/${viewing.profile.username}`)
-              }}
-              className="flex-shrink-0 h-9 px-4 rounded-full text-sm font-semibold transition-opacity active:opacity-70"
+              type="button"
+              onClick={() => { setViewing(null); router.push(`/profile/${viewing.profile.username}`) }}
+              className="flex-shrink-0 h-9 px-4 rounded-full text-sm font-semibold active:opacity-70 transition-opacity"
               style={{ background: 'rgba(124,58,237,0.85)', color: '#fff' }}
             >
               プロフィール
