@@ -90,7 +90,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
   // Save scroll position then navigate to profile
   const goToProfile = useCallback((username: string) => {
     sessionStorage.setItem(SCROLL_KEY, window.scrollY.toString())
-    router.push(`/profile/${username}`)
+    router.push(`/profile/${username}?from=cosmo`)
   }, [SCROLL_KEY, router])
 
   function openViewer(post: GridPost) {

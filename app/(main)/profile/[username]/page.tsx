@@ -122,7 +122,8 @@ export default async function ProfilePage({
           if (from === 'follow-activity') return <BackButton href="/profile/follow-activity" variant="purple" />
           if (from === 'followers' && ref) return <BackButton href={`/profile/${ref}/followers`} variant="purple" />
           if (from === 'following' && ref) return <BackButton href={`/profile/${ref}/following`} variant="purple" />
-          if (isOwner) return undefined
+          if (from) return <BackButton variant="purple" />
+          if (username === 'me') return undefined
           return <BackButton variant="purple" />
         })()}
         title={
