@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatRelativeTime } from '@/lib/utils'
 
@@ -18,9 +19,10 @@ interface ChatViewProps {
   userId: string
   initialMessages: MessageRow[]
   initialHasMore: boolean
+  topBar: ReactNode
 }
 
-export function ChatView({ conversationId, userId, initialMessages, initialHasMore }: ChatViewProps) {
+export function ChatView({ conversationId, userId, initialMessages, initialHasMore, topBar }: ChatViewProps) {
   const [messages, setMessages] = useState<MessageRow[]>(initialMessages)
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -46,30 +48,10 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
 
-  // iOS focus時のページ全体スクロールを防ぐ。
-  // iOSはinputフォーカス時にwindow.scrollYを増やして入力欄を表示しようとするが、
-  // headerが画面外に押し出される。overflow:hiddenでページスクロールをロックする。
-  // メッセージのスクロールはscrollRef内部(overflow-y:auto)が担うので影響なし。
-  useEffect(() => {
-    const html = document.documentElement
-    const body = document.body
-    const prevHtml = html.style.overflow
-    const prevBody = body.style.overflow
-    html.style.overflow = 'hidden'
-    body.style.overflow = 'hidden'
-    window.scrollTo(0, 0)
-    return () => {
-      html.style.overflow = prevHtml
-      body.style.overflow = prevBody
-    }
-  }, [])
-
   // iOS キーボード対応
-  // visualViewport の resize/scroll に合わせてコンテナ bottom を毎回再計算する。
+  // コンテナを top:0 から画面全体にかぶせ、TopBarも内包することでiOSスクロールの影響を受けない。
   // bottom = window.innerHeight - vv.height - vv.offsetTop = キーボード高さ
   useLayoutEffect(() => {
-    const header = document.querySelector('header')
-    const headerHeight = header?.getBoundingClientRect().height ?? 56
     const el = containerRef.current
     if (!el) return
 
@@ -77,13 +59,12 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     let prevVvHeight = vv ? vv.height : window.innerHeight
 
     function update() {
-      const vvHeight   = vv ? vv.height     : window.innerHeight
-      const vvOffset   = vv ? vv.offsetTop  : 0
+      const vvHeight  = vv ? vv.height    : window.innerHeight
+      const vvOffset  = vv ? vv.offsetTop : 0
       const offsetFromBottom = Math.max(0, window.innerHeight - vvHeight - vvOffset)
 
-      el!.style.top    = `${headerHeight}px`
+      el!.style.top    = '0'
       el!.style.bottom = `${offsetFromBottom}px`
-      // Drive input-bar safe-area padding via React state to avoid style-prop conflicts
       setKbBottom(offsetFromBottom)
     }
 
@@ -266,12 +247,14 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   return (
     <>
-      {/* top/bottom は useLayoutEffect で管理。React style prop に入れないことで再レンダリング時リセットを防ぐ */}
+      {/* top/bottom は useLayoutEffect で管理。TopBarをコンテナ内に含めることでiOSスクロールの影響を受けない */}
       <div
         ref={containerRef}
         className="flex flex-col"
         style={{ position: 'fixed', left: 0, right: 0 }}
       >
+        {/* TopBar: fixed コンテナ内に配置することでiOSキーボードによる画面押し上げを防ぐ */}
+        {topBar}
 
         {/* スクロール可能なメッセージ領域 */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto">

@@ -62,33 +62,33 @@ export default async function ChatPage({
   const initialHasMore = rawMessages.length === 30
 
   return (
-    <div style={{ marginBottom: '-80px' }}>
-      <TopBar
-        left={<BackButton variant="purple" />}
-        title={
-          otherUser ? (
-            <div className="flex items-center gap-2">
-              <Avatar
-                src={otherUser.avatar_url}
-                username={otherUser.username}
-                size="xs"
-              />
-              <span>{otherUser.display_name ?? otherUser.username}</span>
-            </div>
-          ) : (
-            'メッセージ'
-          )
-        }
-        right={otherUserId ? (
-          <DmChatMenu targetUserId={otherUserId} currentUserId={user.id} />
-        ) : undefined}
-      />
-      <ChatView
-        conversationId={conversationId}
-        userId={user.id}
-        initialMessages={initialMessages}
-        initialHasMore={initialHasMore}
-      />
-    </div>
+    <ChatView
+      conversationId={conversationId}
+      userId={user.id}
+      initialMessages={initialMessages}
+      initialHasMore={initialHasMore}
+      topBar={
+        <TopBar
+          left={<BackButton variant="purple" />}
+          title={
+            otherUser ? (
+              <div className="flex items-center gap-2">
+                <Avatar
+                  src={otherUser.avatar_url}
+                  username={otherUser.username}
+                  size="xs"
+                />
+                <span>{otherUser.display_name ?? otherUser.username}</span>
+              </div>
+            ) : (
+              'メッセージ'
+            )
+          }
+          right={otherUserId ? (
+            <DmChatMenu targetUserId={otherUserId} currentUserId={user.id} />
+          ) : undefined}
+        />
+      }
+    />
   )
 }
