@@ -41,8 +41,16 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
     if (!raw) return
     const y = parseInt(raw, 10)
     sessionStorage.removeItem(SCROLL_KEY)
-    // rAF lets the browser finish layout before scrolling
-    requestAnimationFrame(() => window.scrollTo(0, y))
+    // 1st rAF: initial layout done → scroll to target
+    // 2nd rAF: correct for any reflow from the first scroll
+    // setTimeout 300ms: catch images that load slowly and shift content
+    requestAnimationFrame(() => {
+      window.scrollTo(0, y)
+      requestAnimationFrame(() => {
+        window.scrollTo(0, y)
+        setTimeout(() => window.scrollTo(0, y), 300)
+      })
+    })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // mount-only
 
