@@ -7,6 +7,7 @@ import { ProfileMenu } from '@/components/profile/ProfileMenu'
 import { ProfileOwnerMenu } from '@/components/profile/ProfileOwnerMenu'
 import { ProfilePostGrid } from '@/components/profile/ProfilePostGrid'
 import { BackButton } from '@/components/ui/BackButton'
+import { SlideIn } from '@/components/ui/SlideIn'
 import type { Post, Profile } from '@/types/database'
 
 export default async function ProfilePage({
@@ -114,7 +115,7 @@ export default async function ProfilePage({
     : { data: [] }
 
   return (
-    <>
+    <SlideIn>
       <TopBar
         left={(() => {
           if (from === 'follow-activity') return <BackButton href="/profile/follow-activity" variant="purple" />
@@ -190,7 +191,7 @@ export default async function ProfilePage({
           )}
         </div>
       </div>
-    </>
+    </SlideIn>
   )
 }
 
