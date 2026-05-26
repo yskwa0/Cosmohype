@@ -52,6 +52,7 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
 
   return (
     <>
+      <p style={{ color: 'red', fontWeight: 'bold', fontSize: 12, marginBottom: 8 }}>COSMO GRID TEST v2</p>
       <div className="grid grid-cols-2 gap-1.5">
         {posts.map(post => (
           /* Card: tap image area → open viewer */
