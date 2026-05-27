@@ -2,26 +2,25 @@
 import { useEffect, useState } from 'react'
 
 const SESSION_KEY = '_ch_splash'
-
 type Phase = 'show' | 'fade' | 'gone'
 
 export function SplashScreen() {
-  const [phase, setPhase] = useState<Phase>('show')
-
-  useEffect(() => {
+  // ssr: false で動的インポートされるため window は必ず存在する。
+  // 初期値でsessionStorageを確認し、表示済みなら最初から 'gone' にする。
+  const [phase, setPhase] = useState<Phase>(() => {
     try {
-      if (sessionStorage.getItem(SESSION_KEY)) {
-        setPhase('gone')
-        return
-      }
+      if (sessionStorage.getItem(SESSION_KEY)) return 'gone'
       sessionStorage.setItem(SESSION_KEY, '1')
     } catch { /* private/incognito */ }
+    return 'show'
+  })
 
-    // 1800ms 表示 → fade開始 → 550ms後にDOM削除
+  useEffect(() => {
+    if (phase !== 'show') return
     const t1 = setTimeout(() => setPhase('fade'), 1800)
     const t2 = setTimeout(() => setPhase('gone'), 2350)
     return () => { clearTimeout(t1); clearTimeout(t2) }
-  }, [])
+  }, [phase])
 
   if (phase === 'gone') return null
 
