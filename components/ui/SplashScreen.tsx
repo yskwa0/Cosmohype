@@ -3,39 +3,27 @@ import { useEffect, useState } from 'react'
 
 const SESSION_KEY = '_ch_splash'
 
-const STARS = [
-  { top: '8%',  left: '12%', size: 2,   opacity: 0.55 },
-  { top: '14%', left: '78%', size: 1.5, opacity: 0.45 },
-  { top: '6%',  left: '48%', size: 1,   opacity: 0.65 },
-  { top: '28%', left: '93%', size: 2,   opacity: 0.35 },
-  { top: '38%', left: '4%',  size: 1.5, opacity: 0.50 },
-  { top: '70%', left: '7%',  size: 2,   opacity: 0.55 },
-  { top: '82%', left: '88%', size: 1.5, opacity: 0.45 },
-  { top: '90%', left: '32%', size: 1,   opacity: 0.40 },
-  { top: '60%', left: '96%', size: 1.5, opacity: 0.50 },
-  { top: '5%',  left: '25%', size: 1,   opacity: 0.50 },
-  { top: '94%', left: '62%', size: 1.5, opacity: 0.45 },
-  { top: '76%', left: '52%', size: 1,   opacity: 0.35 },
-]
+type Phase = 'show' | 'fade' | 'gone'
 
 export function SplashScreen() {
-  // Start visible so SSR and client hydration agree (no mismatch).
-  // useEffect immediately hides if session already seen.
-  const [visible, setVisible] = useState(true)
+  const [phase, setPhase] = useState<Phase>('show')
 
   useEffect(() => {
     try {
       if (sessionStorage.getItem(SESSION_KEY)) {
-        setVisible(false)
+        setPhase('gone')
         return
       }
       sessionStorage.setItem(SESSION_KEY, '1')
     } catch { /* private/incognito */ }
-    const t = setTimeout(() => setVisible(false), 1800)
-    return () => clearTimeout(t)
+
+    // 1800ms 表示 → fade開始 → 550ms後にDOM削除
+    const t1 = setTimeout(() => setPhase('fade'), 1800)
+    const t2 = setTimeout(() => setPhase('gone'), 2350)
+    return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [])
 
-  if (!visible) return null
+  if (phase === 'gone') return null
 
   return (
     <div
@@ -51,36 +39,10 @@ export function SplashScreen() {
         justifyContent: 'center',
         pointerEvents: 'none',
         overflow: 'hidden',
+        opacity: phase === 'fade' ? 0 : 1,
+        transition: phase === 'fade' ? 'opacity 0.5s ease-out' : 'none',
       }}
     >
-      {/* Stars */}
-      {STARS.map((s, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            top: s.top,
-            left: s.left,
-            width: `${s.size}px`,
-            height: `${s.size}px`,
-            borderRadius: '50%',
-            background: '#ffffff',
-            opacity: s.opacity,
-          }}
-        />
-      ))}
-
-      {/* Nebula glow — pure radial-gradient fading to transparent; no filter:blur to avoid rectangular artifact */}
-      <div
-        style={{
-          position: 'absolute',
-          width: '520px',
-          height: '520px',
-          background: 'radial-gradient(ellipse at center, rgba(139,58,237,0.55) 0%, rgba(168,85,247,0.3) 22%, rgba(124,58,237,0.12) 50%, rgba(100,40,200,0.04) 68%, transparent 80%)',
-        }}
-      />
-
-      {/* Logo */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/cosmohypelogo.png"
@@ -89,8 +51,6 @@ export function SplashScreen() {
           width: '180px',
           height: 'auto',
           display: 'block',
-          position: 'relative',
-          filter: 'drop-shadow(0 0 20px rgba(168,85,247,0.75))',
         }}
       />
     </div>
