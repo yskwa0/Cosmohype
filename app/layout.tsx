@@ -1,15 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { createClient } from '@/lib/supabase/server'
-import nextDynamic from 'next/dynamic'
-
-// ssr: false でサーバーレンダリングをスキップ。
-// これにより useState 初期値で sessionStorage を直接参照でき、
-// 再訪問時に一度もスプラッシュをレンダリングしない。
-const SplashScreen = nextDynamic(
-  () => import('@/components/ui/SplashScreen').then(mod => ({ default: mod.SplashScreen })),
-  { ssr: false }
-)
+import { SplashScreenMount } from '@/components/ui/SplashScreenMount'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,7 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ja" className={`h-full ${themeClass}`} style={{ background: '#090714' }}>
       <body className="min-h-full antialiased" style={{ background: '#090714' }}>
-        <SplashScreen />
+        <SplashScreenMount />
         {children}
       </body>
     </html>
