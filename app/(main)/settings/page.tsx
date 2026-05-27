@@ -4,16 +4,29 @@ import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { AccountManageSection } from '@/components/settings/AccountManageSection'
+import { ThemeForm } from '@/components/settings/ThemeForm'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('theme')
+    .eq('id', user.id)
+    .single()
+
   return (
     <>
       <TopBar title="設定" left={<BackButton variant="purple" />} />
       <div className="px-4 pt-6 pb-8 flex flex-col gap-6">
+
+        {/* テーマ */}
+        <section>
+          <p className="text-xs font-semibold px-1 mb-2" style={{ color: 'var(--text-muted)' }}>テーマ</p>
+          <ThemeForm userId={user.id} initialTheme={profile?.theme ?? 'cosmic-black'} />
+        </section>
 
         {/* アカウント設定 */}
         <section>

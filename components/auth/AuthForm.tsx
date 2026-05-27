@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -14,25 +14,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [backPressed, setBackPressed] = useState(false)
-  const [loginPressed, setLoginPressed] = useState(false)
-
-  useEffect(() => {
-    const html = document.documentElement
-    const body = document.body
-    const prevHtml = html.style.backgroundColor
-    const prevBody = body.style.backgroundColor
-    html.style.backgroundColor = '#0A0A1A'
-    body.style.backgroundColor = '#0A0A1A'
-    return () => {
-      html.style.backgroundColor = prevHtml
-      body.style.backgroundColor = prevBody
-    }
-  }, [])
 
   async function handleAction() {
     setLoading(true)
-    setLoginPressed(false)
     setError(null)
     setMessage(null)
 
@@ -50,7 +34,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
         window.location.href = '/feed'
-        // ナビゲーション完了まで loading を維持する（意図的に setLoading(false) しない）
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -67,47 +50,43 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, overflowY: 'auto', WebkitOverflowScrolling: 'touch', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 24px', background: 'linear-gradient(to bottom, #0A0A1A 0%, #1A0533 20%, #2D0A5F 50%, #1A0533 80%, #0A0A1A 100%)' }}
+      style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingTop: '64px',
+        paddingRight: '24px',
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 64px)',
+        paddingLeft: '24px',
+        background: 'linear-gradient(to bottom, #090714 0%, #1A0533 20%, #2D0A5F 50%, #1A0533 80%, #090714 100%)',
+        boxSizing: 'border-box',
+      }}
     >
-
       {/* 戻るボタン */}
-      <Link
-        href="/"
-        aria-label="トップに戻る"
-        onPointerDown={() => setBackPressed(true)}
-        onPointerUp={() => setBackPressed(false)}
-        onPointerLeave={() => setBackPressed(false)}
-        onPointerCancel={() => setBackPressed(false)}
-        style={{
-          position: 'fixed',
-          top: 'calc(env(safe-area-inset-top, 0px) + 36px)',
-          left: '16px',
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          background: 'rgba(124,58,237,0.18)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10,
-          transform: backPressed ? 'scale(0.82)' : 'scale(1)',
-          transition: backPressed
-            ? 'transform 70ms ease-in'
-            : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-        }}
-      >
-        <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </Link>
-
-      {/* 星エフェクト — pointer-events: none で操作を一切ブロックしない */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
-        <div style={{ position: 'absolute', top: '25%', left: '50%', transform: 'translateX(-50%)', width: '384px', height: '384px', borderRadius: '50%', background: 'rgba(124,58,237,0.2)', filter: 'blur(80px)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', bottom: '25%', right: '25%', width: '256px', height: '256px', borderRadius: '50%', background: 'rgba(236,72,153,0.2)', filter: 'blur(80px)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top, 0px) + 16px)', left: '16px' }}>
+        <Link
+          href="/"
+          aria-label="トップに戻る"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            background: 'rgba(124,58,237,0.18)',
+          }}
+        >
+          <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </Link>
       </div>
 
       <div style={{ width: '100%', maxWidth: '384px' }}>
+        {/* ロゴ */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <Image
             src="/cosmohypelogo.png"
@@ -120,9 +99,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <p style={{ fontSize: '14px', color: '#C4B5FD' }}>ファッションで、自分を表現しよう</p>
         </div>
 
+        {/* フォーム */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '11px', fontWeight: 500, color: '#9B97B2', textTransform: 'uppercase', letterSpacing: '0.1em' }}>メールアドレス</label>
+            <label style={{ fontSize: '11px', fontWeight: 500, color: '#9B97B2', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              メールアドレス
+            </label>
             <input
               type="email"
               value={email}
@@ -132,8 +114,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
               style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', fontSize: '14px', color: '#111118', background: '#FFFFFF', border: '1px solid rgba(124,58,237,0.15)', boxSizing: 'border-box', outline: 'none' }}
             />
           </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '11px', fontWeight: 500, color: '#9B97B2', textTransform: 'uppercase', letterSpacing: '0.1em' }}>パスワード</label>
+            <label style={{ fontSize: '11px', fontWeight: 500, color: '#9B97B2', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              パスワード
+            </label>
             <input
               type="password"
               value={password}
@@ -146,73 +131,42 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </div>
 
           {error && (
-            <p style={{ fontSize: '14px', color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', padding: '12px 16px' }}>
+            <p style={{ fontSize: '14px', color: '#f87171', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '12px', padding: '12px 16px', margin: 0 }}>
               {error}
             </p>
           )}
           {message && (
-            <p style={{ fontSize: '14px', color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '12px', padding: '12px 16px' }}>
+            <p style={{ fontSize: '14px', color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '12px', padding: '12px 16px', margin: 0 }}>
               {message}
             </p>
           )}
 
           <button
             type="button"
-            disabled={loading}
             onClick={handleAction}
-            onPointerDown={() => !loading && setLoginPressed(true)}
-            onPointerUp={() => setLoginPressed(false)}
-            onPointerLeave={() => setLoginPressed(false)}
-            onPointerCancel={() => setLoginPressed(false)}
+            disabled={loading}
             style={{
               width: '100%',
-              height: '48px',
+              padding: '14px',
               borderRadius: '12px',
-              color: 'white',
-              fontWeight: 600,
               fontSize: '15px',
-              marginTop: '8px',
-              background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+              fontWeight: 600,
+              color: '#FFFFFF',
+              background: loading ? 'rgba(124,58,237,0.5)' : 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
               border: 'none',
               cursor: loading ? 'not-allowed' : 'pointer',
-              opacity: loading ? 0.75 : 1,
-              position: 'relative',
-              zIndex: 100,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              transform: loginPressed ? 'scale(0.93)' : 'scale(1)',
-              transition: loginPressed
-                ? 'transform 70ms ease-in'
-                : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+              touchAction: 'manipulation',
             }}
           >
-            {loading && (
-              <svg
-                className="animate-spin"
-                width={18}
-                height={18}
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden
-              >
-                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.35)" strokeWidth="3" />
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="white" strokeWidth="3" strokeLinecap="round" />
-              </svg>
-            )}
-            {loading
-              ? (mode === 'register' ? '登録中...' : 'ログイン中...')
-              : (mode === 'register' ? 'アカウントを作成' : 'ログイン')}
+            {loading ? '処理中...' : mode === 'login' ? 'ログイン' : '登録する'}
           </button>
 
-          {/* 新規登録時：ボタン直下に同意文 */}
           {mode === 'register' && (
             <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.38)', lineHeight: 1.7 }}>
               登録することで、
-              <Link href="/terms" style={{ color: '#A855F7', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}>利用規約</Link>
+              <Link href="/terms" style={{ color: '#A855F7', textDecoration: 'underline' }}>利用規約</Link>
               と
-              <Link href="/privacy" style={{ color: '#A855F7', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}>プライバシーポリシー</Link>
+              <Link href="/privacy" style={{ color: '#A855F7', textDecoration: 'underline' }}>プライバシーポリシー</Link>
               に同意したものとみなされます。
             </p>
           )}
@@ -230,7 +184,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
           )}
         </p>
 
-        {/* ログイン時：最下部にリンク */}
         {mode === 'login' && (
           <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '20px' }}>
             <Link href="/terms" style={{ color: 'rgba(168,85,247,0.7)' }}>利用規約</Link>
@@ -239,7 +192,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </p>
         )}
       </div>
-
     </div>
   )
 }

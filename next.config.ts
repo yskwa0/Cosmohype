@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
       dynamic: 30,
     },
   },
-  allowedDevOrigins: ['192.168.10.110'],
+  allowedDevOrigins: ['192.168.10.101', '192.168.10.110', '192.168.*.* '],
   images: {
     remotePatterns: [
       {
