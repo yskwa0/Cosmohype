@@ -70,15 +70,13 @@ export function SplashScreen() {
         />
       ))}
 
-      {/* Nebula glow behind logo */}
+      {/* Nebula glow — pure radial-gradient fading to transparent; no filter:blur to avoid rectangular artifact */}
       <div
         style={{
           position: 'absolute',
-          width: '380px',
-          height: '380px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(124,58,237,0.45) 0%, rgba(168,85,247,0.2) 40%, transparent 70%)',
-          filter: 'blur(28px)',
+          width: '520px',
+          height: '520px',
+          background: 'radial-gradient(ellipse at center, rgba(139,58,237,0.55) 0%, rgba(168,85,247,0.3) 22%, rgba(124,58,237,0.12) 50%, rgba(100,40,200,0.04) 68%, transparent 80%)',
         }}
       />
 
