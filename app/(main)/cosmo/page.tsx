@@ -4,12 +4,14 @@ import { BackButton } from '@/components/ui/BackButton'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { StyleId } from '@/lib/style-id/types'
+import { PageTracker } from '@/components/analytics/PageTracker'
 
 const ALL_STYLES = Object.values(STYLE_TYPES)
 
 export default function CosmoPage() {
   return (
     <div className="feed-animate-in">
+      <PageTracker event="cosmo_open" />
       <TopBar title="COSMO" left={<BackButton variant="purple" />} />
 
       <div

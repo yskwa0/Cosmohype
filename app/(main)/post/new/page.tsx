@@ -6,6 +6,7 @@ import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { BackButton } from '@/components/ui/BackButton'
 import type { StyleId } from '@/lib/style-id/types'
 import { HYPE_THEME_MAP } from '@/lib/hypeThemes'
+import { PageTracker } from '@/components/analytics/PageTracker'
 
 export default async function NewPostPage({
   searchParams,
@@ -38,6 +39,7 @@ export default async function NewPostPage({
 
   return (
     <>
+      <PageTracker event="post_create_open" />
       <TopBar title={title} left={<BackButton />} />
       <div className="pt-4">
         {hypeLabel && (

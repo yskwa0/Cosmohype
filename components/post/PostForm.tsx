@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { ImageUpload } from './ImageUpload'
+import { track } from '@/lib/analytics'
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -127,6 +128,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
         if (itemsError) throw itemsError
       }
 
+      track.postCreateComplete(post.id)
       router.push('/feed')
       router.refresh()
     } catch (err) {

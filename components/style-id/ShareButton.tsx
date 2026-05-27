@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react'
 import { StyleAlien } from './StyleAlien'
 import type { StyleId, StyleType } from '@/lib/style-id/types'
+import { track } from '@/lib/analytics'
 
 interface Props {
   styleId: StyleId
@@ -146,6 +147,7 @@ export function ShareButton({ styleId, primary, shareUrl }: Props) {
             title: `私のSTYLE IDは ${primary.name}！`,
             text: `${primary.subtitle} — Cosmohypeでスタイル診断してみて！`,
           })
+          track.shareStyleId(styleId, 'file')
           setStatus('idle')
           return
         } catch (e) {
@@ -166,6 +168,7 @@ export function ShareButton({ styleId, primary, shareUrl }: Props) {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      track.shareStyleId(styleId, 'download')
       setStatus('done')
       setTimeout(() => setStatus('idle'), 2500)
     } catch {
@@ -174,6 +177,7 @@ export function ShareButton({ styleId, primary, shareUrl }: Props) {
       try {
         if (typeof navigator.share === 'function') {
           await navigator.share({ title: `私のSTYLE IDは ${primary.name}！`, url: shareUrl })
+          track.shareStyleId(styleId, 'text')
         }
       } catch { /* ignore */ }
     }

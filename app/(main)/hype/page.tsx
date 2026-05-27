@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { HypeRankCard } from '@/components/hype/HypeRankCard'
 import type { RankEntry } from '@/components/hype/HypeRankCard'
 import { getTodayHypeTheme } from '@/lib/hypeThemes'
+import { PageTracker } from '@/components/analytics/PageTracker'
 
 const { slug: THEME_SLUG, label: THEME } = getTodayHypeTheme()
 
@@ -70,6 +71,7 @@ export default async function HypePage() {
 
   return (
     <div className="feed-animate-in">
+      <PageTracker event="hype_open" />
       <TopBar title="今日のHYPE" left={<BackButton variant="purple" />} />
 
       <div className="flex flex-col pb-24">

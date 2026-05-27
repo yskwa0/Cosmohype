@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
+import { track } from '@/lib/analytics'
 
 type Column = {
   category: string
@@ -68,6 +69,13 @@ const CATEGORIES = ['すべて', 'ブランド', '基礎知識', '歴史', 'ト�
 export default function ColumnsPage() {
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('すべて')
+  const trackFired = useRef(false)
+
+  useEffect(() => {
+    if (trackFired.current) return
+    trackFired.current = true
+    track.columnOpen()
+  }, [])
 
   const isDefaultView = !search.trim() && activeCategory === 'すべて'
 

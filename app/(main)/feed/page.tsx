@@ -6,6 +6,7 @@ import { FeedSlider } from '@/components/layout/FeedSlider'
 import { DmPanel, type DmConversation } from '@/components/dm/DmPanel'
 import { DmIconButton } from '@/components/dm/DmIconButton'
 import type { Post, Profile } from '@/types/database'
+import { PageTracker } from '@/components/analytics/PageTracker'
 
 const VALID_TABS = ['recommended', 'following'] as const
 type FeedTab = typeof VALID_TABS[number]
@@ -128,6 +129,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   return (
     <>
+      <PageTracker event="feed_open" />
       <TopBar
         showLogo
         right={<DmIconButton hasUnread={hasUnread} />}

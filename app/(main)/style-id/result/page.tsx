@@ -6,6 +6,7 @@ import { ShareButton } from '@/components/style-id/ShareButton'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { decodeResult } from '@/lib/style-id/scoring'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
+import { PageTracker } from '@/components/analytics/PageTracker'
 
 function AdviceRow({ label, items, accent, muted }: {
   label: string
@@ -54,6 +55,7 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
 
   return (
     <>
+      <PageTracker event="style_id_complete" params={{ style_id: result.primaryStyle }} />
       <TopBar title="診断結果" left={<BackButton href="/style-id" variant="purple" />} />
 
       {/* Hero */}

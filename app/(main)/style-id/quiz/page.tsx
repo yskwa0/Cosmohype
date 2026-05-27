@@ -38,6 +38,7 @@ import { useRouter } from 'next/navigation'
 import { QUESTIONS } from '@/lib/style-id/questions'
 import { calculateResult, encodeResult } from '@/lib/style-id/scoring'
 import type { QuizAnswer } from '@/lib/style-id/types'
+import { track } from '@/lib/analytics'
 
 const LABELS = ['A', 'B', 'C', 'D']
 
@@ -48,11 +49,17 @@ export default function QuizPage() {
   const [selected, setSelected] = useState<number | null>(null)
   const [isFinishing, setIsFinishing] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const trackFired = useRef(false)
 
   const question = QUESTIONS[currentQ]
   const isLast = currentQ === QUESTIONS.length - 1
   const progress = (currentQ / QUESTIONS.length) * 100
 
+  useEffect(() => {
+    if (trackFired.current) return
+    trackFired.current = true
+    track.styleIdStart()
+  }, [])
   useEffect(() => () => clearTimeout(timerRef.current), [])
 
   function handleSelect(idx: number) {

@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
+import { PageTracker } from '@/components/analytics/PageTracker'
 
 const VALID_SLUGS = ['supreme', 'comme-des-garcons', 'fashion-history', 'silhouette-basics', 'three-color-rule'] as const
 type Slug = typeof VALID_SLUGS[number]
@@ -14,6 +15,7 @@ export default async function ColumnDetailPage({ params }: { params: Promise<{ s
 
   return (
     <>
+      <PageTracker event="column_article_open" params={{ article_id: slug }} />
       <TopBar left={<BackButton />} title="コラム" />
       <div className="max-w-md mx-auto px-4 pt-6 pb-24">
         {slug === 'supreme' && <SupremeArticle />}
