@@ -108,6 +108,9 @@ select:focus-visible,
 .feed-animate-in {
   animation: feedFadeIn 100ms ease-out both;
 }
+.splash-logo-in {
+  animation: feedFadeIn 300ms ease-out both;
+}
 
 @keyframes twinkle {
   0%, 100% { opacity: 0.08; transform: scale(1); }
