@@ -57,7 +57,6 @@ export default function StyleIdTopPage() {
         <div className="flex flex-col gap-3">
           <Link
             href="/style-id/quiz"
-            replace
             className="w-full h-14 rounded-2xl flex items-center justify-center text-base font-semibold text-white transition-transform duration-75 active:scale-[0.97]"
             style={{
               background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',

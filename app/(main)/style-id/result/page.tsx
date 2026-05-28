@@ -56,7 +56,7 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
   return (
     <>
       <PageTracker event="style_id_complete" params={{ style_id: result.primaryStyle }} />
-      <TopBar title="診断結果" left={<BackButton href="/style-id" variant="purple" />} />
+      <TopBar title="診断結果" left={<BackButton variant="purple" />} />
 
       {/* Hero */}
       <div
