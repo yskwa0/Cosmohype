@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
-import { ShareButton } from '@/components/style-id/ShareButton'
+import { StyleIdShareCard } from '@/components/style-id/StyleIdShareCard'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { decodeResult } from '@/lib/style-id/scoring'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
@@ -191,13 +191,14 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           </Link>
         </div>
 
+        {/* Share Card */}
+        <StyleIdShareCard
+          styleId={result.primaryStyle}
+          primary={primary}
+        />
+
         {/* Actions */}
         <div className="flex flex-col gap-3 pt-2">
-          <ShareButton
-            styleId={result.primaryStyle}
-            primary={primary}
-            shareUrl={shareUrl}
-          />
           <Link
             href={`/style-id/compat?a=${result.primaryStyle}&r=${r}`}
             replace
