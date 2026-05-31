@@ -47,8 +47,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const themeClass = theme !== 'cosmic-black' ? `theme-${theme}` : ''
 
   return (
-    <html lang="ja" className={`h-full ${themeClass}`} style={{ background: '#090714' }}>
-      <body className="min-h-full antialiased" style={{ background: '#090714' }}>
+    <html lang="ja" className={`h-full ${themeClass}`}>
+      <body className="min-h-full antialiased">
         <SplashScreenMount />
         {children}
       </body>
