@@ -29,6 +29,24 @@ export function FeedPosts({
   useEffect(() => { postsRef.current = posts }, [posts])
   useEffect(() => { hasMoreRef.current = hasMore }, [hasMore])
 
+  const handleLikeToggle = useCallback((postId: string, isLiked: boolean) => {
+    setLikedIds(prev => {
+      const next = new Set(prev)
+      if (isLiked) next.add(postId)
+      else next.delete(postId)
+      return next
+    })
+  }, [])
+
+  const handleSaveToggle = useCallback((postId: string, isSaved: boolean) => {
+    setSavedIds(prev => {
+      const next = new Set(prev)
+      if (isSaved) next.add(postId)
+      else next.delete(postId)
+      return next
+    })
+  }, [])
+
   const loadMore = useCallback(async () => {
     if (isLoadingRef.current || !hasMoreRef.current) return
     const cursor = postsRef.current[postsRef.current.length - 1]?.created_at
@@ -107,6 +125,8 @@ export function FeedPosts({
           userId={userId}
           isLiked={likedIds.has(post.id)}
           isSaved={savedIds.has(post.id)}
+          onLikeToggle={handleLikeToggle}
+          onSaveToggle={handleSaveToggle}
         />
       ))}
 

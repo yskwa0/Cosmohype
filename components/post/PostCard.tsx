@@ -26,8 +26,10 @@ function isToday(dateStr: string): boolean {
   )
 }
 
-export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
+export function PostCard({ post, userId, isLiked = false, isSaved = false, onLikeToggle, onSaveToggle }: {
   post: Post; userId?: string; isLiked?: boolean; isSaved?: boolean
+  onLikeToggle?: (postId: string, isLiked: boolean) => void
+  onSaveToggle?: (postId: string, isSaved: boolean) => void
 }) {
   const [currentImage, setCurrentImage] = useState(0)
   const [showComments, setShowComments] = useState(false)
@@ -63,6 +65,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) setLikeCount(count)
+      onLikeToggle?.(post.id, next)
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)
@@ -73,10 +76,18 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false }: {
     if (!userId) return
     const next = !saved
     setSaved(next)
-    if (next) {
-      await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
-    } else {
-      await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
+    try {
+      if (next) {
+        const { error } = await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
+        if (error) throw error
+      }
+      onSaveToggle?.(post.id, next)
+      router.refresh()
+    } catch {
+      setSaved(!next)
     }
   }
 

@@ -70,10 +70,17 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
     if (!userId) return
     const next = !saved
     setSaved(next)
-    if (next) {
-      await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
-    } else {
-      await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
+    try {
+      if (next) {
+        const { error } = await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
+        if (error) throw error
+      }
+      router.refresh()
+    } catch {
+      setSaved(!next)
     }
   }
 
