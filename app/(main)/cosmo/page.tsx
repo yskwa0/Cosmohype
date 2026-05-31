@@ -19,7 +19,7 @@ export default function CosmoPage() {
         style={{ minHeight: 'calc(100svh - 136px)' }}
       >
         {/* Text — upper area */}
-        <div className="px-5 pt-10 text-center">
+        <div className="px-5 pt-5 text-center">
           <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: 'var(--purple)' }}>
             STYLE ID DISCOVERY
           </p>
@@ -31,8 +31,8 @@ export default function CosmoPage() {
           </p>
         </div>
 
-        {/* Grid — centered in remaining space */}
-        <div className="flex-1 flex flex-col justify-center px-4">
+        {/* Grid — centered in remaining space, biased slightly upward */}
+        <div className="flex-1 flex flex-col justify-center px-4 pb-12">
           <div className="grid grid-cols-4 gap-2">
             {ALL_STYLES.map(s => (
               <StyleCard key={s.id} style={s} />
