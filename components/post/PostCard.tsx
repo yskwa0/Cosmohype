@@ -85,7 +85,6 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         if (error) throw error
       }
       onSaveToggle?.(post.id, next)
-      router.refresh()
     } catch {
       setSaved(!next)
     }
