@@ -141,17 +141,38 @@ export function useEdgeSwipeBack() {
         sessionStorage.setItem('skipSlideIn', '1')
         routerRef.current.back()
 
-        requestAnimationFrame(() =>
+        function removeOverlay() {
+          if (mainEl) { mainEl.style.transition = 'none'; mainEl.style.transform = ''; mainEl.style.opacity = '' }
+          if (navEl)  { navEl.style.transition  = 'none'; navEl.style.transform  = ''; navEl.style.opacity  = '' }
+          // Synchronous reflow: forces Safari/WebKit to recalculate sticky positions
+          // (e.g. TopBar) before the overlay is removed. Without this, WebKit retains
+          // a stale sticky offset from when main had a CSS transform, causing the TopBar
+          // to appear displaced into the safe-area zone after back navigation.
+          void mainEl?.offsetHeight
+          overlay.remove()
           requestAnimationFrame(() => {
-            if (mainEl) { mainEl.style.transition = 'none'; mainEl.style.transform = ''; mainEl.style.opacity = '' }
-            if (navEl)  { navEl.style.transition  = 'none'; navEl.style.transform  = ''; navEl.style.opacity  = '' }
-            setTimeout(() => {
-              if (mainEl) { mainEl.style.transition = '' }
-              if (navEl)  { navEl.style.transition  = '' }
-              overlay.remove()
-            }, 60)
+            if (mainEl) mainEl.style.transition = ''
+            if (navEl)  navEl.style.transition  = ''
           })
-        )
+        }
+
+        // Wait for React to commit the new page into <main> before revealing it.
+        // This prevents the old page content from briefly flashing when opacity is restored.
+        let obs: MutationObserver | null = null
+        const fallback = setTimeout(() => {
+          obs?.disconnect()
+          removeOverlay()
+        }, 600)
+
+        if (mainEl) {
+          obs = new MutationObserver((mutations) => {
+            if (!mutations.some(m => m.addedNodes.length > 0)) return
+            obs!.disconnect()
+            clearTimeout(fallback)
+            requestAnimationFrame(removeOverlay)
+          })
+          obs.observe(mainEl, { childList: true })
+        }
       }, DURATION + 8)
     }
 

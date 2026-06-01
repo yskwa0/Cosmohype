@@ -1,7 +1,6 @@
 'use client'
 import Link from 'next/link'
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { ImageViewer } from '@/components/ui/ImageViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
@@ -38,7 +37,6 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
   const [viewerIdx, setViewerIdx] = useState(0)
   const lastTapRef = useRef(0)
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const router = useRouter()
   const supabase = createClient()
   const images = post.post_images ?? []
   const profile = post.profiles
@@ -59,7 +57,6 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) setLikeCount(count)
-      router.refresh()
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)
@@ -78,7 +75,6 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
         if (error) throw error
       }
-      router.refresh()
     } catch {
       setSaved(!next)
     }
