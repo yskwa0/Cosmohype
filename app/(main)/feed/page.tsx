@@ -11,17 +11,6 @@ import { PageTracker } from '@/components/analytics/PageTracker'
 const VALID_TABS = ['recommended', 'following'] as const
 type FeedTab = typeof VALID_TABS[number]
 
-function scorePost(post: Post, userStyleId: string | null, followingIds: Set<string>): number {
-  let score = 0
-  if (userStyleId && post.profiles?.style_id === userStyleId) score += 40
-  if (post.tags?.some(t => t.toLowerCase() === 'hype')) score += 30
-  score += (post.likes_count ?? 0) * 2
-  score += (post.saves_count ?? 0) * 5
-  score += (post.comments_count ?? 0) * 3
-  if (Date.now() - new Date(post.created_at).getTime() < 24 * 60 * 60 * 1000) score += 15
-  if (followingIds.has(post.user_id)) score += 30
-  return score
-}
 
 export default async function FeedPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const { tab: rawTab } = await searchParams
@@ -87,10 +76,9 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       : Promise.resolve({ data: null }),
   ])
 
-  // Build feed posts
+  // Build feed posts — keep created_at desc order from the DB query (stable, unaffected by likes/saves)
   const recommendedPosts = ((recResult.data ?? []) as Post[])
     .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))
-    .sort((a, b) => scorePost(b, profile.style_id, followingIds) - scorePost(a, profile.style_id, followingIds))
 
   const followingPosts = ((followResult.data ?? []) as Post[])
     .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))

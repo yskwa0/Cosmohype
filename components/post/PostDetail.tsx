@@ -5,6 +5,7 @@ import { ImageViewer } from '@/components/ui/ImageViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
 import { createClient } from '@/lib/supabase/client'
+import { setFeedInteraction } from '@/lib/feedInteractionCache'
 import { formatRelativeTime } from '@/lib/utils'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
@@ -57,6 +58,7 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) setLikeCount(count)
+      setFeedInteraction(post.id, { liked: next })
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)
@@ -75,6 +77,7 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
         if (error) throw error
       }
+      setFeedInteraction(post.id, { saved: next })
     } catch {
       setSaved(!next)
     }

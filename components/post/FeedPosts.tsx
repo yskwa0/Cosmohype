@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { PostCard } from './PostCard'
+import { drainFeedInteractions } from '@/lib/feedInteractionCache'
 import type { Post } from '@/types/database'
 
 export function FeedPosts({
@@ -28,6 +29,35 @@ export function FeedPosts({
 
   useEffect(() => { postsRef.current = posts }, [posts])
   useEffect(() => { hasMoreRef.current = hasMore }, [hasMore])
+
+  // Sync like/save state changes made in PostDetail back to this feed.
+  // PostDetail writes to feedInteractionCache; we drain it on mount and on every
+  // popstate (i.e., when the user navigates back to the feed from another page).
+  useEffect(() => {
+    function applyPending() {
+      const pending = drainFeedInteractions()
+      if (!pending.size) return
+      setLikedIds(prev => {
+        const next = new Set(prev)
+        for (const [id, { liked }] of pending) {
+          if (liked === true) next.add(id)
+          else if (liked === false) next.delete(id)
+        }
+        return next
+      })
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        for (const [id, { saved }] of pending) {
+          if (saved === true) next.add(id)
+          else if (saved === false) next.delete(id)
+        }
+        return next
+      })
+    }
+    applyPending()
+    window.addEventListener('popstate', applyPending)
+    return () => window.removeEventListener('popstate', applyPending)
+  }, [])
 
   const handleLikeToggle = useCallback((postId: string, isLiked: boolean) => {
     setLikedIds(prev => {
