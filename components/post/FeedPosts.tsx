@@ -24,8 +24,11 @@ export function FeedPosts({
     if (!pending.size) return initialPosts
     return initialPosts.map(p => {
       const ov = pending.get(p.id)
-      if (!ov || ov.likeCount === undefined) return p
-      return { ...p, likes_count: ov.likeCount }
+      if (!ov) return p
+      const patch: Partial<Post> = {}
+      if (ov.likeCount !== undefined) patch.likes_count = ov.likeCount
+      if (ov.saveCount !== undefined) patch.saves_count = ov.saveCount
+      return Object.keys(patch).length ? { ...p, ...patch } : p
     })
   })
   const [likedIds, setLikedIds] = useState<Set<string>>(() => {
@@ -84,8 +87,11 @@ export function FeedPosts({
       })
       setPosts(prev => prev.map(p => {
         const ov = pending.get(p.id)
-        if (!ov || ov.likeCount === undefined) return p
-        return { ...p, likes_count: ov.likeCount }
+        if (!ov) return p
+        const patch: Partial<Post> = {}
+        if (ov.likeCount !== undefined) patch.likes_count = ov.likeCount
+        if (ov.saveCount !== undefined) patch.saves_count = ov.saveCount
+        return Object.keys(patch).length ? { ...p, ...patch } : p
       }))
     }
 

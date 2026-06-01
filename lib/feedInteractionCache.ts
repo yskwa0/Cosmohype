@@ -2,7 +2,7 @@
 // PostDetail writes here after a successful like/save; FeedPosts reads on mount and
 // on popstate (returning from another page) to immediately reflect the correct state.
 
-export type InteractionOverride = { liked?: boolean; saved?: boolean; likeCount?: number }
+export type InteractionOverride = { liked?: boolean; saved?: boolean; likeCount?: number; saveCount?: number }
 const cache = new Map<string, InteractionOverride>()
 
 export function setFeedInteraction(postId: string, update: InteractionOverride) {

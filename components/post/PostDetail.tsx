@@ -5,7 +5,7 @@ import { ImageViewer } from '@/components/ui/ImageViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
 import { createClient } from '@/lib/supabase/client'
-import { setFeedInteraction } from '@/lib/feedInteractionCache'
+import { peekFeedInteractions, setFeedInteraction } from '@/lib/feedInteractionCache'
 import { formatRelativeTime } from '@/lib/utils'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
@@ -30,9 +30,10 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
   isSaved?: boolean
 }) {
   const [currentImage, setCurrentImage] = useState(0)
-  const [liked, setLiked] = useState(isLiked)
-  const [likeCount, setLikeCount] = useState(post.likes_count)
-  const [saved, setSaved] = useState(isSaved)
+  const cached = peekFeedInteractions().get(post.id) ?? {}
+  const [liked, setLiked] = useState(cached.liked !== undefined ? cached.liked : isLiked)
+  const [likeCount, setLikeCount] = useState(cached.likeCount !== undefined ? cached.likeCount : post.likes_count)
+  const [saved, setSaved] = useState(cached.saved !== undefined ? cached.saved : isSaved)
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerIdx, setViewerIdx] = useState(0)

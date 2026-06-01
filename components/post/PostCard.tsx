@@ -10,6 +10,7 @@ import type { StyleId } from '@/lib/style-id/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatRelativeTime } from '@/lib/utils'
 import { saveFeedScroll, armFeedScrollRestore } from '@/lib/feedScrollStore'
+import { setFeedInteraction } from '@/lib/feedInteractionCache'
 import { InlineComments } from './InlineComments'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
@@ -52,7 +53,8 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
     const next = !liked
     setLiked(next)
     setLikeCount(c => next ? c + 1 : c - 1)
-    onLikeToggle?.(post.id, next) // sync with optimistic update — before any await
+    setFeedInteraction(post.id, { liked: next })
+    onLikeToggle?.(post.id, next)
     try {
       if (next) {
         const { error } = await supabase.from('likes').insert({ user_id: userId, post_id: post.id })
@@ -65,11 +67,15 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         .from('likes')
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
-      if (count !== null) setLikeCount(count)
+      if (count !== null) {
+        setLikeCount(count)
+        setFeedInteraction(post.id, { liked: next, likeCount: count })
+      }
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)
-      onLikeToggle?.(post.id, !next) // rollback parent state too
+      setFeedInteraction(post.id, { liked: !next })
+      onLikeToggle?.(post.id, !next)
     }
   }
 
@@ -77,7 +83,8 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
     if (!userId) return
     const next = !saved
     setSaved(next)
-    onSaveToggle?.(post.id, next) // sync with optimistic update — before any await
+    setFeedInteraction(post.id, { saved: next })
+    onSaveToggle?.(post.id, next)
     try {
       if (next) {
         const { error } = await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
@@ -88,7 +95,8 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
       }
     } catch {
       setSaved(!next)
-      onSaveToggle?.(post.id, !next) // rollback parent state too
+      setFeedInteraction(post.id, { saved: !next })
+      onSaveToggle?.(post.id, !next)
     }
   }
 
