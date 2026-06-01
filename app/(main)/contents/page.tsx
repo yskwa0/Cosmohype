@@ -124,6 +124,25 @@ export default function ContentsPage() {
             </svg>
           </SpringCard>
 
+          {/* STYLE PLANET */}
+          <SpringCard
+            href="/style-planet"
+            gradient="linear-gradient(145deg, #0A1A12 0%, #064E3B 50%, #34D399 100%)"
+            dots={DOTS_A}
+            label="STYLE PLANET"
+            description="ブランドを発見する"
+          >
+            <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>
+              <circle cx={30} cy={30} r={11} fill="#065F46" opacity={0.95} />
+              <ellipse cx={30} cy={30} rx={22} ry={7} fill="none" stroke="#6EE7B7" strokeWidth={1.5} opacity={0.7} transform="rotate(-22 30 30)" />
+              <circle cx={30} cy={30} r={7} fill="#10B981" opacity={0.9} />
+              <ellipse cx={26} cy={27} rx={2.5} ry={2} fill="#A7F3D0" opacity={0.5} />
+              <circle cx={14} cy={18} r={1.5} fill="white" opacity={0.3} />
+              <circle cx={48} cy={42} r={1} fill="white" opacity={0.25} />
+              <text x={44} y={16} fontSize={10} fill="#FCD34D">✦</text>
+            </svg>
+          </SpringCard>
+
         </div>
       </div>
     </>
