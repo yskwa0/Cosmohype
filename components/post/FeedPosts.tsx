@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { PostCard } from './PostCard'
-import { peekFeedInteractions, drainFeedInteractions } from '@/lib/feedInteractionCache'
+import { initPostInteraction } from '@/lib/postInteractionStore'
 import type { Post } from '@/types/database'
 
 export function FeedPosts({
@@ -17,38 +17,25 @@ export function FeedPosts({
   userId: string
   tab: 'recommended' | 'following'
 }) {
-  // Initializers run synchronously on mount — peek (don't drain) the cache so the
-  // very first render already reflects any like/save done on the detail page.
-  const [posts, setPosts] = useState<Post[]>(() => {
-    const pending = peekFeedInteractions()
-    if (!pending.size) return initialPosts
-    return initialPosts.map(p => {
-      const ov = pending.get(p.id)
-      if (!ov) return p
-      const patch: Partial<Post> = {}
-      if (ov.likeCount !== undefined) patch.likes_count = ov.likeCount
-      if (ov.saveCount !== undefined) patch.saves_count = ov.saveCount
-      return Object.keys(patch).length ? { ...p, ...patch } : p
-    })
-  })
-  const [likedIds, setLikedIds] = useState<Set<string>>(() => {
-    const pending = peekFeedInteractions()
-    const base = new Set(initialLikedIds)
-    for (const [id, { liked }] of pending) {
-      if (liked === true) base.add(id)
-      else if (liked === false) base.delete(id)
+  // Pre-populate the store before PostCards render so each PostCard's
+  // usePostInteraction hook reads the correct server value on first render.
+  // initPostInteraction is a no-op if the entry already exists, which prevents
+  // stale server props from overwriting a newer in-session liked/saved state.
+  useState<null>(() => {
+    const likedSet = new Set(initialLikedIds)
+    const savedSet = new Set(initialSavedIds)
+    for (const post of initialPosts) {
+      initPostInteraction(post.id, {
+        liked: likedSet.has(post.id),
+        saved: savedSet.has(post.id),
+        likeCount: post.likes_count,
+        saveCount: post.saves_count,
+      })
     }
-    return base
+    return null
   })
-  const [savedIds, setSavedIds] = useState<Set<string>>(() => {
-    const pending = peekFeedInteractions()
-    const base = new Set(initialSavedIds)
-    for (const [id, { saved }] of pending) {
-      if (saved === true) base.add(id)
-      else if (saved === false) base.delete(id)
-    }
-    return base
-  })
+
+  const [posts, setPosts] = useState<Post[]>(initialPosts)
   const [isLoading, setIsLoading] = useState(false)
   const [hasMore, setHasMore] = useState(initialPosts.length >= 20)
   const isLoadingRef = useRef(false)
@@ -58,64 +45,6 @@ export function FeedPosts({
 
   useEffect(() => { postsRef.current = posts }, [posts])
   useEffect(() => { hasMoreRef.current = hasMore }, [hasMore])
-
-  // Sync like/save state from PostDetail back to this feed.
-  // On mount: drain what was peeked in the useState initializers above (cache cleared).
-  // On popstate: apply any new interactions written while on the detail page.
-  // This handles the case where FeedPosts is NOT re-mounted (restored from router cache).
-  useEffect(() => {
-    drainFeedInteractions() // clear what was already applied in the useState initializers
-
-    function applyPending() {
-      const pending = drainFeedInteractions()
-      if (!pending.size) return
-      setLikedIds(prev => {
-        const next = new Set(prev)
-        for (const [id, { liked }] of pending) {
-          if (liked === true) next.add(id)
-          else if (liked === false) next.delete(id)
-        }
-        return next
-      })
-      setSavedIds(prev => {
-        const next = new Set(prev)
-        for (const [id, { saved }] of pending) {
-          if (saved === true) next.add(id)
-          else if (saved === false) next.delete(id)
-        }
-        return next
-      })
-      setPosts(prev => prev.map(p => {
-        const ov = pending.get(p.id)
-        if (!ov) return p
-        const patch: Partial<Post> = {}
-        if (ov.likeCount !== undefined) patch.likes_count = ov.likeCount
-        if (ov.saveCount !== undefined) patch.saves_count = ov.saveCount
-        return Object.keys(patch).length ? { ...p, ...patch } : p
-      }))
-    }
-
-    window.addEventListener('popstate', applyPending)
-    return () => window.removeEventListener('popstate', applyPending)
-  }, [])
-
-  const handleLikeToggle = useCallback((postId: string, isLiked: boolean) => {
-    setLikedIds(prev => {
-      const next = new Set(prev)
-      if (isLiked) next.add(postId)
-      else next.delete(postId)
-      return next
-    })
-  }, [])
-
-  const handleSaveToggle = useCallback((postId: string, isSaved: boolean) => {
-    setSavedIds(prev => {
-      const next = new Set(prev)
-      if (isSaved) next.add(postId)
-      else next.delete(postId)
-      return next
-    })
-  }, [])
 
   const loadMore = useCallback(async () => {
     if (isLoadingRef.current || !hasMoreRef.current) return
@@ -134,20 +63,22 @@ export function FeedPosts({
       if (!res.ok) throw new Error('fetch failed')
       const { posts: newPosts, likedIds: newLiked, savedIds: newSaved, hasMore: more } = await res.json()
 
+      // Initialize store for new posts before they render
+      const likedSet = new Set(newLiked as string[])
+      const savedSet = new Set(newSaved as string[])
+      for (const post of newPosts as Post[]) {
+        initPostInteraction(post.id, {
+          liked: likedSet.has(post.id),
+          saved: savedSet.has(post.id),
+          likeCount: post.likes_count,
+          saveCount: post.saves_count,
+        })
+      }
+
       setPosts(p => {
         const existingIds = new Set(p.map(x => x.id))
         const deduped = (newPosts as Post[]).filter(x => !existingIds.has(x.id))
         return [...p, ...deduped]
-      })
-      setLikedIds(prev => {
-        const next = new Set(prev)
-        ;(newLiked as string[]).forEach(id => next.add(id))
-        return next
-      })
-      setSavedIds(prev => {
-        const next = new Set(prev)
-        ;(newSaved as string[]).forEach(id => next.add(id))
-        return next
       })
       const nextHasMore = more && (newPosts as Post[]).length > 0
       setHasMore(nextHasMore)
@@ -193,10 +124,6 @@ export function FeedPosts({
           key={post.id}
           post={post}
           userId={userId}
-          isLiked={likedIds.has(post.id)}
-          isSaved={savedIds.has(post.id)}
-          onLikeToggle={handleLikeToggle}
-          onSaveToggle={handleSaveToggle}
         />
       ))}
 

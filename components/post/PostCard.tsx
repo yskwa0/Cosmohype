@@ -10,7 +10,7 @@ import type { StyleId } from '@/lib/style-id/types'
 import { createClient } from '@/lib/supabase/client'
 import { formatRelativeTime } from '@/lib/utils'
 import { saveFeedScroll, armFeedScrollRestore } from '@/lib/feedScrollStore'
-import { setFeedInteraction } from '@/lib/feedInteractionCache'
+import { usePostInteraction } from '@/hooks/usePostInteraction'
 import { InlineComments } from './InlineComments'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
@@ -34,9 +34,6 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
 }) {
   const [currentImage, setCurrentImage] = useState(0)
   const [showComments, setShowComments] = useState(false)
-  const [liked, setLiked] = useState(isLiked)
-  const [likeCount, setLikeCount] = useState(post.likes_count)
-  const [saved, setSaved] = useState(isSaved)
   const [commentsCount, setCommentsCount] = useState(post.comments_count)
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
@@ -48,12 +45,18 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
   const images = post.post_images ?? []
   const profile = post.profiles
 
+  const [{ liked, saved, likeCount }, updateInteraction] = usePostInteraction(post.id, {
+    liked: isLiked,
+    saved: isSaved,
+    likeCount: post.likes_count,
+    saveCount: post.saves_count,
+  })
+
   async function toggleLike() {
     if (!userId) return
     const next = !liked
-    setLiked(next)
-    setLikeCount(c => next ? c + 1 : c - 1)
-    setFeedInteraction(post.id, { liked: next })
+    const prevCount = likeCount
+    updateInteraction({ liked: next, likeCount: next ? prevCount + 1 : prevCount - 1 })
     onLikeToggle?.(post.id, next)
     try {
       if (next) {
@@ -67,14 +70,9 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         .from('likes')
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
-      if (count !== null) {
-        setLikeCount(count)
-        setFeedInteraction(post.id, { liked: next, likeCount: count })
-      }
+      if (count !== null) updateInteraction({ liked: next, likeCount: count })
     } catch {
-      setLiked(!next)
-      setLikeCount(c => next ? c - 1 : c + 1)
-      setFeedInteraction(post.id, { liked: !next })
+      updateInteraction({ liked: !next, likeCount: prevCount })
       onLikeToggle?.(post.id, !next)
     }
   }
@@ -82,8 +80,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
   async function toggleSave() {
     if (!userId) return
     const next = !saved
-    setSaved(next)
-    setFeedInteraction(post.id, { saved: next })
+    updateInteraction({ saved: next })
     onSaveToggle?.(post.id, next)
     try {
       if (next) {
@@ -94,8 +91,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         if (error) throw error
       }
     } catch {
-      setSaved(!next)
-      setFeedInteraction(post.id, { saved: !next })
+      updateInteraction({ saved: !next })
       onSaveToggle?.(post.id, !next)
     }
   }

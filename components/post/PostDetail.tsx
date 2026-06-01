@@ -5,7 +5,7 @@ import { ImageViewer } from '@/components/ui/ImageViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
 import { createClient } from '@/lib/supabase/client'
-import { peekFeedInteractions, setFeedInteraction } from '@/lib/feedInteractionCache'
+import { usePostInteraction } from '@/hooks/usePostInteraction'
 import { formatRelativeTime } from '@/lib/utils'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
@@ -30,10 +30,6 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
   isSaved?: boolean
 }) {
   const [currentImage, setCurrentImage] = useState(0)
-  const cached = peekFeedInteractions().get(post.id) ?? {}
-  const [liked, setLiked] = useState(cached.liked !== undefined ? cached.liked : isLiked)
-  const [likeCount, setLikeCount] = useState(cached.likeCount !== undefined ? cached.likeCount : post.likes_count)
-  const [saved, setSaved] = useState(cached.saved !== undefined ? cached.saved : isSaved)
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerIdx, setViewerIdx] = useState(0)
@@ -43,11 +39,18 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
   const images = post.post_images ?? []
   const profile = post.profiles
 
+  const [{ liked, saved, likeCount }, updateInteraction] = usePostInteraction(post.id, {
+    liked: isLiked,
+    saved: isSaved,
+    likeCount: post.likes_count,
+    saveCount: post.saves_count,
+  })
+
   async function toggleLike() {
     if (!userId) return
     const next = !liked
-    setLiked(next)
-    setLikeCount(c => next ? c + 1 : c - 1)
+    const prevCount = likeCount
+    updateInteraction({ liked: next, likeCount: next ? prevCount + 1 : prevCount - 1 })
     try {
       if (next) {
         await supabase.from('likes').insert({ user_id: userId, post_id: post.id })
@@ -58,18 +61,16 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         .from('likes')
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
-      if (count !== null) setLikeCount(count)
-      setFeedInteraction(post.id, { liked: next, likeCount: count ?? undefined })
+      if (count !== null) updateInteraction({ liked: next, likeCount: count })
     } catch {
-      setLiked(!next)
-      setLikeCount(c => next ? c - 1 : c + 1)
+      updateInteraction({ liked: !next, likeCount: prevCount })
     }
   }
 
   async function toggleSave() {
     if (!userId) return
     const next = !saved
-    setSaved(next)
+    updateInteraction({ saved: next })
     try {
       if (next) {
         const { error } = await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
@@ -78,9 +79,8 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
         if (error) throw error
       }
-      setFeedInteraction(post.id, { saved: next })
     } catch {
-      setSaved(!next)
+      updateInteraction({ saved: !next })
     }
   }
 
