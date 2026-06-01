@@ -83,7 +83,7 @@ export function StyleIdShareCard({ styleId, primary }: Props) {
 
       {/* スクショ案内 */}
       <p className="text-xs text-center leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-        この画面をスクショして<br />Instagramストーリーなどでシェアしよう 📸
+        この画面をスクショして<br />診断結果をシェアしよう 📸
       </p>
     </div>
   )
