@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { PostCard } from './PostCard'
-import { drainFeedInteractions } from '@/lib/feedInteractionCache'
+import { peekFeedInteractions, drainFeedInteractions } from '@/lib/feedInteractionCache'
 import type { Post } from '@/types/database'
 
 export function FeedPosts({
@@ -17,9 +17,35 @@ export function FeedPosts({
   userId: string
   tab: 'recommended' | 'following'
 }) {
-  const [posts, setPosts] = useState(initialPosts)
-  const [likedIds, setLikedIds] = useState(() => new Set(initialLikedIds))
-  const [savedIds, setSavedIds] = useState(() => new Set(initialSavedIds))
+  // Initializers run synchronously on mount — peek (don't drain) the cache so the
+  // very first render already reflects any like/save done on the detail page.
+  const [posts, setPosts] = useState<Post[]>(() => {
+    const pending = peekFeedInteractions()
+    if (!pending.size) return initialPosts
+    return initialPosts.map(p => {
+      const ov = pending.get(p.id)
+      if (!ov || ov.likeCount === undefined) return p
+      return { ...p, likes_count: ov.likeCount }
+    })
+  })
+  const [likedIds, setLikedIds] = useState<Set<string>>(() => {
+    const pending = peekFeedInteractions()
+    const base = new Set(initialLikedIds)
+    for (const [id, { liked }] of pending) {
+      if (liked === true) base.add(id)
+      else if (liked === false) base.delete(id)
+    }
+    return base
+  })
+  const [savedIds, setSavedIds] = useState<Set<string>>(() => {
+    const pending = peekFeedInteractions()
+    const base = new Set(initialSavedIds)
+    for (const [id, { saved }] of pending) {
+      if (saved === true) base.add(id)
+      else if (saved === false) base.delete(id)
+    }
+    return base
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [hasMore, setHasMore] = useState(initialPosts.length >= 20)
   const isLoadingRef = useRef(false)
@@ -30,10 +56,13 @@ export function FeedPosts({
   useEffect(() => { postsRef.current = posts }, [posts])
   useEffect(() => { hasMoreRef.current = hasMore }, [hasMore])
 
-  // Sync like/save state changes made in PostDetail back to this feed.
-  // PostDetail writes to feedInteractionCache; we drain it on mount and on every
-  // popstate (i.e., when the user navigates back to the feed from another page).
+  // Sync like/save state from PostDetail back to this feed.
+  // On mount: drain what was peeked in the useState initializers above (cache cleared).
+  // On popstate: apply any new interactions written while on the detail page.
+  // This handles the case where FeedPosts is NOT re-mounted (restored from router cache).
   useEffect(() => {
+    drainFeedInteractions() // clear what was already applied in the useState initializers
+
     function applyPending() {
       const pending = drainFeedInteractions()
       if (!pending.size) return
@@ -53,8 +82,13 @@ export function FeedPosts({
         }
         return next
       })
+      setPosts(prev => prev.map(p => {
+        const ov = pending.get(p.id)
+        if (!ov || ov.likeCount === undefined) return p
+        return { ...p, likes_count: ov.likeCount }
+      }))
     }
-    applyPending()
+
     window.addEventListener('popstate', applyPending)
     return () => window.removeEventListener('popstate', applyPending)
   }, [])

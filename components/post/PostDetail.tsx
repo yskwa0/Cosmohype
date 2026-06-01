@@ -58,7 +58,7 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) setLikeCount(count)
-      setFeedInteraction(post.id, { liked: next })
+      setFeedInteraction(post.id, { liked: next, likeCount: count ?? undefined })
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)

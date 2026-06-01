@@ -52,6 +52,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
     const next = !liked
     setLiked(next)
     setLikeCount(c => next ? c + 1 : c - 1)
+    onLikeToggle?.(post.id, next) // sync with optimistic update — before any await
     try {
       if (next) {
         const { error } = await supabase.from('likes').insert({ user_id: userId, post_id: post.id })
@@ -65,10 +66,10 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) setLikeCount(count)
-      onLikeToggle?.(post.id, next)
     } catch {
       setLiked(!next)
       setLikeCount(c => next ? c - 1 : c + 1)
+      onLikeToggle?.(post.id, !next) // rollback parent state too
     }
   }
 
@@ -76,6 +77,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
     if (!userId) return
     const next = !saved
     setSaved(next)
+    onSaveToggle?.(post.id, next) // sync with optimistic update — before any await
     try {
       if (next) {
         const { error } = await supabase.from('saved_posts').insert({ user_id: userId, post_id: post.id })
@@ -84,9 +86,9 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
         if (error) throw error
       }
-      onSaveToggle?.(post.id, next)
     } catch {
       setSaved(!next)
+      onSaveToggle?.(post.id, !next) // rollback parent state too
     }
   }
 
