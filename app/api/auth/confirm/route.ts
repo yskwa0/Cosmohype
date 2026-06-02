@@ -19,10 +19,12 @@ export async function GET(request: Request) {
   }
 
   const { data: { user } } = await supabase.auth.getUser()
+  let needsSetup = true
   if (user) {
     const { data: profile } = await supabase.from('profiles').select('id').eq('id', user.id).maybeSingle()
-    if (!profile) return NextResponse.redirect(`${origin}/profile/setup`)
+    needsSetup = !profile
   }
 
-  return NextResponse.redirect(`${origin}/feed`)
+  // Let the client page detect Capacitor and decide where to navigate.
+  return NextResponse.redirect(`${origin}/auth/confirmed?setup=${needsSetup ? '1' : '0'}`)
 }
