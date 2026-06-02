@@ -28,7 +28,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
         })
         if (error) throw error
-        setMessage('確認メールを送信しました。メールをご確認ください。')
+        setMessage('確認メールを送信しました。\nメール内のリンクを開くとSafariが表示されます。\n確認が完了したら、Cosmohypeアプリに戻って同じメールアドレスでログインしてください。')
         setLoading(false)
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -136,7 +136,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </p>
           )}
           {message && (
-            <p style={{ fontSize: '14px', color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '12px', padding: '12px 16px', margin: 0 }}>
+            <p style={{ fontSize: '14px', color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: '12px', padding: '12px 16px', margin: 0, whiteSpace: 'pre-line', lineHeight: '1.7' }}>
               {message}
             </p>
           )}
