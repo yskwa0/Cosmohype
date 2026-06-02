@@ -39,9 +39,8 @@ export async function POST(req: Request) {
       .in('user_id', followingIds)
       .eq('is_archived', false)
       .eq('is_hidden', false)
-      .lt('created_at', cursor)
     if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-    const { data } = await q.order('created_at', { ascending: false }).limit(LIMIT + 1)
+    const { data } = await q.lt('created_at', cursor).order('created_at', { ascending: false }).limit(LIMIT + 1)
 
     const all = (data ?? []) as Post[]
     const hasMore = all.length > LIMIT
@@ -62,9 +61,8 @@ export async function POST(req: Request) {
     .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
     .eq('is_archived', false)
     .eq('is_hidden', false)
-    .lt('created_at', cursor)
   if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-  const { data } = await q.order('created_at', { ascending: false }).limit(LIMIT + 1)
+  const { data } = await q.lt('created_at', cursor).order('created_at', { ascending: false }).limit(LIMIT + 1)
 
   const all = (data ?? []) as Post[]
   const hasMore = all.length > LIMIT
