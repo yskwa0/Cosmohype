@@ -98,6 +98,22 @@ export type Report = {
   created_at: string
 }
 
+export type Notification = {
+  id: string
+  user_id: string
+  actor_id: string
+  type: 'like' | 'comment' | 'follow'
+  post_id: string | null
+  comment_id: string | null
+  is_read: boolean
+  created_at: string
+}
+
+export type NotificationWithActor = Notification & {
+  actor: Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
+  post: { id: string; post_images: Pick<PostImage, 'url' | 'display_order'>[] } | null
+}
+
 export type Block = {
   id: string
   blocker_id: string
@@ -733,6 +749,54 @@ export type Database = {
           {
             foreignKeyName: "username_changes_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          actor_id: string
+          type: string
+          post_id: string | null
+          comment_id: string | null
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          actor_id: string
+          type: string
+          post_id?: string | null
+          comment_id?: string | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          actor_id?: string
+          type?: string
+          post_id?: string | null
+          comment_id?: string | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

@@ -84,24 +84,22 @@ export default async function ProfilePage({
 
   const isMutualFollow = isFollowing && isFollowedBy
 
-  const hasPendingRequests = await (async () => {
+  const hasActivity = await (async () => {
     if (!isOwner) return false
+    const { count: unreadCount } = await supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', profile.id)
+      .eq('is_read', false)
+    if ((unreadCount ?? 0) > 0) return true
     if (profile.is_private) {
-      const { count } = await supabase
+      const { count: reqCount } = await supabase
         .from('follow_requests')
         .select('id', { count: 'exact', head: true })
         .eq('target_id', profile.id)
-      return (count ?? 0) > 0
+      return (reqCount ?? 0) > 0
     }
-    // 公開アカウント：未読の新規フォローがあるかチェック
-    const lastRead = profile.follow_activity_last_read_at
-    const query = supabase
-      .from('follows')
-      .select('id', { count: 'exact', head: true })
-      .eq('following_id', profile.id)
-    if (lastRead) query.gt('created_at', lastRead)
-    const { count } = await query
-    return (count ?? 0) > 0
+    return false
   })()
 
   const canViewPosts = !profile.is_private || isOwner || isFollowing
@@ -155,13 +153,13 @@ export default async function ProfilePage({
             <Link
               href="/profile/follow-activity"
               className="relative p-1 transition-transform duration-75 active:scale-75"
-              aria-label="フォローリクエスト・通知"
+              aria-label="通知"
               style={{ color: 'var(--text)' }}
             >
               <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
               </svg>
-              {hasPendingRequests && (
+              {hasActivity && (
                 <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-500" />
               )}
             </Link>

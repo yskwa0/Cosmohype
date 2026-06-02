@@ -1,13 +1,28 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { Avatar } from '@/components/ui/Avatar'
 import { FollowRequestItem } from '@/components/profile/FollowRequestItem'
-import { MarkFollowActivityRead } from '@/components/profile/MarkFollowActivityRead'
+import { MarkActivityRead } from '@/components/profile/MarkActivityRead'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Profile } from '@/types/database'
+
+type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
+type NotifPost = { id: string; post_images: { url: string; display_order: number }[] } | null
+
+type RawNotification = {
+  id: string
+  type: 'like' | 'comment' | 'follow'
+  post_id: string | null
+  is_read: boolean
+  created_at: string
+  actor: ActorProfile
+  post: NotifPost
+}
+
 
 export default async function FollowActivityPage() {
   const supabase = await createClient()
@@ -23,126 +38,149 @@ export default async function FollowActivityPage() {
   if (!profileRaw) redirect('/login')
   const profile = profileRaw as Pick<Profile, 'id' | 'username' | 'is_private'>
 
+  // Fetch notifications (limit 50, newest first)
+  const { data: notificationsRaw } = await supabase
+    .from('notifications')
+    .select(`
+      id, type, post_id, is_read, created_at,
+      actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url),
+      post:posts!notifications_post_id_fkey(id, post_images(url, display_order))
+    `)
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  const notifications = (notificationsRaw ?? []) as unknown as RawNotification[]
+
+  // Follow requests for private accounts
+  let requests: { id: string; requester_id: string; created_at: string }[] = []
+  let requesterProfiles: Record<string, ActorProfile> = {}
+
   if (profile.is_private) {
-    // 非公開：フォローリクエスト一覧
-    const { data: requests } = await supabase
+    const { data: reqs } = await supabase
       .from('follow_requests')
       .select('id, requester_id, created_at')
       .eq('target_id', user.id)
       .order('created_at', { ascending: false })
+    requests = reqs ?? []
 
-    const requesterIds = requests?.map(r => r.requester_id) ?? []
-    let requesterProfiles: Record<string, Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>> = {}
-
+    const requesterIds = requests.map(r => r.requester_id)
     if (requesterIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, username, display_name, avatar_url')
         .in('id', requesterIds)
       for (const p of profiles ?? []) {
-        requesterProfiles[p.id] = p as Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
+        requesterProfiles[p.id] = p as ActorProfile
       }
     }
-
-    return (
-      <>
-        <TopBar
-          title="フォローリクエスト"
-          left={<BackButton href="/profile/me" />}
-        />
-        {(requests?.length ?? 0) === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
-              style={{ background: 'var(--purple-dim)', border: '1px solid var(--border)' }}>
-              <svg viewBox="0 0 24 24" className="w-7 h-7" style={{ color: 'var(--purple)' }} fill="none" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-              </svg>
-            </div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>フォローリクエストはありません</p>
-          </div>
-        ) : (
-          <ul>
-            {requests!.map(req => {
-              const requester = requesterProfiles[req.requester_id]
-              if (!requester) return null
-              return (
-                <FollowRequestItem
-                  key={req.id}
-                  requestId={req.id}
-                  requester={requester}
-                />
-              )
-            })}
-          </ul>
-        )}
-      </>
-    )
   }
 
-  // 公開：直近1週間のフォロワー通知
-  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-
-  const { data: recentFollows } = await supabase
-    .from('follows')
-    .select('follower_id, created_at')
-    .eq('following_id', user.id)
-    .gte('created_at', oneWeekAgo)
-    .order('created_at', { ascending: false })
-
-  const followerIds = recentFollows?.map(f => f.follower_id) ?? []
-  let followerProfiles: Record<string, Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>> = {}
-
-  if (followerIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, username, display_name, avatar_url')
-      .in('id', followerIds)
-    for (const p of profiles ?? []) {
-      followerProfiles[p.id] = p as Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
-    }
-  }
+  const isEmpty = notifications.length === 0 && requests.length === 0
 
   return (
     <>
-      <MarkFollowActivityRead userId={user.id} />
-      <TopBar
-        title="フォロワー通知"
-        left={<BackButton href="/profile/me" />}
-      />
-      {(recentFollows?.length ?? 0) === 0 ? (
+      <MarkActivityRead userId={user.id} />
+      <TopBar title="通知" left={<BackButton href="/profile/me" />} />
+
+      {isEmpty ? (
         <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
-            style={{ background: 'var(--purple-dim)', border: '1px solid var(--border)' }}>
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
+            style={{ background: 'var(--purple-dim)', border: '1px solid var(--border)' }}
+          >
             <svg viewBox="0 0 24 24" className="w-7 h-7" style={{ color: 'var(--purple)' }} fill="none" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
             </svg>
           </div>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>直近1週間のフォロワーはいません</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text)' }}>通知はありません</p>
+          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>いいね・コメント・フォローがあると表示されます</p>
         </div>
       ) : (
-        <ul>
-          {recentFollows!.map(follow => {
-            const follower = followerProfiles[follow.follower_id]
-            if (!follower) return null
-            return (
-              <li key={follow.follower_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <Link href={`/profile/${follower.username}?from=follow-activity`} className="flex items-center gap-3 px-4 py-3 active:opacity-70">
-                  <Avatar src={follower.avatar_url} username={follower.username} size="md" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
-                      <span className="font-semibold">{follower.display_name ?? follower.username}</span>
-                      <span style={{ color: 'var(--text-muted)' }}> さんがあなたをフォローしました</span>
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>@{follower.username}</p>
-                  </div>
-                  <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-                    {formatRelativeTime(follow.created_at)}
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+        <div>
+          {/* フォローリクエスト（非公開アカウントのみ） */}
+          {requests.length > 0 && (
+            <div>
+              <p className="px-4 pt-4 pb-2 text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                フォローリクエスト
+              </p>
+              <ul>
+                {requests.map(req => {
+                  const requester = requesterProfiles[req.requester_id]
+                  if (!requester) return null
+                  return (
+                    <FollowRequestItem
+                      key={req.id}
+                      requestId={req.id}
+                      requester={requester}
+                    />
+                  )
+                })}
+              </ul>
+              {notifications.length > 0 && (
+                <div className="mt-4 mb-1 px-4">
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
+                    通知
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 通知リスト */}
+          {notifications.length > 0 && (
+            <ul>
+              {notifications.map(notif => {
+                const actor = notif.actor
+                if (!actor) return null
+                const actorName = actor.display_name ?? actor.username
+                const href = notif.type === 'follow'
+                  ? `/profile/${actor.username}?from=follow-activity`
+                  : `/post/${notif.post_id}`
+                const thumb = notif.post?.post_images
+                  ?.slice()
+                  .sort((a, b) => a.display_order - b.display_order)[0]?.url ?? null
+
+                return (
+                  <li
+                    key={notif.id}
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      background: notif.is_read ? undefined : 'color-mix(in srgb, var(--purple) 6%, transparent)',
+                    }}
+                  >
+                    <Link href={href} className="flex items-center gap-3 px-4 py-3 active:opacity-70">
+                      {/* unread dot */}
+                      <span
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                        style={{ background: notif.is_read ? 'transparent' : 'var(--purple)' }}
+                      />
+                      <Avatar src={actor.avatar_url} username={actor.username} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
+                          <span className="font-semibold">{actorName}</span>
+                          <span style={{ color: 'var(--text-sub)' }}>
+                            {notif.type === 'like' && 'さんがあなたの投稿にいいねしました'}
+                            {notif.type === 'comment' && 'さんがあなたの投稿にコメントしました'}
+                            {notif.type === 'follow' && 'さんがあなたをフォローしました'}
+                          </span>
+                        </p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                          {formatRelativeTime(notif.created_at)}
+                        </p>
+                      </div>
+                      {thumb && notif.type !== 'follow' && (
+                        <div className="relative w-10 h-10 flex-shrink-0 rounded overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                          <Image src={thumb} alt="" fill className="object-cover" sizes="40px" />
+                        </div>
+                      )}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
       )}
     </>
   )
