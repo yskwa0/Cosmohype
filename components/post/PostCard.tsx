@@ -243,7 +243,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
                 <>
                   {currentImage > 0 && (
                     <button onClick={e => { e.stopPropagation(); setCurrentImage(i => i - 1) }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center">
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/55 flex items-center justify-center">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                       </svg>
@@ -251,13 +251,13 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
                   )}
                   {currentImage < images.length - 1 && (
                     <button onClick={e => { e.stopPropagation(); setCurrentImage(i => i + 1) }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center">
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/55 flex items-center justify-center">
                       <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>
                     </button>
                   )}
-                  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-black/35 backdrop-blur-sm">
+                  <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-black/55">
                     <span className="text-white text-[10px] font-medium">{currentImage + 1}/{images.length}</span>
                   </div>
                 </>

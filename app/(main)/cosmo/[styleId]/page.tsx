@@ -19,12 +19,13 @@ export default async function CosmoStylePage({
 
   const supabase = await createClient()
 
-  // このスタイルの全公開ユーザーを取得
+  // このスタイルの公開ユーザーを取得（最大100件：現在の最終出力上限20件に対して十分な余裕）
   const { data: profileData } = await supabase
     .from('profiles')
     .select('id, username, display_name, avatar_url, cosmo_post_id')
     .eq('style_id', styleId)
     .eq('is_private', false)
+    .limit(100)
 
   const profiles = profileData ?? []
   const profileMap = new Map(profiles.map(p => [p.id, p]))
@@ -69,8 +70,10 @@ export default async function CosmoStylePage({
     }
 
     // ② cosmo_post_id 未設定、またはアーカイブで取得できなかったユーザー → 最新投稿を表示
+    const needed = Math.max(0, 20 - addedUserIds.size)
     const fallbackUserIds = profiles
       .filter(p => !addedUserIds.has(p.id))
+      .slice(0, needed * 3)  // 必要数 × 3 ユーザー分に絞る（hidden/archived の外れを考慮）
       .map(p => p.id)
 
     if (fallbackUserIds.length > 0) {
@@ -81,7 +84,7 @@ export default async function CosmoStylePage({
         .eq('is_archived', false)
         .eq('is_hidden', false)
         .order('created_at', { ascending: false })
-        .limit(fallbackUserIds.length * 5)
+        .limit(fallbackUserIds.length * 3)
 
       const seen = new Set<string>()
       for (const p of (latest ?? []) as RawPost[]) {

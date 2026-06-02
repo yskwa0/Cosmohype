@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { compressImage } from '@/lib/compressImage'
 
@@ -16,8 +16,13 @@ interface ImageUploadProps {
 export function ImageUpload({ files, onChange, error }: ImageUploadProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [localError, setLocalError] = useState<string | null>(null)
+  const [previews, setPreviews] = useState<string[]>([])
 
-  const previews = files.map(f => URL.createObjectURL(f))
+  useEffect(() => {
+    const urls = files.map(f => URL.createObjectURL(f))
+    setPreviews(urls)
+    return () => { urls.forEach(u => URL.revokeObjectURL(u)) }
+  }, [files])
 
   async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])

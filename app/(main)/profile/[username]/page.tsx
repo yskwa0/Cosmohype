@@ -105,15 +105,29 @@ export default async function ProfilePage({
   })()
 
   const canViewPosts = !profile.is_private || isOwner || isFollowing
-  const { data: posts } = canViewPosts
-    ? await supabase
-        .from('posts')
-        .select(`*, post_images(*)`)
-        .eq('user_id', profile.id)
-        .eq('is_archived', false)
-        .eq('is_hidden', false)
-        .order('created_at', { ascending: false })
-    : { data: [] }
+
+  const PAGE_SIZE = 24
+  const [{ data: posts }, { count: postsCountRaw }] = await Promise.all([
+    canViewPosts
+      ? supabase
+          .from('posts')
+          .select(`*, post_images(*)`)
+          .eq('user_id', profile.id)
+          .eq('is_archived', false)
+          .eq('is_hidden', false)
+          .order('created_at', { ascending: false })
+          .limit(PAGE_SIZE)
+      : Promise.resolve({ data: [] }),
+    canViewPosts
+      ? supabase
+          .from('posts')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', profile.id)
+          .eq('is_archived', false)
+          .eq('is_hidden', false)
+      : Promise.resolve({ count: 0 }),
+  ])
+  const postsCount = postsCountRaw ?? 0
 
   const pageContent = (
     <>
@@ -164,7 +178,7 @@ export default async function ProfilePage({
       <div style={{ paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))' }}>
         <ProfileHeader
           profile={profile}
-          postsCount={canViewPosts ? (posts?.length ?? 0) : 0}
+          postsCount={canViewPosts ? postsCount : 0}
           isOwner={isOwner}
           currentUserId={currentUser?.id}
           initialFollowing={isFollowing}
@@ -190,7 +204,11 @@ export default async function ProfilePage({
               まだ投稿がありません
             </div>
           ) : (
-            <ProfilePostGrid posts={posts as Post[]} />
+            <ProfilePostGrid
+              initialPosts={posts as Post[]}
+              userId={profile.id}
+              hasMoreInitial={(posts?.length ?? 0) >= PAGE_SIZE}
+            />
           )}
         </div>
       </div>

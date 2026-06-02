@@ -5,27 +5,12 @@ import { FeedPosts } from '@/components/post/FeedPosts'
 import { FeedSlider } from '@/components/layout/FeedSlider'
 import { DmPanel, type DmConversation } from '@/components/dm/DmPanel'
 import { DmIconButton } from '@/components/dm/DmIconButton'
-import type { Post, Profile } from '@/types/database'
+import type { Post } from '@/types/database'
 import { PageTracker } from '@/components/analytics/PageTracker'
 
 const VALID_TABS = ['recommended', 'following'] as const
 type FeedTab = typeof VALID_TABS[number]
 
-function scorePost(post: Post, userStyleId: string | null): number {
-  const createdMs = new Date(post.created_at).getTime()
-  const ageHours = Number.isNaN(createdMs)
-    ? 24 * 7
-    : Math.max(2, (Date.now() - createdMs) / 3_600_000)
-  const engagement =
-    (post.likes_count ?? 0) * 2 +
-    (post.saves_count ?? 0) * 3 +
-    (post.comments_count ?? 0) * 1
-  const styleBoost =
-    userStyleId && post.profiles?.style_id && post.profiles.style_id === userStyleId
-      ? 1.3
-      : 1.0
-  return ((engagement + 1) / Math.pow(ageHours, 1.5)) * styleBoost
-}
 
 
 export default async function FeedPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
@@ -42,7 +27,6 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     .eq('id', user.id)
     .single()
   if (!profileData) redirect('/profile/setup')
-  const profile = profileData as Profile
 
   const { data: blocksData } = await supabase
     .from('blocks')
@@ -70,7 +54,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   const buildRecQ = () => {
     let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).eq('is_archived', false).eq('is_hidden', false)
     if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
-    return q.order('created_at', { ascending: false }).limit(60)
+    return q.order('created_at', { ascending: false }).limit(20)
   }
   const buildFollowQ = () => {
     let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).in('user_id', validFollowingIds).eq('is_archived', false).eq('is_hidden', false)
@@ -92,11 +76,8 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       : Promise.resolve({ data: null }),
   ])
 
-  // Build feed posts — recommended: score by recency × engagement × style match, top 20 of 60
   const recommendedPosts = ((recResult.data ?? []) as Post[])
     .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))
-    .sort((a, b) => scorePost(b, profile.style_id) - scorePost(a, profile.style_id))
-    .slice(0, 20)
 
   const followingPosts = ((followResult.data ?? []) as Post[])
     .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))
