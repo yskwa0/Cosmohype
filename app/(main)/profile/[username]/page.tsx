@@ -161,7 +161,7 @@ export default async function ProfilePage({
           />
         ) : undefined}
       />
-      <div>
+      <div style={{ paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0px))' }}>
         <ProfileHeader
           profile={profile}
           postsCount={canViewPosts ? (posts?.length ?? 0) : 0}

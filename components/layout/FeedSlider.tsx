@@ -217,23 +217,41 @@ export function FeedSlider({
 
       if (target === 0) { clearFeedScroll(); signalReady(); return }
 
-      let cancelled = false
-      const attempt = () => {
-        if (cancelled) return
-        const panel = [p0.current, p1.current][panelIdx]
-        if (!panel) { requestAnimationFrame(attempt); return }
+      const panel = ([p0.current, p1.current] as const)[panelIdx] ?? null
+
+      // Immediate attempt — works if content is already tall enough
+      if (panel) {
         panel.scrollTop = target
-        if (Math.abs(panel.scrollTop - target) > 5) {
-          requestAnimationFrame(attempt)
-        } else {
+        if (Math.abs(panel.scrollTop - target) <= 5) {
           clearFeedScroll()
           scrollPositions.current[panelIdx] = panel.scrollTop
           signalReady()
+          return
         }
       }
-      attempt()
-      const tid = setTimeout(() => { cancelled = true; clearFeedScroll(); signalReady() }, 2000)
-      return () => { cancelled = true; clearTimeout(tid) }
+
+      // Content not tall enough yet — re-attempt each time images load and expand it
+      let done = false
+      function finish() {
+        if (done) return
+        done = true
+        ro.disconnect()
+        clearTimeout(tid)
+        clearFeedScroll()
+        if (panel) scrollPositions.current[panelIdx] = panel.scrollTop
+        signalReady()
+      }
+
+      const ro = new ResizeObserver(() => {
+        if (!panel || done) return
+        panel.scrollTop = target
+        if (Math.abs(panel.scrollTop - target) <= 5) finish()
+      })
+      const child = panel?.firstElementChild
+      if (child) ro.observe(child)
+
+      const tid = setTimeout(finish, 4000)
+      return () => { done = true; ro.disconnect(); clearTimeout(tid) }
     }
 
     const cleanup = applyRestore()

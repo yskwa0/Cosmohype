@@ -42,10 +42,10 @@ export function SpringCard({ href, gradient, dots, label, description, infoButto
           userSelect: 'none',
           WebkitUserSelect: 'none',
           WebkitTapHighlightColor: 'transparent',
-          transform: pressed ? 'scale(0.88)' : 'scale(1)',
+          transform: pressed ? 'scale(0.95)' : 'scale(1)',
           transition: pressed
             ? 'transform 80ms ease-in'
-            : 'transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            : 'transform 300ms cubic-bezier(0.25, 1, 0.5, 1)',
         }}
       >
         <div
