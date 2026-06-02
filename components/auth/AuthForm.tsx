@@ -25,7 +25,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}/api/auth/callback` },
+          options: {
+            emailRedirectTo:
+              /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+                ? `${window.location.origin}/api/auth/callback`
+                : 'https://cosmohype.jp/api/auth/callback',
+          },
         })
         if (error) throw error
         setMessage('確認メールを送信しました。\nメール内のリンクを開くとSafariが表示されます。\n確認が完了したら、Cosmohypeアプリに戻って同じメールアドレスでログインしてください。')

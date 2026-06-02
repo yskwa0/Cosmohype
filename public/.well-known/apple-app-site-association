@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "S77R9Q2CG3.jp.cosmohype.app"
+        ],
+        "components": [
+          {
+            "/": "/api/auth/callback*",
+            "comment": "Open auth callback links in the Cosmohype iOS app"
+          },
+          {
+            "/": "/api/auth/confirm*",
+            "comment": "Open email confirmation links in the Cosmohype iOS app"
+          }
+        ]
+      }
+    ]
+  }
+}
