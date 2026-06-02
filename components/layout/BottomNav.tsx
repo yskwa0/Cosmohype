@@ -59,7 +59,6 @@ const navItems = [
 export function BottomNav() {
   const pathname = usePathname()
   const router = useRouter()
-  const [pressedLabel, setPressedLabel] = useState<string | null>(null)
   // Tracks the tapped href immediately so active state updates before pathname changes
   const [pendingHref, setPendingHref] = useState<string | null>(null)
 
@@ -79,29 +78,19 @@ export function BottomNav() {
         {navItems.map(({ href, label, icon }) => {
           const active = effectivePath === href || (href !== '/post/new' && effectivePath.startsWith(href))
           const isPost = href === '/post/new'
-          const pressed = pressedLabel === label
           return (
             <Link
               key={label}
               href={href}
               prefetch={true}
               className={cn('flex flex-col items-center gap-1 min-w-[56px]')}
-              style={{
-                ...(isPost ? {} : { color: active ? 'var(--purple)' : 'var(--text-muted)' }),
-                transform: pressed ? 'scale(0.82)' : 'scale(1)',
-                transition: pressed
-                  ? 'transform 60ms ease-in'
-                  : 'transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-              }}
+              style={isPost ? {} : { color: active ? 'var(--purple)' : 'var(--text-muted)' }}
               aria-label={label}
               onPointerDown={() => {
-                setPressedLabel(label)
                 // Show active state immediately on tap
                 if (!isPost) setPendingHref(href)
               }}
-              onPointerUp={() => setPressedLabel(null)}
-              onPointerLeave={() => setPressedLabel(null)}
-              onPointerCancel={() => { setPressedLabel(null); setPendingHref(null) }}
+              onPointerCancel={() => { setPendingHref(null) }}
               onClick={href === '/feed'
                 ? () => {
                     clearFeedScroll()
