@@ -348,6 +348,10 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
         <p className="text-sm text-red-500 rounded-xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.1)' }}>{errors.submit}</p>
       )}
 
+      <p className="text-xs text-center leading-relaxed px-2" style={{ color: 'var(--text-muted)' }}>
+        コーデ・服・靴・バッグ・アクセサリーなど、<br />ファッションが主役の投稿をおすすめしています。
+      </p>
+
       <Button type="submit" loading={loading} fullWidth className="h-12">
         投稿する
       </Button>
