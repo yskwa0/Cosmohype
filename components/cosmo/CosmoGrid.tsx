@@ -106,9 +106,9 @@ export function CosmoGrid({ posts }: { posts: GridPost[] }) {
         className="rounded-2xl p-8 flex flex-col items-center gap-2"
         style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
       >
-        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>まだ投稿がありません</p>
+        <p className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>まだスタイルがありません</p>
         <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-          STYLE IDを設定して投稿すると<br />ここに表示されます
+          STYLE IDを設定してスタイルを残すと<br />ここに表示されます
         </p>
       </div>
     )

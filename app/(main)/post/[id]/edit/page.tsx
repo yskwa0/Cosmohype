@@ -30,7 +30,7 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <TopBar title="投稿を編集" left={<BackButton />} />
+      <TopBar title="スタイルを編集" left={<BackButton />} />
       <div className="pt-4">
         <PostEditForm
           postId={id}

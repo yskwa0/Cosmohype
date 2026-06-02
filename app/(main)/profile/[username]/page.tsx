@@ -195,11 +195,11 @@ export default async function ProfilePage({
                 </svg>
               </div>
               <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>このアカウントは非公開アカウントです</p>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>フォローすると投稿を見られます</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>フォローするとスタイルを見られます</p>
             </div>
           ) : (posts?.length ?? 0) === 0 ? (
             <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
-              まだ投稿がありません
+              まだスタイルがありません
             </div>
           ) : (
             <ProfilePostGrid

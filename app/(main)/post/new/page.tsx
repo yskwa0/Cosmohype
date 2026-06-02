@@ -30,7 +30,7 @@ export default async function NewPostPage({
 
   const title = (
     <>
-      新しいコーデを投稿
+      今日のスタイルを残す
       {profile.style_id && (
         <StyleAlien styleId={profile.style_id as StyleId} size={22} />
       )}

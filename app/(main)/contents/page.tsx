@@ -88,7 +88,7 @@ export default function ContentsPage() {
             gradient="linear-gradient(145deg, #1C0030 0%, #7C1D6F 50%, #EC4899 100%)"
             dots={DOTS_A}
             label="HYPE"
-            description="テーマ別コーデをみんなで投稿"
+            description="テーマ別コーデをみんなで残す"
             infoButton={<HypeInfoModal />}
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>

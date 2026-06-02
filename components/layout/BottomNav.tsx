@@ -27,7 +27,7 @@ const navItems = [
   },
   {
     href: '/post/new',
-    label: '投稿',
+    label: '記録',
     icon: () => (
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center -mt-5"
         style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>

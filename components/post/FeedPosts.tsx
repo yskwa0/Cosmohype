@@ -145,7 +145,7 @@ export function FeedPosts({
 
       {!hasMore && !isLoading && (
         <p className="text-center text-xs py-6" style={{ color: 'var(--text-muted)' }}>
-          すべての投稿を表示しました
+          すべてのスタイルを表示しました
         </p>
       )}
     </div>
@@ -177,8 +177,8 @@ function EmptyFeed() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
         </svg>
       </div>
-      <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--text)' }}>まだ投稿がありません</h2>
-      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>最初のコーデを投稿してみましょう</p>
+      <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--text)' }}>まだスタイルがありません</h2>
+      <p className="text-sm" style={{ color: 'var(--text-muted)' }}>最初のコーデを残してみましょう</p>
     </div>
   )
 }

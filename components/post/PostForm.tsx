@@ -133,7 +133,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
       router.refresh()
     } catch (err) {
       console.error(err)
-      setErrors({ submit: '投稿に失敗しました。もう一度お試しください。' })
+      setErrors({ submit: 'スタイルの保存に失敗しました。もう一度お試しください。' })
     } finally {
       setLoading(false)
     }
@@ -349,11 +349,11 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
       )}
 
       <p className="text-xs text-center leading-relaxed px-2" style={{ color: 'var(--text-muted)' }}>
-        コーデ・服・靴・バッグ・アクセサリーなど、<br />ファッションが主役の投稿をおすすめしています。
+        コーデ・服・靴・バッグ・アクセサリーなど、<br />ファッションが主役のスタイルを残しましょう。
       </p>
 
       <Button type="submit" loading={loading} fullWidth className="h-12">
-        投稿する
+        スタイルを残す
       </Button>
     </form>
   )
