@@ -1,6 +1,5 @@
 'use client'
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -13,7 +12,6 @@ const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_SIZE_MB = 10
 
 export function ProfileSetupForm({ userId }: { userId: string }) {
-  const router = useRouter()
   const supabase = createClient()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -68,8 +66,9 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {}
-    if (!username.trim()) newErrors.username = 'ユーザーネームは必須です'
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
+    if (!username.trim()) {
+      newErrors.username = 'ユーザーネームは必須です'
+    } else if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
       newErrors.username = '3〜30文字の英数字・アンダースコアのみ使用できます'
     }
     setErrors(newErrors)
@@ -109,16 +108,16 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
       if (error) {
         if (error.code === '23505') {
           setErrors({ username: 'このユーザーネームは既に使われています' })
+          setLoading(false)
           return
         }
         throw error
       }
 
-      router.push('/feed')
+      window.location.replace('/feed')
     } catch (err) {
       console.error(err)
       setErrors({ submit: 'エラーが発生しました。もう一度お試しください。' })
-    } finally {
       setLoading(false)
     }
   }
