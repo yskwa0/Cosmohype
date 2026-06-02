@@ -30,6 +30,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
     initialFollowing ? 'following' : initialPending ? 'pending' : 'not_following'
   )
   const [followersCount, setFollowersCount] = useState(profile.followers_count)
+  const [followingCount, setFollowingCount] = useState(profile.following_count)
   const [isFollowedBy, setIsFollowedBy] = useState(initialIsFollowedBy)
   const [loading, setLoading] = useState(false)
   const [editPressing, setEditPressing] = useState(false)
@@ -66,6 +67,10 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
     if (!currentUserId) return
     setLoading(true)
     setShowUnfollowModal(false)
+    // Optimistic: update UI immediately before awaiting DB
+    setFollowState('not_following')
+    setFollowersCount(c => c - 1)
+    if (alsoRemoveFollower) setIsFollowedBy(false)
 
     await supabase.from('follows').delete()
       .eq('follower_id', currentUserId)
@@ -73,11 +78,8 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
 
     if (alsoRemoveFollower) {
       await supabase.rpc('remove_follower', { p_follower_id: profile.id })
-      setIsFollowedBy(false)
     }
 
-    setFollowState('not_following')
-    setFollowersCount(c => c - 1)
     setLoading(false)
     router.refresh()
   }
@@ -151,7 +153,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>フォロワー</span>
         </Link>
         <Link href={`/profile/${profile.username}/following`} className="flex flex-col items-center active:opacity-70">
-          <span className="text-base font-bold" style={{ color: 'var(--text)' }}>{profile.following_count}</span>
+          <span className="text-base font-bold" style={{ color: 'var(--text)' }}>{followingCount}</span>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>フォロー</span>
         </Link>
       </div>

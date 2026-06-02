@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { StarField } from '@/components/ui/StarField'
 import { EdgeSwipeBack } from '@/components/ui/EdgeSwipeBack'
@@ -15,7 +16,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       .select('theme')
       .eq('id', user.id)
       .single()
-    if (profile?.theme) theme = profile.theme
+    if (!profile) redirect('/profile/setup')
+    if (profile.theme) theme = profile.theme
   }
 
   const themeClass = theme !== 'cosmic-black' ? `theme-${theme}` : ''

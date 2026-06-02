@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
 import type { Profile } from '@/types/database'
@@ -15,6 +16,7 @@ export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: 
   const [followingIds, setFollowingIds] = useState(() => new Set(initialFollowingIds))
   const [loadingIds, setLoadingIds] = useState(() => new Set<string>())
   const supabase = createClient()
+  const router = useRouter()
 
   async function toggleFollow(userId: string) {
     if (loadingIds.has(userId)) return
@@ -35,6 +37,7 @@ export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: 
     }
 
     setLoadingIds(prev => { const next = new Set(prev); next.delete(userId); return next })
+    router.refresh()
   }
 
   return (
