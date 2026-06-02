@@ -52,8 +52,10 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
 
   // Phase 2: parallel — feed posts and DM details
   const buildRecQ = () => {
+    // 自分・フォロー中・ブロック済みを除外して「未知のユーザー」だけ表示
+    const excludeIds = [user.id, ...blockedIds, ...followingIds]
     let q = supabase.from('posts').select(`*, profiles!posts_user_id_fkey(*), post_images(*)`).eq('is_archived', false).eq('is_hidden', false)
-    if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
+    if (excludeIds.length > 0) q = q.not('user_id', 'in', `(${excludeIds.join(',')})`)
     return q.order('created_at', { ascending: false }).limit(20)
   }
   const buildFollowQ = () => {
@@ -77,7 +79,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   ])
 
   const recommendedPosts = ((recResult.data ?? []) as Post[])
-    .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))
+    .filter(p => !p.profiles?.is_private)
 
   const followingPosts = ((followResult.data ?? []) as Post[])
     .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIds.has(p.user_id))

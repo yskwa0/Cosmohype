@@ -51,24 +51,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ posts, likedIds, savedIds, hasMore })
   }
 
-  // recommended tab — keep created_at desc order from the DB (stable, unaffected by likes/saves)
+  // recommended tab — 自分・フォロー中・ブロック済みを除外して「未知のユーザー」だけ表示
   const { data: followsData } = await supabase
     .from('follows').select('following_id').eq('follower_id', user.id)
-  const followingIdsSet = new Set((followsData ?? []).map(f => f.following_id))
+  const followingIds = (followsData ?? []).map(f => f.following_id)
 
+  const excludeIds = [user.id, ...blockedIds, ...followingIds]
   let q = supabase
     .from('posts')
     .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
     .eq('is_archived', false)
     .eq('is_hidden', false)
-  if (blockedIds.length > 0) q = q.not('user_id', 'in', `(${blockedIds.join(',')})`)
+  if (excludeIds.length > 0) q = q.not('user_id', 'in', `(${excludeIds.join(',')})`)
   const { data } = await q.lt('created_at', cursor).order('created_at', { ascending: false }).limit(LIMIT + 1)
 
   const all = (data ?? []) as Post[]
   const hasMore = all.length > LIMIT
   const posts = all
     .slice(0, LIMIT)
-    .filter(p => !p.profiles?.is_private || p.user_id === user.id || followingIdsSet.has(p.user_id))
+    .filter(p => !p.profiles?.is_private)
 
   return NextResponse.json({ posts, likedIds, savedIds, hasMore })
 }
