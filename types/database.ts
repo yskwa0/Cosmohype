@@ -114,6 +114,13 @@ export type NotificationWithActor = Notification & {
   post: { id: string; post_images: Pick<PostImage, 'url' | 'display_order'>[] } | null
 }
 
+export type HypeParticipation = {
+  id: string
+  user_id: string
+  hype_theme: string
+  created_at: string
+}
+
 export type Block = {
   id: string
   blocker_id: string
@@ -748,6 +755,35 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "username_changes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      hype_participations: {
+        Row: {
+          id: string
+          user_id: string
+          hype_theme: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          hype_theme: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          hype_theme?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hype_participations_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

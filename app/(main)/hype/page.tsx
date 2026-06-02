@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { createClient } from '@/lib/supabase/server'
 import { HypeRankCard } from '@/components/hype/HypeRankCard'
 import type { RankEntry } from '@/components/hype/HypeRankCard'
+import { HypeParticipateButtons } from '@/components/hype/HypeParticipateButtons'
 import { getTodayHypeTheme } from '@/lib/hypeThemes'
 import { PageTracker } from '@/components/analytics/PageTracker'
 
@@ -30,14 +30,29 @@ export default async function HypePage() {
 
   const postIds = (rawPosts ?? []).map(p => p.id)
 
-  const [{ data: allLikes }, { data: likedData }] = await Promise.all([
+  const [
+    { data: allLikes },
+    { data: likedData },
+    participationResult,
+    photoResult,
+    myParticipationResult,
+  ] = await Promise.all([
     postIds.length > 0
       ? supabase.from('likes').select('post_id').in('post_id', postIds)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [] as { post_id: string }[] }),
     user
       ? supabase.from('likes').select('post_id').eq('user_id', user.id)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [] as { post_id: string }[] }),
+    supabase.from('hype_participations').select('id', { count: 'exact', head: true }).eq('hype_theme', THEME_SLUG),
+    supabase.from('posts').select('id', { count: 'exact', head: true }).eq('hype_theme', THEME_SLUG).eq('is_hidden', false).eq('is_archived', false),
+    user
+      ? supabase.from('hype_participations').select('id').eq('user_id', user.id).eq('hype_theme', THEME_SLUG).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
+
+  const participationCount = participationResult.count ?? 0
+  const photoCount = photoResult.count ?? 0
+  const initialParticipated = !!myParticipationResult.data
 
   // likesテーブルから正確な件数を集計
   const likeCountMap = (allLikes ?? []).reduce<Map<string, number>>((map, like) => {
@@ -66,8 +81,6 @@ export default async function HypePage() {
     })
     .sort((a, b) => b.likes - a.likes)
     .map((entry, i) => ({ ...entry, rank: i + 1 }))
-
-  const totalLikes = ranking.reduce((sum, r) => sum + r.likes, 0)
 
   return (
     <div className="feed-animate-in">
@@ -116,31 +129,13 @@ export default async function HypePage() {
                 今日のテーマに参加したコーデを、いいね数順でチェックしよう
               </p>
 
-              <div className="flex items-center gap-3 mb-5">
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  {ranking.length}件参加中
-                </span>
-                <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
-                  計{totalLikes}いいね
-                </span>
-              </div>
-
-              <Link
-                href={`/post/new?hype=${THEME_SLUG}`}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-opacity active:opacity-70"
-                style={{
-                  background: 'rgba(255,255,255,0.18)',
-                  backdropFilter: 'blur(8px)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.28)',
-                }}
-              >
-                このテーマで投稿する
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-              </Link>
+              <HypeParticipateButtons
+                themeSlug={THEME_SLUG}
+                userId={user?.id ?? null}
+                initialParticipated={initialParticipated}
+                initialParticipationCount={participationCount}
+                photoCount={photoCount}
+              />
             </div>
           </div>
         </div>

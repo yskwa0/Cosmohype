@@ -128,6 +128,15 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
         if (itemsError) throw itemsError
       }
 
+      if (hypeTheme) {
+        const { error: participationError } = await supabase
+          .from('hype_participations')
+          .insert({ user_id: userId, hype_theme: hypeTheme })
+        if (participationError && participationError.code !== '23505') {
+          console.error('hype_participations insert failed:', participationError)
+        }
+      }
+
       track.postCreateComplete(post.id)
       router.push('/feed')
       router.refresh()
