@@ -24,9 +24,6 @@ export function useEdgeSwipeBack() {
     function getMain() {
       return document.querySelector('main') as HTMLElement | null
     }
-    function getNav() {
-      return document.querySelector('nav') as HTMLElement | null
-    }
 
     function onTouchStart(e: TouchEvent) {
       // Feed page has its own horizontal swipe (FeedSlider) — skip entirely
@@ -117,7 +114,6 @@ export function useEdgeSwipeBack() {
 
     function triggerBack() {
       const mainEl = getMain()
-      const navEl = getNav()
       const DURATION = 180
       const easing = 'cubic-bezier(0.4, 0, 0.6, 1)'
 
@@ -125,11 +121,6 @@ export function useEdgeSwipeBack() {
         mainEl.style.transition = `transform ${DURATION}ms ${easing}, opacity ${DURATION}ms ${easing}`
         mainEl.style.transform = 'translateX(100vw)'
         mainEl.style.opacity = '0'
-      }
-      if (navEl) {
-        navEl.style.transition = `transform ${DURATION}ms ${easing}, opacity ${DURATION}ms ${easing}`
-        navEl.style.transform = 'translateX(100vw)'
-        navEl.style.opacity = '0'
       }
 
       setTimeout(() => {
@@ -143,7 +134,6 @@ export function useEdgeSwipeBack() {
 
         function removeOverlay() {
           if (mainEl) { mainEl.style.transition = 'none'; mainEl.style.transform = ''; mainEl.style.opacity = '' }
-          if (navEl)  { navEl.style.transition  = 'none'; navEl.style.transform  = ''; navEl.style.opacity  = '' }
           // Synchronous reflow: forces Safari/WebKit to recalculate sticky positions
           // (e.g. TopBar) before the overlay is removed. Without this, WebKit retains
           // a stale sticky offset from when main had a CSS transform, causing the TopBar
@@ -152,7 +142,6 @@ export function useEdgeSwipeBack() {
           overlay.remove()
           requestAnimationFrame(() => {
             if (mainEl) mainEl.style.transition = ''
-            if (navEl)  navEl.style.transition  = ''
           })
         }
 

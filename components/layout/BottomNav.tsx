@@ -73,7 +73,7 @@ export function BottomNav() {
   const effectivePath = pendingHref ?? pathname
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl select-none" style={{ background: 'var(--nav-bg)', WebkitUserSelect: 'none' }}>
+    <nav className="fixed bottom-0 left-0 right-0 z-50 backdrop-blur-xl select-none" style={{ background: 'var(--nav-bg)', WebkitUserSelect: 'none', transform: 'translate3d(0,0,0)', willChange: 'transform' }}>
       <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, var(--border), transparent)' }} />
       <div className="max-w-md mx-auto flex items-end justify-around px-6 pt-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
         {navItems.map(({ href, label, icon }) => {
