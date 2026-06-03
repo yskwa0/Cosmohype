@@ -4,12 +4,15 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 
 interface Requester {
   id: string
   username: string
   display_name: string | null
   avatar_url: string | null
+  is_official?: boolean
+  is_cosmohype_creator?: boolean
 }
 
 interface Props {
@@ -59,9 +62,12 @@ export function FollowRequestItem({ requestId, requester }: Props) {
         <Link href={`/profile/${requester.username}?from=follow-activity`} className="flex items-center gap-3 flex-1 min-w-0 active:opacity-70">
           <Avatar src={requester.avatar_url} username={requester.username} size="md" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
-              {requester.display_name ?? requester.username}
-            </p>
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                {requester.display_name ?? requester.username}
+              </span>
+              <AccountBadges isOfficial={requester.is_official} isCosmohypeCreator={requester.is_cosmohype_creator} />
+            </div>
             <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
               @{requester.username}
             </p>

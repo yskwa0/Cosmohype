@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import type { Profile } from '@/types/database'
 
 interface Props {
@@ -60,9 +61,12 @@ export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: 
               >
                 <Avatar src={u.avatar_url} username={u.username} size="md" />
                 <div className="min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--text)' }}>
-                    {u.display_name ?? u.username}
-                  </p>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="font-semibold text-sm truncate" style={{ color: 'var(--text)' }}>
+                      {u.display_name ?? u.username}
+                    </span>
+                    <AccountBadges isOfficial={u.is_official} isCosmohypeCreator={u.is_cosmohype_creator} />
+                  </div>
                   <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                     @{u.username}
                   </p>

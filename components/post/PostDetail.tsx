@@ -7,6 +7,7 @@ import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
 import { createClient } from '@/lib/supabase/client'
 import { usePostInteraction } from '@/hooks/usePostInteraction'
 import { formatRelativeTime } from '@/lib/utils'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
 import { ImageCarousel } from './ImageCarousel'
@@ -118,6 +119,7 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
                 {profile?.display_name ?? profile?.username}
               </span>
             </Link>
+            <AccountBadges isOfficial={profile?.is_official} isCosmohypeCreator={profile?.is_cosmohype_creator} />
             {profile?.style_id && (
               <StyleIdBadge styleId={profile.style_id} />
             )}

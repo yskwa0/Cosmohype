@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import { ChatView } from '@/components/dm/ChatView'
 import { DmChatMenu } from '@/components/dm/DmChatMenu'
 import type { MessageRow } from '@/components/dm/ChatView'
@@ -10,7 +11,7 @@ import type { Profile } from '@/types/database'
 
 type OtherProfileRow = {
   user_id: string
-  profiles: Pick<Profile, 'username' | 'display_name' | 'avatar_url'> | null
+  profiles: Pick<Profile, 'username' | 'display_name' | 'avatar_url' | 'is_official' | 'is_cosmohype_creator'> | null
 }
 
 export default async function ChatPage({
@@ -36,7 +37,7 @@ export default async function ChatPage({
   const [{ data: otherRaw }, { data: messagesRaw }] = await Promise.all([
     supabase
       .from('conversation_participants')
-      .select('user_id, profiles(username, display_name, avatar_url)')
+      .select('user_id, profiles(username, display_name, avatar_url, is_official, is_cosmohype_creator)')
       .eq('conversation_id', conversationId)
       .neq('user_id', user.id)
       .limit(1)
@@ -79,6 +80,7 @@ export default async function ChatPage({
                   size="xs"
                 />
                 <span>{otherUser.display_name ?? otherUser.username}</span>
+                <AccountBadges isOfficial={otherUser.is_official} isCosmohypeCreator={otherUser.is_cosmohype_creator} />
               </div>
             ) : (
               'メッセージ'

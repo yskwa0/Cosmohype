@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import { formatRelativeTime } from '@/lib/utils'
 import { DmPageShell } from '@/components/layout/DmPageShell'
 
@@ -12,6 +13,8 @@ type OtherParticipantRow = {
     username: string
     display_name: string | null
     avatar_url: string | null
+    is_official: boolean | null
+    is_cosmohype_creator: boolean | null
   } | null
 }
 
@@ -45,7 +48,7 @@ export default async function DmPage() {
   const [{ data: othersRaw }, { data: messagesRaw }, { data: conversationsRaw }, { data: unreadRaw }] = await Promise.all([
     supabase
       .from('conversation_participants')
-      .select('conversation_id, profiles(username, display_name, avatar_url)')
+      .select('conversation_id, profiles(username, display_name, avatar_url, is_official, is_cosmohype_creator)')
       .in('conversation_id', conversationIds)
       .neq('user_id', user.id),
     supabase
@@ -113,12 +116,15 @@ export default async function DmPage() {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span
-                      className="text-sm font-semibold truncate"
-                      style={{ color: 'var(--text)' }}
-                    >
-                      {conv.otherUser?.display_name ?? conv.otherUser?.username}
-                    </span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span
+                        className="text-sm font-semibold truncate"
+                        style={{ color: 'var(--text)' }}
+                      >
+                        {conv.otherUser?.display_name ?? conv.otherUser?.username}
+                      </span>
+                      <AccountBadges isOfficial={conv.otherUser?.is_official ?? undefined} isCosmohypeCreator={conv.otherUser?.is_cosmohype_creator ?? undefined} />
+                    </div>
                     {conv.latestMessage && (
                       <span
                         className="text-xs flex-shrink-0"

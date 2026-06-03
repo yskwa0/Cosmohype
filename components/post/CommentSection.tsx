@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Comment } from '@/types/database'
 
@@ -61,11 +62,14 @@ export function CommentSection({ postId, userId, initialComments }: Props) {
             </Link>
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-1.5">
-                <Link href={`/profile/${comment.profiles?.username ?? ''}`}>
-                  <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
-                    {comment.profiles?.display_name ?? comment.profiles?.username}
-                  </span>
-                </Link>
+                <div className="flex items-center gap-1">
+                  <Link href={`/profile/${comment.profiles?.username ?? ''}`}>
+                    <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
+                      {comment.profiles?.display_name ?? comment.profiles?.username}
+                    </span>
+                  </Link>
+                  <AccountBadges isOfficial={comment.profiles?.is_official} isCosmohypeCreator={comment.profiles?.is_cosmohype_creator} />
+                </div>
                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   {formatRelativeTime(comment.created_at)}
                 </span>

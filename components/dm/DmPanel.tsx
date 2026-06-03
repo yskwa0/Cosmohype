@@ -1,12 +1,13 @@
 'use client'
 import Link from 'next/link'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import { formatRelativeTime } from '@/lib/utils'
 import { saveFeedScroll, armFeedScrollRestore } from '@/lib/feedScrollStore'
 
 export type DmConversation = {
   id: string
-  otherUser: { username: string; display_name: string | null; avatar_url: string | null } | null
+  otherUser: { username: string; display_name: string | null; avatar_url: string | null; is_official?: boolean | null; is_cosmohype_creator?: boolean | null } | null
   latestMessage: { body: string; created_at: string } | null
   unread: number
 }
@@ -36,9 +37,12 @@ export function DmPanel({ conversations }: { conversations: DmConversation[] }) 
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
-                      {conv.otherUser?.display_name ?? conv.otherUser?.username}
-                    </span>
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                        {conv.otherUser?.display_name ?? conv.otherUser?.username}
+                      </span>
+                      <AccountBadges isOfficial={conv.otherUser?.is_official ?? undefined} isCosmohypeCreator={conv.otherUser?.is_cosmohype_creator ?? undefined} />
+                    </div>
                     {conv.latestMessage && (
                       <span className="text-xs flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
                         {formatRelativeTime(conv.latestMessage.created_at)}

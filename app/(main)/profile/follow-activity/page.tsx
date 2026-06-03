@@ -10,7 +10,7 @@ import { MarkActivityRead } from '@/components/profile/MarkActivityRead'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Profile } from '@/types/database'
 
-type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
+type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_official' | 'is_cosmohype_creator'>
 type NotifPost = { id: string; post_images: { url: string; display_order: number }[] } | null
 
 type RawNotification = {
@@ -68,7 +68,7 @@ export default async function FollowActivityPage() {
     if (requesterIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url')
+        .select('id, username, display_name, avatar_url, is_official, is_cosmohype_creator')
         .in('id', requesterIds)
       for (const p of profiles ?? []) {
         requesterProfiles[p.id] = p as ActorProfile

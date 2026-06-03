@@ -68,7 +68,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     buildRecQ(),
     validFollowingIds.length > 0 ? buildFollowQ() : Promise.resolve({ data: null }),
     conversationIds.length > 0
-      ? supabase.from('conversation_participants').select('conversation_id, profiles(username, display_name, avatar_url)').in('conversation_id', conversationIds).neq('user_id', user.id)
+      ? supabase.from('conversation_participants').select('conversation_id, profiles(username, display_name, avatar_url, is_official, is_cosmohype_creator)').in('conversation_id', conversationIds).neq('user_id', user.id)
       : Promise.resolve({ data: null }),
     conversationIds.length > 0
       ? supabase.from('messages').select('conversation_id, body, created_at').in('conversation_id', conversationIds).order('created_at', { ascending: false }).limit(Math.max(conversationIds.length * 5, 20))

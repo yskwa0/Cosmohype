@@ -4,9 +4,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import type { Profile } from '@/types/database'
 
-type ListUser = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_private'>
+type ListUser = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_private' | 'is_official' | 'is_cosmohype_creator'>
 
 interface Props {
   initialFollowers: ListUser[]
@@ -49,9 +50,12 @@ export function OwnerFollowersList({ initialFollowers, currentUserId, profileUse
             >
               <Avatar src={user.avatar_url} username={user.username} size="md" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
-                  {user.display_name ?? user.username}
-                </p>
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                    {user.display_name ?? user.username}
+                  </span>
+                  <AccountBadges isOfficial={user.is_official} isCosmohypeCreator={user.is_cosmohype_creator} />
+                </div>
                 <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                   @{user.username}
                 </p>

@@ -4,11 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { Avatar } from '@/components/ui/Avatar'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import { FollowListButton } from '@/components/profile/FollowListButton'
 import { OwnerFollowersList } from '@/components/profile/OwnerFollowersList'
 import type { Profile } from '@/types/database'
 
-type ListUser = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_private'>
+type ListUser = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_private' | 'is_official' | 'is_cosmohype_creator'>
 
 export default async function FollowersPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params
@@ -54,7 +55,7 @@ export default async function FollowersPage({ params }: { params: Promise<{ user
       const [profilesRes, myFollowsRes, myPendingRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, username, display_name, avatar_url, is_private')
+          .select('id, username, display_name, avatar_url, is_private, is_official, is_cosmohype_creator')
           .in('id', ids),
         currentUser
           ? supabase
@@ -121,9 +122,12 @@ export default async function FollowersPage({ params }: { params: Promise<{ user
                   <Link href={`/profile/${user.username}?from=followers&ref=${username}`} className="flex items-center gap-3 flex-1 min-w-0 active:opacity-70">
                     <Avatar src={user.avatar_url} username={user.username} size="md" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
-                        {user.display_name ?? user.username}
-                      </p>
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+                          {user.display_name ?? user.username}
+                        </span>
+                        <AccountBadges isOfficial={user.is_official} isCosmohypeCreator={user.is_cosmohype_creator} />
+                      </div>
                       <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
                         @{user.username}
                       </p>
