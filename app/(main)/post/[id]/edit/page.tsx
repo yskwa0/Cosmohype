@@ -12,7 +12,7 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: post }, { data: postItems }, { data: firstImage }] = await Promise.all([
+  const [{ data: post }, { data: postItems }, { data: postImages }] = await Promise.all([
     supabase
       .from('posts')
       .select('id, user_id, caption, tags, brand_tags, hype_theme, image_aspect_ratio')
@@ -25,11 +25,9 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
       .order('display_order', { ascending: true }),
     supabase
       .from('post_images')
-      .select('url')
+      .select('id, url, position_x, position_y')
       .eq('post_id', id)
-      .order('display_order', { ascending: true })
-      .limit(1)
-      .single(),
+      .order('display_order', { ascending: true }),
   ])
 
   if (!post) notFound()
@@ -46,7 +44,7 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
           initialBrandTags={post.brand_tags ?? []}
           initialHypeTheme={post.hype_theme ?? undefined}
           initialAspectRatio={(post.image_aspect_ratio as '1:1' | '4:5' | '16:9' | null) ?? null}
-          initialImageUrl={firstImage?.url ?? null}
+          initialImages={(postImages ?? []) as { id: string; url: string; position_x: number; position_y: number }[]}
           initialItems={(postItems ?? []) as PostItem[]}
         />
       </div>

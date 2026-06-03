@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -23,13 +23,26 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
   const [images, setImages] = useState<File[]>([])
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '16:9'>('4:5')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewUrls, setPreviewUrls] = useState<string[]>([])
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [imagePositions, setImagePositions] = useState<{ x: number; y: number }[]>([])
+  const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null)
+  const previewContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (images.length === 0) { setPreviewUrl(null); return }
-    const url = URL.createObjectURL(images[0])
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
+    if (images.length === 0) {
+      setPreviewUrls([])
+      setPreviewIndex(0)
+      return
+    }
+    const urls = images.map(f => URL.createObjectURL(f))
+    setPreviewUrls(urls)
+    setPreviewIndex(prev => Math.min(prev, images.length - 1))
+    return () => urls.forEach(u => URL.revokeObjectURL(u))
+  }, [images])
+
+  useEffect(() => {
+    setImagePositions(prev => images.map((_, i) => prev[i] ?? { x: 0.5, y: 0.5 }))
   }, [images])
   const [caption, setCaption] = useState('')
   const [tagInput, setTagInput] = useState('')
@@ -120,6 +133,8 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           post_id: post.id,
           url: data.publicUrl,
           display_order: i,
+          position_x: imagePositions[i]?.x ?? 0.5,
+          position_y: imagePositions[i]?.y ?? 0.5,
         })
       })
 
@@ -183,16 +198,84 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
       {images.length > 0 && (
         <div className="flex flex-col gap-3">
           {/* 比率プレビュー */}
-          {previewUrl && (
+          {previewUrls.length > 0 && (
             <div
+              ref={previewContainerRef}
               className="w-full overflow-hidden rounded-xl"
               style={{ position: 'relative', aspectRatio: aspectRatio.replace(':', '/') }}
             >
               <img
-                src={previewUrl}
-                alt="プレビュー"
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                src={previewUrls[previewIndex]}
+                alt={`プレビュー ${previewIndex + 1}`}
+                draggable={false}
+                style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: `${(imagePositions[previewIndex]?.x ?? 0.5) * 100}% ${(imagePositions[previewIndex]?.y ?? 0.5) * 100}%`,
+                  display: 'block',
+                  cursor: 'grab',
+                  touchAction: 'none',
+                }}
+                onPointerDown={e => {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  const pos = imagePositions[previewIndex] ?? { x: 0.5, y: 0.5 }
+                  dragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y }
+                }}
+                onPointerMove={e => {
+                  if (!dragRef.current || !previewContainerRef.current) return
+                  const { clientWidth: w, clientHeight: h } = previewContainerRef.current
+                  const dx = (e.clientX - dragRef.current.startX) / w
+                  const dy = (e.clientY - dragRef.current.startY) / h
+                  const newX = Math.max(0, Math.min(1, dragRef.current.startPosX - dx))
+                  const newY = Math.max(0, Math.min(1, dragRef.current.startPosY - dy))
+                  setImagePositions(prev => prev.map((p, i) => i === previewIndex ? { x: newX, y: newY } : p))
+                }}
+                onPointerUp={() => { dragRef.current = null }}
+                onPointerCancel={() => { dragRef.current = null }}
               />
+              {images.length > 1 && (
+                <>
+                  {previewIndex > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewIndex(i => i - 1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ background: 'rgba(0,0,0,0.55)' }}
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                  )}
+                  {previewIndex < images.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewIndex(i => i + 1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ background: 'rgba(0,0,0,0.55)' }}
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="white" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                  )}
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 pointer-events-none">
+                    {images.map((_, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          display: 'block',
+                          height: 5,
+                          width: i === previewIndex ? 18 : 5,
+                          borderRadius: 9999,
+                          background: i === previewIndex ? 'white' : 'rgba(255,255,255,0.5)',
+                          transition: 'width 180ms ease, background 180ms ease',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
           {/* 比率選択ボタン */}

@@ -120,7 +120,7 @@ export function ImageCarousel({
                   alt={alt}
                   fill
                   sizes={sizes}
-                  style={{ objectFit: 'cover' }}
+                  style={{ objectFit: 'cover', objectPosition: `${(img.position_x ?? 0.5) * 100}% ${(img.position_y ?? 0.5) * 100}%` }}
                   priority={priority && i === 0}
                   draggable={false}
                 />

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,13 @@ type ItemDraft = {
   item_name: string
   brand_name: string
   purchase_url: string
+}
+
+type EditImage = {
+  id: string
+  url: string
+  position_x: number
+  position_y: number
 }
 
 const EMPTY_DRAFT: ItemDraft = { item_name: '', brand_name: '', purchase_url: '' }
@@ -29,7 +36,7 @@ export function PostEditForm({
   initialBrandTags,
   initialHypeTheme,
   initialAspectRatio,
-  initialImageUrl,
+  initialImages,
   initialItems,
 }: {
   postId: string
@@ -38,7 +45,7 @@ export function PostEditForm({
   initialBrandTags: string[]
   initialHypeTheme?: string
   initialAspectRatio: '1:1' | '4:5' | '16:9' | null
-  initialImageUrl?: string | null
+  initialImages: EditImage[]
   initialItems: PostItem[]
 }) {
   const router = useRouter()
@@ -50,6 +57,13 @@ export function PostEditForm({
   const [brandInput, setBrandInput] = useState('')
   const [tags, setTags] = useState<string[]>(initialTags)
   const [brandTags, setBrandTags] = useState<string[]>(initialBrandTags)
+
+  const [editPositions, setEditPositions] = useState<{ x: number; y: number }[]>(
+    initialImages.map(img => ({ x: img.position_x, y: img.position_y }))
+  )
+  const [editPreviewIndex, setEditPreviewIndex] = useState(0)
+  const editDragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null)
+  const editPreviewContainerRef = useRef<HTMLDivElement>(null)
 
   const [items, setItems] = useState<ItemDraft[]>(initialItems.map(itemToDraft))
   const [draftOpen, setDraftOpen] = useState(false)
@@ -108,6 +122,23 @@ export function PostEditForm({
 
       if (postError) throw postError
 
+      // Update image positions
+      if (initialImages.length > 0) {
+        const results = await Promise.all(
+          initialImages.map((img, i) =>
+            supabase
+              .from('post_images')
+              .update({
+                position_x: editPositions[i]?.x ?? img.position_x,
+                position_y: editPositions[i]?.y ?? img.position_y,
+              })
+              .eq('id', img.id)
+          )
+        )
+        const posError = results.find(r => r.error)?.error
+        if (posError) throw posError
+      }
+
       // 既存 post_items を削除して再挿入
       const { error: deleteError } = await supabase
         .from('post_items')
@@ -157,17 +188,89 @@ export function PostEditForm({
       )}
 
       <div className="flex flex-col gap-3">
-        {/* 比率プレビュー */}
-        {initialImageUrl && aspectRatio && (
-          <div
-            className="w-full overflow-hidden rounded-xl"
-            style={{ position: 'relative', aspectRatio: aspectRatio.replace(':', '/') }}
-          >
-            <img
-              src={initialImageUrl}
-              alt="プレビュー"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
+        {/* 画像プレビュー（ドラッグで位置調整） */}
+        {initialImages.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div
+              ref={editPreviewContainerRef}
+              className="w-full overflow-hidden rounded-xl relative"
+              style={{ aspectRatio: (aspectRatio ?? '4:5').replace(':', '/') }}
+            >
+              <img
+                src={initialImages[editPreviewIndex].url}
+                alt={`画像 ${editPreviewIndex + 1}`}
+                draggable={false}
+                style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: `${(editPositions[editPreviewIndex]?.x ?? 0.5) * 100}% ${(editPositions[editPreviewIndex]?.y ?? 0.5) * 100}%`,
+                  display: 'block',
+                  cursor: 'grab',
+                  touchAction: 'none',
+                }}
+                onPointerDown={e => {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  const pos = editPositions[editPreviewIndex] ?? { x: 0.5, y: 0.5 }
+                  editDragRef.current = { startX: e.clientX, startY: e.clientY, startPosX: pos.x, startPosY: pos.y }
+                }}
+                onPointerMove={e => {
+                  if (!editDragRef.current || !editPreviewContainerRef.current) return
+                  const { clientWidth: w, clientHeight: h } = editPreviewContainerRef.current
+                  const dx = (e.clientX - editDragRef.current.startX) / w
+                  const dy = (e.clientY - editDragRef.current.startY) / h
+                  const newX = Math.max(0, Math.min(1, editDragRef.current.startPosX - dx))
+                  const newY = Math.max(0, Math.min(1, editDragRef.current.startPosY - dy))
+                  setEditPositions(prev => prev.map((p, i) => i === editPreviewIndex ? { x: newX, y: newY } : p))
+                }}
+                onPointerUp={() => { editDragRef.current = null }}
+                onPointerCancel={() => { editDragRef.current = null }}
+              />
+              {initialImages.length > 1 && (
+                <>
+                  {editPreviewIndex > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEditPreviewIndex(i => i - 1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                  )}
+                  {editPreviewIndex < initialImages.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setEditPreviewIndex(i => i + 1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/50 flex items-center justify-center"
+                    >
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
+                  )}
+                  <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {initialImages.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setEditPreviewIndex(i)}
+                        style={{
+                          display: 'block', height: 5,
+                          width: i === editPreviewIndex ? 18 : 5,
+                          borderRadius: 9999,
+                          background: i === editPreviewIndex ? 'white' : 'rgba(255,255,255,0.5)',
+                          transition: 'width 180ms ease',
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+              ドラッグして表示位置を調整できます
+            </p>
           </div>
         )}
         {/* 比率選択ボタン */}

@@ -230,7 +230,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
                   alt={post.caption ?? 'コーデ'}
                   fill
                   sizes="(max-width: 448px) 80vw, 360px"
-                  style={{ objectFit: 'cover' }}
+                  style={{ objectFit: 'cover', objectPosition: `${(images[currentImage].position_x ?? 0.5) * 100}% ${(images[currentImage].position_y ?? 0.5) * 100}%` }}
                   draggable={false}
                 />
               ) : (

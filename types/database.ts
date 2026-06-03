@@ -78,6 +78,8 @@ export type PostImage = {
   post_id: string
   url: string
   display_order: number
+  position_x: number
+  position_y: number
   created_at: string
 }
 
@@ -309,6 +311,8 @@ export type Database = {
           post_id: string
           url: string
           display_order: number
+          position_x: number
+          position_y: number
           created_at: string
         }
         Insert: {
@@ -316,6 +320,8 @@ export type Database = {
           post_id: string
           url: string
           display_order?: number
+          position_x?: number
+          position_y?: number
           created_at?: string
         }
         Update: {
@@ -323,6 +329,8 @@ export type Database = {
           post_id?: string
           url?: string
           display_order?: number
+          position_x?: number
+          position_y?: number
         }
         Relationships: [
           {
