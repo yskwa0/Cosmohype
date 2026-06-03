@@ -1,10 +1,16 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { AvatarCropper } from '@/components/ui/AvatarCropper'
+import { StyleAlien } from '@/components/style-id/StyleAlien'
+import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
+import type { StyleId } from '@/lib/style-id/types'
+
+const STYLE_ID_KEYS = Object.keys(STYLE_TYPES) as StyleId[]
+const PENDING_STYLE_KEY = 'cosmohype_pending_style_id'
 
 const STYLE_TAGS = ['ストリート', 'カジュアル', 'フェミニン', 'モード', 'ヴィンテージ', 'スポーツ', 'ナチュラル', 'ゴシック', 'ミリタリー', 'ワーク']
 
@@ -19,12 +25,20 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
   const [displayName, setDisplayName] = useState('')
   const [bio, setBio] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedStyleId, setSelectedStyleId] = useState<StyleId | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [cropperSrc, setCropperSrc] = useState<string | null>(null)
   const [cropperExiting, setCropperExiting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const stored = localStorage.getItem(PENDING_STYLE_KEY)
+    if (stored && STYLE_ID_KEYS.includes(stored as StyleId)) {
+      setSelectedStyleId(stored as StyleId)
+    }
+  }, [])
 
   function toggleTag(tag: string) {
     setSelectedTags(prev =>
@@ -103,6 +117,7 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
         bio: bio.trim() || null,
         avatar_url: avatarUrl,
         style_tags: selectedTags,
+        style_id: selectedStyleId ?? null,
       })
 
       if (error) {
@@ -114,6 +129,7 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
         throw error
       }
 
+      localStorage.removeItem(PENDING_STYLE_KEY)
       window.location.replace('/feed')
     } catch (err) {
       console.error(err)
@@ -219,6 +235,42 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
                   {tag}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* STYLE ID選択 */}
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>
+                STYLE ID <span className="text-xs font-normal" style={{ color: 'var(--hint-text)' }}>（任意）</span>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--hint-text)' }}>あなたのファッション系統を選んでください</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {STYLE_ID_KEYS.map(id => {
+                const type = STYLE_TYPES[id]
+                const isSelected = selectedStyleId === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSelectedStyleId(prev => prev === id ? null : id)}
+                    className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl transition-all active:scale-[0.97]"
+                    style={{
+                      border: isSelected ? '2px solid var(--purple)' : '2px solid var(--border)',
+                      background: isSelected ? 'var(--purple-dim)' : 'var(--bg-elevated)',
+                    }}
+                  >
+                    <StyleAlien styleId={id} size={52} />
+                    <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: isSelected ? 'var(--purple)' : 'var(--text-sub)' }}>
+                      {type.name}
+                    </span>
+                    <span className="text-[10px] text-center leading-tight" style={{ color: 'var(--text-muted)' }}>
+                      {type.subtitle}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 

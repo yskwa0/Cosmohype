@@ -38,7 +38,10 @@ export function AuthForm({ mode }: { mode: Mode }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
-        window.location.href = '/feed'
+        const params = new URLSearchParams(window.location.search)
+        const redirectTo = params.get('redirect')
+        const dest = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/feed'
+        window.location.href = dest
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -188,6 +191,30 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </>
           )}
         </p>
+
+        {/* STYLE ID診断サブ導線 */}
+        <Link
+          href="/style-id"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '3px',
+            marginTop: '16px',
+            padding: '12px 16px',
+            borderRadius: '14px',
+            border: '1px solid rgba(124,58,237,0.25)',
+            background: 'rgba(124,58,237,0.06)',
+            textDecoration: 'none',
+          }}
+        >
+          <span style={{ fontSize: '13px', fontWeight: 600, color: '#A855F7' }}>
+            まずはSTYLE ID診断を試す
+          </span>
+          <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.38)' }}>
+            登録前にあなたの系統をチェックできます
+          </span>
+        </Link>
 
         {mode === 'login' && (
           <p style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255,255,255,0.3)', marginTop: '20px' }}>

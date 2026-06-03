@@ -72,7 +72,7 @@ export default function OnboardingPage() {
     }
   }, [router])
 
-  function done(dest: '/register' | '/') {
+  function done(dest: string) {
     localStorage.setItem(STORAGE_KEY, '1')
     router.push(dest)
   }
@@ -187,6 +187,18 @@ export default function OnboardingPage() {
                 style={{ background: 'linear-gradient(to right, #7C3AED, #EC4899)', color: '#fff' }}
               >
                 はじめる
+              </button>
+              <button
+                onClick={e => { e.stopPropagation(); done('/style-id') }}
+                className="w-full h-12 rounded-2xl text-sm font-semibold transition-opacity active:opacity-80 flex flex-col items-center justify-center gap-0.5"
+                style={{
+                  background: 'rgba(124,58,237,0.12)',
+                  border: '1px solid rgba(124,58,237,0.3)',
+                  color: '#A855F7',
+                }}
+              >
+                <span>STYLE ID診断をはじめる</span>
+                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>登録前に自分の系統をチェック</span>
               </button>
               <button
                 onClick={e => { e.stopPropagation(); done('/') }}

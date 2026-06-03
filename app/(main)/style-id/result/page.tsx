@@ -3,10 +3,12 @@ import Link from 'next/link'
 import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { StyleIdShareCard } from '@/components/style-id/StyleIdShareCard'
+import { StyleIdSetButton } from '@/components/style-id/StyleIdSetButton'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { decodeResult } from '@/lib/style-id/scoring'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import { PageTracker } from '@/components/analytics/PageTracker'
+import { createClient } from '@/lib/supabase/server'
 
 function AdviceRow({ label, items, accent, muted }: {
   label: string
@@ -52,6 +54,10 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cosmohype.vercel.app'
   const shareUrl = `${appUrl}/style-id/card/${r}`
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const isLoggedIn = !!user
 
   return (
     <>
@@ -196,6 +202,9 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           styleId={result.primaryStyle}
           primary={primary}
         />
+
+        {/* Set to profile */}
+        <StyleIdSetButton styleId={result.primaryStyle} isLoggedIn={isLoggedIn} encodedResult={r} />
 
         {/* Actions */}
         <div className="flex flex-col gap-3 pt-2">
