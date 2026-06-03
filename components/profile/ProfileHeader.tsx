@@ -123,7 +123,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
     <div className="px-5 pt-6 pb-5">
       {/* Avatar (left) + Name/Username (right) */}
       <div className="flex items-center justify-center gap-4 mb-4">
-        <div className="relative flex-shrink-0">
+        <div className="relative flex-shrink-0" style={{ pointerEvents: 'none' }}>
           <div className="absolute -inset-0.5 rounded-full opacity-60 blur-[2px]"
             style={{ background: 'linear-gradient(135deg, #7C3AED, #EC4899)' }} />
           <Avatar src={profile.avatar_url} username={profile.username} size="xl" className="relative" />
