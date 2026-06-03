@@ -2,9 +2,8 @@
 import { useEffect, useRef } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
-const EDGE_WIDTH = 22       // px — touch must start within this from the left edge
-const SWIPE_THRESHOLD = 80  // px — minimum rightward dx to trigger back
-const PARALLAX_START = 24   // px — bg layer starts at translateX(-24px) and moves toward 0
+const EDGE_WIDTH = 22      // px — touch must start within this from the left edge
+const SWIPE_THRESHOLD = 80 // px — minimum rightward dx to trigger back
 
 export function useEdgeSwipeBack() {
   const router = useRouter()
@@ -21,70 +20,14 @@ export function useEdgeSwipeBack() {
     let startY = 0
     let tracking = false  // touch started in the edge zone
     let committed = false // confirmed horizontal gesture
-    let bgLayer: HTMLDivElement | null = null
 
     function getMain() {
       return document.querySelector('main') as HTMLElement | null
     }
 
-    function createBgLayer() {
-      const el = document.createElement('div')
-      el.style.cssText =
-        `position:fixed;inset:0;z-index:9;background:var(--bg,#090714);` +
-        `transform:translateX(-${PARALLAX_START}px);pointer-events:none;will-change:transform;overflow:hidden;`
-
-      // Pseudo TopBar
-      const topBar = document.createElement('div')
-      topBar.style.cssText =
-        `position:absolute;top:0;left:0;right:0;box-sizing:border-box;` +
-        `height:calc(env(safe-area-inset-top,0px) + 44px);` +
-        `background:var(--bg-elevated,#100D22);` +
-        `border-bottom:1px solid rgba(168,85,247,0.15);` +
-        `display:flex;align-items:flex-end;padding:0 16px 10px;gap:10px;`
-      const backCircle = document.createElement('div')
-      backCircle.style.cssText =
-        `width:36px;height:36px;flex-shrink:0;border-radius:50%;background:rgba(124,58,237,0.14);`
-      const titlePill = document.createElement('div')
-      titlePill.style.cssText =
-        `height:12px;width:80px;border-radius:6px;background:rgba(245,243,255,0.1);`
-      topBar.appendChild(backCircle)
-      topBar.appendChild(titlePill)
-      el.appendChild(topBar)
-
-      // Pseudo BottomNav
-      const bottomNav = document.createElement('div')
-      bottomNav.style.cssText =
-        `position:absolute;bottom:0;left:0;right:0;box-sizing:border-box;` +
-        `height:calc(env(safe-area-inset-bottom,0px) + 58px);` +
-        `background:var(--nav-bg,rgba(9,7,20,0.9));` +
-        `border-top:1px solid rgba(168,85,247,0.12);` +
-        `display:flex;align-items:flex-start;justify-content:space-around;padding:14px 28px 0;`
-      for (let i = 0; i < 5; i++) {
-        const icon = document.createElement('div')
-        if (i === 2) {
-          icon.style.cssText =
-            `width:40px;height:40px;border-radius:12px;margin-top:-8px;background:rgba(124,58,237,0.2);`
-        } else {
-          icon.style.cssText =
-            `width:22px;height:22px;border-radius:4px;background:rgba(245,243,255,0.08);`
-        }
-        bottomNav.appendChild(icon)
-      }
-      el.appendChild(bottomNav)
-
-      document.body.appendChild(el)
-      return el
-    }
-
-    function removeBgLayer() {
-      bgLayer?.remove()
-      bgLayer = null
-    }
-
     function onTouchStart(e: TouchEvent) {
       // Feed page has its own horizontal swipe (FeedSlider) — skip entirely
       if (pathnameRef.current?.startsWith('/feed')) return
-      removeBgLayer() // safety: clean up any orphaned layer from a previous gesture
       const touch = e.touches[0]
       startX = touch.clientX
       startY = touch.clientY
@@ -115,27 +58,16 @@ export function useEdgeSwipeBack() {
           return
         }
         committed = true
-        removeBgLayer() // defensive: remove any stale layer before creating a new one
-        bgLayer = createBgLayer()
       }
 
       if (committed) {
         // Take over: prevent ImageCarousel / FeedSwipeWrapper from seeing this move
         e.stopPropagation()
         const mainEl = getMain()
-        const clampedDx = Math.min(dx, window.innerWidth * 0.8)
-        const ratio = clampedDx / (window.innerWidth * 0.8)
-
         if (mainEl) {
+          const clampedDx = Math.min(dx, window.innerWidth * 0.8)
           mainEl.style.transition = 'none'
           mainEl.style.transform = `translateX(${clampedDx}px)`
-          // No opacity dimming — keep current page at full opacity while dragging
-        }
-
-        if (bgLayer) {
-          const parallaxX = -PARALLAX_START * (1 - ratio)
-          bgLayer.style.transition = 'none'
-          bgLayer.style.transform = `translateX(${parallaxX}px)`
         }
       }
     }
@@ -164,31 +96,18 @@ export function useEdgeSwipeBack() {
 
     function onTouchCancel() {
       if (committed) resetMain()
-      else removeBgLayer()
       tracking = false
       committed = false
     }
 
     function resetMain() {
       const mainEl = getMain()
-      if (!mainEl || !mainEl.style.transform) {
-        removeBgLayer()
-        return
-      }
-
-      const SPRING = 'transform 280ms cubic-bezier(0.25, 1, 0.5, 1)'
-      mainEl.style.transition = SPRING
+      if (!mainEl || !mainEl.style.transform) return
+      mainEl.style.transition = 'transform 280ms cubic-bezier(0.25, 1, 0.5, 1), opacity 280ms ease-out'
       mainEl.style.transform = ''
       mainEl.style.opacity = ''
-
-      if (bgLayer) {
-        bgLayer.style.transition = SPRING
-        bgLayer.style.transform = `translateX(-${PARALLAX_START}px)`
-      }
-
       setTimeout(() => {
         if (mainEl) mainEl.style.transition = ''
-        removeBgLayer()
       }, 290)
     }
 
@@ -203,15 +122,7 @@ export function useEdgeSwipeBack() {
         mainEl.style.opacity = '0'
       }
 
-      // Animate bg layer to translateX(0) as the current page slides away
-      if (bgLayer) {
-        bgLayer.style.transition = `transform ${DURATION}ms ${easing}`
-        bgLayer.style.transform = 'translateX(0px)'
-      }
-
       setTimeout(() => {
-        removeBgLayer() // overlay takes over — bg layer no longer needed
-
         const overlay = document.createElement('div')
         overlay.style.cssText =
           'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg,#090714);'

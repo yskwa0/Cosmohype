@@ -20,7 +20,7 @@ export default async function ProfileEditPage() {
 
   return (
     <>
-      <TopBar title="プロフィールを編集" left={<BackButton href={`/profile/${profileRaw.username}`} variant="purple" />} />
+      <TopBar title="プロフィールを編集" left={<BackButton variant="purple" />} />
       <ProfileEditForm profile={profileRaw as Profile} />
     </>
   )
