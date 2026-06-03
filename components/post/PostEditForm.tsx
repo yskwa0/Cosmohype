@@ -193,8 +193,12 @@ export function PostEditForm({
           <div className="flex flex-col gap-2">
             <div
               ref={editPreviewContainerRef}
-              className="w-full overflow-hidden rounded-xl relative"
-              style={{ aspectRatio: (aspectRatio ?? '4:5').replace(':', '/') }}
+              className="overflow-hidden rounded-xl relative mx-auto"
+              style={{
+                width: '100%',
+                maxWidth: ({ '1:1': 360, '4:5': 288, '16:9': 640 } as Record<string, number>)[aspectRatio ?? '4:5'] ?? 288,
+                aspectRatio: (aspectRatio ?? '4:5').replace(':', '/'),
+              }}
             >
               <img
                 src={initialImages[editPreviewIndex].url}

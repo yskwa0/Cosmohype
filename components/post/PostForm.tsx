@@ -201,8 +201,13 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           {previewUrls.length > 0 && (
             <div
               ref={previewContainerRef}
-              className="w-full overflow-hidden rounded-xl"
-              style={{ position: 'relative', aspectRatio: aspectRatio.replace(':', '/') }}
+              className="overflow-hidden rounded-xl mx-auto"
+              style={{
+                position: 'relative',
+                width: '100%',
+                maxWidth: ({ '1:1': 360, '4:5': 288, '16:9': 640 } as Record<string, number>)[aspectRatio] ?? 288,
+                aspectRatio: aspectRatio.replace(':', '/'),
+              }}
             >
               <img
                 src={previewUrls[previewIndex]}
