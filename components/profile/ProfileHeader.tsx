@@ -120,7 +120,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
   }
 
   return (
-    <div className="px-5 pt-6 pb-5">
+    <div className="px-5 pt-6 pb-5 select-none" style={{ WebkitTouchCallout: 'none' } as React.CSSProperties}>
       {/* Avatar (left) + Name/Username (right) */}
       <div className="flex items-center justify-center gap-4 mb-4">
         <div className="relative flex-shrink-0" style={{ pointerEvents: 'none' }}>
