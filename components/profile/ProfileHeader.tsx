@@ -9,6 +9,7 @@ import { StartDmButton } from '@/components/dm/StartDmButton'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { Profile } from '@/types/database'
 import type { StyleId } from '@/lib/style-id/types'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 
 type FollowState = 'not_following' | 'following' | 'pending'
 
@@ -133,6 +134,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
             <h1 className="text-base font-bold leading-snug" style={{ color: 'var(--text)' }}>
               {profile.display_name ?? profile.username}
             </h1>
+            <AccountBadges isOfficial={profile.is_official} isCosmohypeCreator={profile.is_cosmohype_creator} />
             {profile.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
               <Link
                 href={`/cosmo/${profile.style_id}`}

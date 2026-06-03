@@ -15,6 +15,7 @@ import { InlineComments } from './InlineComments'
 import { PostMenu } from './PostMenu'
 import { PostOwnerMenu } from './PostOwnerMenu'
 import { ImageViewer } from '@/components/ui/ImageViewer'
+import { AccountBadges } from '@/components/ui/AccountBadges'
 import type { Post } from '@/types/database'
 
 function isToday(dateStr: string): boolean {
@@ -161,6 +162,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
                   {profile?.display_name ?? profile?.username}
                 </span>
               </Link>
+              <AccountBadges isOfficial={profile?.is_official} isCosmohypeCreator={profile?.is_cosmohype_creator} />
               {profile?.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
                 <Link
                   href={`/cosmo/${profile.style_id}`}
