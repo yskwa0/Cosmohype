@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +23,14 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
   const [images, setImages] = useState<File[]>([])
   const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '16:9'>('4:5')
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (images.length === 0) { setPreviewUrl(null); return }
+    const url = URL.createObjectURL(images[0])
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [images])
   const [caption, setCaption] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [brandInput, setBrandInput] = useState('')
@@ -173,8 +181,21 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
       </div>
 
       {images.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>表示比率</p>
+        <div className="flex flex-col gap-3">
+          {/* 比率プレビュー */}
+          {previewUrl && (
+            <div
+              className="w-full overflow-hidden rounded-xl"
+              style={{ position: 'relative', aspectRatio: aspectRatio.replace(':', '/') }}
+            >
+              <img
+                src={previewUrl}
+                alt="プレビュー"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+            </div>
+          )}
+          {/* 比率選択ボタン */}
           <div className="flex gap-2">
             {(['1:1', '4:5', '16:9'] as const).map(r => (
               <button

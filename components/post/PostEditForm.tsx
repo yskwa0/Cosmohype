@@ -29,6 +29,7 @@ export function PostEditForm({
   initialBrandTags,
   initialHypeTheme,
   initialAspectRatio,
+  initialImageUrl,
   initialItems,
 }: {
   postId: string
@@ -37,6 +38,7 @@ export function PostEditForm({
   initialBrandTags: string[]
   initialHypeTheme?: string
   initialAspectRatio: '1:1' | '4:5' | '16:9' | null
+  initialImageUrl?: string | null
   initialItems: PostItem[]
 }) {
   const router = useRouter()
@@ -154,7 +156,21 @@ export function PostEditForm({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
+        {/* 比率プレビュー */}
+        {initialImageUrl && aspectRatio && (
+          <div
+            className="w-full overflow-hidden rounded-xl"
+            style={{ position: 'relative', aspectRatio: aspectRatio.replace(':', '/') }}
+          >
+            <img
+              src={initialImageUrl}
+              alt="プレビュー"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            />
+          </div>
+        )}
+        {/* 比率選択ボタン */}
         <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>表示比率</p>
         <div className="flex gap-2">
           {(['1:1', '4:5', '16:9'] as const).map(r => (
