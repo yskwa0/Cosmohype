@@ -150,6 +150,7 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
             alt={post.caption ?? 'コーデ'}
             sizes="100vw"
             priority
+            aspectRatio={post.image_aspect_ratio ?? undefined}
             onTap={handleImageTap}
             onIndexChange={setCurrentImage}
           >

@@ -221,16 +221,28 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
           {images.length > 0 && (
             <div
               className="relative rounded-xl overflow-hidden mb-2 select-none"
+              style={post.image_aspect_ratio ? { aspectRatio: post.image_aspect_ratio.replace(':', '/') } : undefined}
               onClick={handleImageTap}
             >
-              <Image
-                src={images[currentImage].url}
-                alt={post.caption ?? 'コーデ'}
-                width={0}
-                height={0}
-                sizes="(max-width: 448px) 80vw, 360px"
-                style={{ width: '100%', height: 'auto', display: 'block' }}
-              />
+              {post.image_aspect_ratio ? (
+                <Image
+                  src={images[currentImage].url}
+                  alt={post.caption ?? 'コーデ'}
+                  fill
+                  sizes="(max-width: 448px) 80vw, 360px"
+                  style={{ objectFit: 'cover' }}
+                  draggable={false}
+                />
+              ) : (
+                <Image
+                  src={images[currentImage].url}
+                  alt={post.caption ?? 'コーデ'}
+                  width={0}
+                  height={0}
+                  sizes="(max-width: 448px) 80vw, 360px"
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+              )}
 
               {heartPos && (
                 <div className="absolute pointer-events-none"

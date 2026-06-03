@@ -28,6 +28,7 @@ export function PostEditForm({
   initialTags,
   initialBrandTags,
   initialHypeTheme,
+  initialAspectRatio,
   initialItems,
 }: {
   postId: string
@@ -35,12 +36,14 @@ export function PostEditForm({
   initialTags: string[]
   initialBrandTags: string[]
   initialHypeTheme?: string
+  initialAspectRatio: '1:1' | '4:5' | '16:9' | null
   initialItems: PostItem[]
 }) {
   const router = useRouter()
   const supabase = createClient()
 
   const [caption, setCaption] = useState(initialCaption)
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '16:9' | null>(initialAspectRatio)
   const [tagInput, setTagInput] = useState('')
   const [brandInput, setBrandInput] = useState('')
   const [tags, setTags] = useState<string[]>(initialTags)
@@ -97,6 +100,7 @@ export function PostEditForm({
           caption: caption.trim() || null,
           tags,
           brand_tags: brandTags,
+          image_aspect_ratio: aspectRatio,
         })
         .eq('id', postId)
 
@@ -149,6 +153,32 @@ export function PostEditForm({
           </div>
         </div>
       )}
+
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>表示比率</p>
+        <div className="flex gap-2">
+          {(['1:1', '4:5', '16:9'] as const).map(r => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setAspectRatio(r)}
+              className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
+              style={{
+                background: aspectRatio === r ? 'var(--purple)' : 'var(--bg-subtle)',
+                color: aspectRatio === r ? '#fff' : 'var(--text-muted)',
+                border: `1px solid ${aspectRatio === r ? 'var(--purple)' : 'var(--border)'}`,
+              }}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+        {aspectRatio === null && (
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            この投稿は比率未設定です。選択すると次回の表示から適用されます。
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>キャプション</label>

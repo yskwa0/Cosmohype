@@ -15,7 +15,7 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
   const [{ data: post }, { data: postItems }] = await Promise.all([
     supabase
       .from('posts')
-      .select('id, user_id, caption, tags, brand_tags, hype_theme')
+      .select('id, user_id, caption, tags, brand_tags, hype_theme, image_aspect_ratio')
       .eq('id', id)
       .single(),
     supabase
@@ -38,6 +38,7 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
           initialTags={post.tags ?? []}
           initialBrandTags={post.brand_tags ?? []}
           initialHypeTheme={post.hype_theme ?? undefined}
+          initialAspectRatio={(post.image_aspect_ratio as '1:1' | '4:5' | '16:9' | null) ?? null}
           initialItems={(postItems ?? []) as PostItem[]}
         />
       </div>

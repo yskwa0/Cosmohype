@@ -11,6 +11,7 @@ interface Props {
   sizes?: string
   priority?: boolean
   className?: string
+  aspectRatio?: string | null
   onTap?: (e: React.MouseEvent<HTMLDivElement>) => void
   onIndexChange?: (idx: number) => void
   children?: React.ReactNode
@@ -18,7 +19,7 @@ interface Props {
 
 export function ImageCarousel({
   images, alt = '', sizes, priority, className = '',
-  onTap, onIndexChange, children,
+  aspectRatio, onTap, onIndexChange, children,
 }: Props) {
   const [idx, setIdx] = useState(0)
   // Refs: idxRef avoids stale closures; stripRef drives animation without re-renders
@@ -102,20 +103,42 @@ export function ImageCarousel({
         ref={stripRef}
         style={{ display: 'flex', alignItems: 'flex-start', willChange: 'transform' }}
       >
-        {images.map((img, i) => (
-          <div key={img.id ?? i} style={{ minWidth: '100%', flexShrink: 0 }}>
-            <Image
-              src={img.url}
-              alt={alt}
-              width={0}
-              height={0}
-              sizes={sizes}
-              style={{ width: '100%', height: 'auto', display: 'block' }}
-              priority={priority && i === 0}
-              draggable={false}
-            />
-          </div>
-        ))}
+        {images.map((img, i) => {
+          const ratioCSS = aspectRatio ? aspectRatio.replace(':', '/') : null
+          return (
+            <div
+              key={img.id ?? i}
+              style={{
+                minWidth: '100%',
+                flexShrink: 0,
+                ...(ratioCSS ? { position: 'relative', aspectRatio: ratioCSS } : {}),
+              }}
+            >
+              {ratioCSS ? (
+                <Image
+                  src={img.url}
+                  alt={alt}
+                  fill
+                  sizes={sizes}
+                  style={{ objectFit: 'cover' }}
+                  priority={priority && i === 0}
+                  draggable={false}
+                />
+              ) : (
+                <Image
+                  src={img.url}
+                  alt={alt}
+                  width={0}
+                  height={0}
+                  sizes={sizes}
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                  priority={priority && i === 0}
+                  draggable={false}
+                />
+              )}
+            </div>
+          )
+        })}
       </div>
 
       {children}

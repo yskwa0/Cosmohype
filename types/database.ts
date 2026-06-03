@@ -47,6 +47,7 @@ export type Post = {
   saves_count: number
   comments_count: number
   hype_theme: string | null
+  image_aspect_ratio: string | null
   is_archived: boolean
   is_hidden: boolean
   created_at: string
@@ -258,6 +259,7 @@ export type Database = {
           likes_count: number
           saves_count: number
           hype_theme: string | null
+          image_aspect_ratio: string | null
           is_archived: boolean
           is_hidden: boolean
           created_at: string
@@ -272,6 +274,7 @@ export type Database = {
           likes_count?: number
           saves_count?: number
           hype_theme?: string | null
+          image_aspect_ratio?: string | null
           is_archived?: boolean
           is_hidden?: boolean
           created_at?: string
@@ -285,6 +288,7 @@ export type Database = {
           brand_tags?: string[]
           likes_count?: number
           hype_theme?: string | null
+          image_aspect_ratio?: string | null
           is_archived?: boolean
           is_hidden?: boolean
           updated_at?: string

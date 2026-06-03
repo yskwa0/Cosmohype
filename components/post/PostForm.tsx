@@ -22,6 +22,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
   const supabase = createClient()
 
   const [images, setImages] = useState<File[]>([])
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '16:9'>('4:5')
   const [caption, setCaption] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [brandInput, setBrandInput] = useState('')
@@ -90,6 +91,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
           tags,
           brand_tags: brandTags,
           hype_theme: hypeTheme ?? null,
+          image_aspect_ratio: aspectRatio,
         })
         .select()
         .single()
@@ -169,6 +171,29 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
         <p className="text-sm font-medium mb-2" style={{ color: 'var(--label-text)' }}>コーデ写真 *</p>
         <ImageUpload files={images} onChange={setImages} error={errors.images} />
       </div>
+
+      {images.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>表示比率</p>
+          <div className="flex gap-2">
+            {(['1:1', '4:5', '16:9'] as const).map(r => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => setAspectRatio(r)}
+                className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
+                style={{
+                  background: aspectRatio === r ? 'var(--purple)' : 'var(--bg-subtle)',
+                  color: aspectRatio === r ? '#fff' : 'var(--text-muted)',
+                  border: `1px solid ${aspectRatio === r ? 'var(--purple)' : 'var(--border)'}`,
+                }}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>キャプション</label>
