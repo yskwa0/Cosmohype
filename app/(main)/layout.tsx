@@ -29,7 +29,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       <main className="relative z-10 max-w-md mx-auto pb-20">
         {children}
       </main>
-      <BottomNav />
+      <BottomNav isLoggedIn={!!user} />
     </div>
   )
 }

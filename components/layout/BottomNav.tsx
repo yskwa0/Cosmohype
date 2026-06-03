@@ -57,7 +57,7 @@ const navItems = [
   },
 ]
 
-export function BottomNav() {
+export function BottomNav({ isLoggedIn = true }: { isLoggedIn?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   // Tracks the tapped href immediately so active state updates before pathname changes
@@ -69,6 +69,7 @@ export function BottomNav() {
   }, [pathname])
 
   if (/^\/dm\/.+/.test(pathname)) return null
+  if (!isLoggedIn && pathname.startsWith('/style-id')) return null
 
   const effectivePath = pendingHref ?? pathname
 
