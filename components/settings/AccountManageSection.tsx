@@ -21,6 +21,8 @@ export function AccountManageSection() {
 
   async function handleDeleteAccount() {
     if (deleting) return
+    const confirmed = window.confirm('本当にアカウントを削除しますか？\n\nアカウントを削除すると、プロフィール、投稿、コメント、いいね、保存、DMなどのデータは削除され、復元できません。')
+    if (!confirmed) return
     setDeleting(true)
     setDeleteError(null)
 
