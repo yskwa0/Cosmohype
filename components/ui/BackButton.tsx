@@ -47,13 +47,14 @@ export function BackButton({
 
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
-        // Disable transition first so the transform reset is instant (no slide-back).
-        if (mainEl) { mainEl.style.transition = 'none'; mainEl.style.transform = '' }
-        if (navEl)  { navEl.style.transition  = 'none'; navEl.style.transform  = '' }
+        // Disable transition so the subsequent transform reset is instant (no slide-back).
+        // Keep transform off-screen until the overlay is removed to avoid a flash of old content.
+        if (mainEl) mainEl.style.transition = 'none'
+        if (navEl)  navEl.style.transition  = 'none'
 
         setTimeout(() => {
-          if (mainEl) { mainEl.style.opacity = ''; mainEl.style.transition = '' }
-          if (navEl)  { navEl.style.opacity  = ''; navEl.style.transition  = '' }
+          if (mainEl) { mainEl.style.transform = ''; mainEl.style.opacity = ''; mainEl.style.transition = '' }
+          if (navEl)  { navEl.style.transform  = ''; navEl.style.opacity  = ''; navEl.style.transition  = '' }
           overlay.remove()
           animatingRef.current = false
         }, 60)
