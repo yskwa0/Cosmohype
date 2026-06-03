@@ -6,5 +6,10 @@ export default async function ConfirmedPage({
   searchParams: Promise<{ setup?: string }>
 }) {
   const { setup } = await searchParams
-  return <ConfirmedClient needsSetup={setup === '1'} />
+  return (
+    <>
+      <style>{`html, body { background-color: #090714 !important; }`}</style>
+      <ConfirmedClient needsSetup={setup === '1'} />
+    </>
+  )
 }

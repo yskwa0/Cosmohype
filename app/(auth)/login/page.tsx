@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 export default function LoginPage() {
   return (
     <>
-      <style>{`html, body { background-color: #0A0A1A !important; }`}</style>
+      <style>{`html, body { background-color: #090714 !important; }`}</style>
       <AuthForm mode="login" />
     </>
   )
