@@ -32,6 +32,22 @@ export async function proxy(request: NextRequest) {
   const isProtected = PROTECTED_PATHS.some(p => pathname.startsWith(p))
   const isAuthPath = AUTH_PATHS.some(p => pathname.startsWith(p))
 
+  // Suspension check — only for logged-in users accessing protected paths.
+  // Suspended users are redirected to /suspended (which signs them out client-side).
+  if (isProtected && user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_suspended')
+      .eq('id', user.id)
+      .single()
+
+    if (profile?.is_suspended) {
+      const redirectResponse = NextResponse.redirect(new URL('/suspended', request.url))
+      supabaseResponse.cookies.getAll().forEach(cookie => redirectResponse.cookies.set(cookie))
+      return redirectResponse
+    }
+  }
+
   if (isProtected && !user) {
     const redirectResponse = NextResponse.redirect(new URL('/login', request.url))
     supabaseResponse.cookies.getAll().forEach(cookie => redirectResponse.cookies.set(cookie))

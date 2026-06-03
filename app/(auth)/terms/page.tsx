@@ -105,7 +105,7 @@ export default function TermsPage() {
 
         <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
           <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-            お問い合わせ：<a href="mailto:info@centcraftcom.net" style={{ color: 'var(--purple)' }}>info@centcraftcom.net</a>
+            お問い合わせ：<a href="mailto:support@cosmohype.jp" style={{ color: 'var(--purple)' }}>support@cosmohype.jp</a>
           </p>
         </div>
       </div>

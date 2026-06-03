@@ -107,7 +107,7 @@ export default async function SettingsPage() {
           <p className="text-xs font-semibold px-1 mb-2" style={{ color: 'var(--text-muted)' }}>サポート</p>
           <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
             <a
-              href="mailto:info@centcraftcom.net"
+              href="mailto:support@cosmohype.jp"
               className="flex items-center gap-4 w-full px-5 py-4 text-sm font-medium transition-all duration-75 active:scale-[0.98] active:opacity-70"
               style={{ color: 'var(--text)' }}
             >

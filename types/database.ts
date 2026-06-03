@@ -10,6 +10,9 @@ export type Profile = {
   body_type: string | null
   theme: string | null
   is_private: boolean
+  is_suspended: boolean
+  suspended_at: string | null
+  suspension_reason: string | null
   follow_activity_last_read_at: string | null
   followers_count: number
   following_count: number
