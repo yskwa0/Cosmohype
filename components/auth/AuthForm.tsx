@@ -33,7 +33,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           },
         })
         if (error) throw error
-        setMessage('確認メールを送信しました。\nメール内のリンクを開くとSafariが表示されます。\n確認が完了したら、Cosmohypeアプリに戻って同じメールアドレスでログインしてください。')
+        setMessage('確認メールを送信しました。メール内のリンクをタップして、登録を完了してください。')
         setLoading(false)
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
