@@ -18,16 +18,17 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
 
   if (!post) notFound()
 
-  const [isLiked, isSaved] = user
+  const [isLiked, isSaved, isAdmin] = user
     ? await Promise.all([
         supabase.from('likes').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data),
         supabase.from('saved_posts').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data),
+        supabase.from('profiles').select('is_admin').eq('id', user.id).single().then(({ data }) => data?.is_admin ?? false),
       ])
-    : [false, false]
+    : [false, false, false]
 
   return (
     <PostDetailSlide>
-      <PostDetail post={{ ...post, post_items: postItems ?? [] } as Post} userId={user?.id} isLiked={isLiked} isSaved={isSaved} />
+      <PostDetail post={{ ...post, post_items: postItems ?? [] } as Post} userId={user?.id} isLiked={isLiked} isSaved={isSaved} isAdmin={isAdmin} />
       <CommentSection postId={id} userId={user?.id ?? null} />
     </PostDetailSlide>
   )

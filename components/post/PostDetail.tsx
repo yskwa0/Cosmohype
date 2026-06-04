@@ -1,6 +1,6 @@
 'use client'
 import Link from 'next/link'
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { ImageViewer } from '@/components/ui/ImageViewer'
 import { Avatar } from '@/components/ui/Avatar'
 import { StyleIdBadge } from '@/components/style-id/StyleIdBadge'
@@ -24,18 +24,29 @@ function isToday(dateStr: string): boolean {
   )
 }
 
-export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
+export function PostDetail({ post, userId, isLiked = false, isSaved = false, isAdmin = false }: {
   post: Post
   userId?: string
   isLiked?: boolean
   isSaved?: boolean
+  isAdmin?: boolean
 }) {
   const [currentImage, setCurrentImage] = useState(0)
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerIdx, setViewerIdx] = useState(0)
+  const [idCopied, setIdCopied] = useState(false)
   const lastTapRef = useRef(0)
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const copyPostId = useCallback(() => {
+    navigator.clipboard.writeText(post.id).then(() => {
+      setIdCopied(true)
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current)
+      copyTimerRef.current = setTimeout(() => setIdCopied(false), 2000)
+    })
+  }, [post.id])
   const supabase = createClient()
   const images = post.post_images ?? []
   const profile = post.profiles
@@ -218,6 +229,23 @@ export function PostDetail({ post, userId, isLiked = false, isSaved = false }: {
         <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
           {formatRelativeTime(post.created_at)}
         </p>
+
+        {/* 運営者専用: 投稿IDコピー */}
+        {isAdmin && (
+          <button
+            onClick={copyPostId}
+            className="flex items-center gap-1.5 mb-3 transition-opacity active:opacity-60"
+            style={{ color: idCopied ? '#22c55e' : 'rgba(124,58,237,0.6)', fontSize: '11px', fontFamily: 'monospace' }}
+          >
+            <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth={2}>
+              {idCopied
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+              }
+            </svg>
+            {idCopied ? 'コピーしました' : post.id}
+          </button>
+        )}
 
         {/* 区切り線 */}
         <div style={{ borderTop: '1px solid var(--border)' }} />
