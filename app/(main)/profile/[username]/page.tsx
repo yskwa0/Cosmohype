@@ -6,7 +6,6 @@ import { ProfileHeader } from '@/components/profile/ProfileHeader'
 import { ProfileMenu } from '@/components/profile/ProfileMenu'
 import { ProfileOwnerMenu } from '@/components/profile/ProfileOwnerMenu'
 import { ProfilePostGrid } from '@/components/profile/ProfilePostGrid'
-import { StyleIdPromoModal } from '@/components/profile/StyleIdPromoModal'
 import { BackButton } from '@/components/ui/BackButton'
 import { SlideIn } from '@/components/ui/SlideIn'
 import type { Post, Profile } from '@/types/database'
@@ -223,8 +222,6 @@ export default async function ProfilePage({
         </div>
       </div>
 
-      {/* STYLE ID未設定のオーナーにだけ診断を促すモーダルを表示 */}
-      <StyleIdPromoModal show={isOwner && !profile.style_id} />
     </>
   )
 
