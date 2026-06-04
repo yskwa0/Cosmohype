@@ -103,7 +103,7 @@ export function useEdgeSwipeBack() {
     function resetMain() {
       const mainEl = getMain()
       if (!mainEl || !mainEl.style.transform) return
-      mainEl.style.transition = 'transform 280ms cubic-bezier(0.25, 1, 0.5, 1), opacity 280ms ease-out'
+      mainEl.style.transition = 'transform 280ms cubic-bezier(0.25, 1, 0.5, 1)'
       mainEl.style.transform = ''
       mainEl.style.opacity = ''
       setTimeout(() => {
@@ -117,39 +117,37 @@ export function useEdgeSwipeBack() {
       const easing = 'cubic-bezier(0.4, 0, 0.6, 1)'
 
       if (mainEl) {
-        mainEl.style.transition = `transform ${DURATION}ms ${easing}, opacity ${DURATION}ms ${easing}`
+        // Slide <main> (and its captured fixed children) off to the right.
+        // No opacity change — content stays visible throughout the animation.
+        mainEl.style.transition = `transform ${DURATION}ms ${easing}`
         mainEl.style.transform = 'translateX(100vw)'
-        mainEl.style.opacity = '0'
       }
 
       setTimeout(() => {
-        const overlay = document.createElement('div')
-        overlay.style.cssText =
-          'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg,#090714);'
-        document.body.appendChild(overlay)
-
         sessionStorage.setItem('skipSlideIn', '1')
         routerRef.current.back()
 
-        function removeOverlay() {
-          if (mainEl) { mainEl.style.transition = 'none'; mainEl.style.transform = ''; mainEl.style.opacity = '' }
-          // Synchronous reflow: forces Safari/WebKit to recalculate sticky positions
-          // (e.g. TopBar) before the overlay is removed. Without this, WebKit retains
-          // a stale sticky offset from when main had a CSS transform, causing the TopBar
-          // to appear displaced into the safe-area zone after back navigation.
-          void mainEl?.offsetHeight
-          overlay.remove()
+        function restoreMain() {
+          if (mainEl) {
+            mainEl.style.transition = 'none'
+            mainEl.style.transform = ''
+            mainEl.style.opacity = ''
+            // Synchronous reflow: forces Safari/WebKit to recalculate sticky positions
+            // (e.g. TopBar) before revealing the new page. Without this, WebKit retains
+            // a stale sticky offset from when main had a CSS transform, causing the TopBar
+            // to appear displaced into the safe-area zone after back navigation.
+            void mainEl.offsetHeight
+          }
           requestAnimationFrame(() => {
             if (mainEl) mainEl.style.transition = ''
           })
         }
 
-        // Wait for React to commit the new page into <main> before revealing it.
-        // This prevents the old page content from briefly flashing when opacity is restored.
+        // Wait for React to commit the new page into <main> before snapping it back.
         let obs: MutationObserver | null = null
         const fallback = setTimeout(() => {
           obs?.disconnect()
-          removeOverlay()
+          restoreMain()
         }, 600)
 
         if (mainEl) {
@@ -157,7 +155,7 @@ export function useEdgeSwipeBack() {
             if (!mutations.some(m => m.addedNodes.length > 0)) return
             obs!.disconnect()
             clearTimeout(fallback)
-            requestAnimationFrame(removeOverlay)
+            requestAnimationFrame(restoreMain)
           })
           obs.observe(mainEl, { childList: true })
         }

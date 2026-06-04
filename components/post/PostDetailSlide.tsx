@@ -11,6 +11,9 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
   const exitingRef = useRef(false)
   const backCalledRef = useRef(false)
   const backTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // rAF IDs for the slide-in animation — cancelled if the user presses back early
+  const raf1Ref = useRef(0)
+  const raf2Ref = useRef(0)
   const router = useRouter()
 
   useLayoutEffect(() => {
@@ -20,18 +23,26 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('post_slide_in_progress')
 
     if (inProgress) {
-      // Loading shell was already at translateX(0) — appear instantly before first paint.
-      // setVisible(true) here re-renders before the browser paints, so no CSS transition fires.
+      // PostDetailLoadingShell already held the position at translateX(0).
+      // Calling setVisible(true) here (before first paint, inside useLayoutEffect)
+      // means the element appears at translateX(0) with no animation.
       setVisible(true)
     } else if (fromFeed) {
-      // Double rAF ensures the translateX(100%) initial state is painted first,
-      // so the CSS transition has a "from" state to animate from.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true))
+      // Double rAF ensures the initial translateX(100%) off-screen state is painted
+      // before we flip to translateX(0), so the CSS transition has a "from" value.
+      raf1Ref.current = requestAnimationFrame(() => {
+        raf2Ref.current = requestAnimationFrame(() => {
+          if (!exitingRef.current) setVisible(true)
+        })
       })
     } else {
       // Direct navigation (URL bar, share link) — appear instantly.
       setVisible(true)
+    }
+
+    return () => {
+      cancelAnimationFrame(raf1Ref.current)
+      cancelAnimationFrame(raf2Ref.current)
     }
   }, [])
 
@@ -46,13 +57,17 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
     if (exitingRef.current) return
     exitingRef.current = true
 
+    // Cancel any pending slide-in rAF to prevent it from overwriting the exit state
+    cancelAnimationFrame(raf1Ref.current)
+    cancelAnimationFrame(raf2Ref.current)
+
     armFeedScrollRestore()
     setExiting(true)
     setVisible(false)
 
-    // Fallback: call router.back() if transitionend doesn't fire within 400ms
-    // (e.g. reduced-motion, animation disabled in tests).
-    backTimerRef.current = setTimeout(doBack, 400)
+    // Fallback: call router.back() if transitionend doesn't fire within 500ms
+    // (e.g. reduced-motion, prefers-reduced-motion media query, animation disabled)
+    backTimerRef.current = setTimeout(doBack, 500)
   }
 
   let transition = 'none'
@@ -104,10 +119,15 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
         overflowX: 'hidden',
         transform: visible ? 'translateX(0)' : 'translateX(100%)',
         transition,
-        willChange: 'transform',
+        // No willChange here: keeping this element un-promoted lets the browser
+        // correctly re-capture it inside <main>'s stacking context when EdgeSwipeBack
+        // applies a CSS transform to <main>. With willChange:transform, iOS Safari
+        // may pre-promote this layer relative to the viewport and not re-composite it
+        // when an ancestor gets a transform, causing the element to stay fixed while
+        // <main> slides — leading to the black background flash.
       }}
       onTransitionEnd={(e) => {
-        // Only act on our own transform transition, not bubbled child transitions.
+        // Filter: only act on our own transform transition, not bubbled child events
         if (e.target !== e.currentTarget || e.propertyName !== 'transform') return
         if (exitingRef.current) doBack()
       }}
