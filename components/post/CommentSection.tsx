@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Avatar } from '@/components/ui/Avatar'
@@ -10,17 +10,25 @@ import type { Comment } from '@/types/database'
 interface Props {
   postId: string
   userId: string | null
-  initialComments: Comment[]
 }
 
-export function CommentSection({ postId, userId, initialComments }: Props) {
-  const [comments, setComments] = useState<Comment[]>(initialComments)
+export function CommentSection({ postId, userId }: Props) {
+  const [comments, setComments] = useState<Comment[] | null>(null)
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
-  async function handleSubmit(e: React.FormEvent) {
+  useEffect(() => {
+    supabase
+      .from('comments')
+      .select('*, profiles(*)')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => setComments((data ?? []) as Comment[]))
+  }, [postId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const text = body.trim()
     if (!text || !userId || submitting) return
@@ -33,7 +41,7 @@ export function CommentSection({ postId, userId, initialComments }: Props) {
       .single()
 
     if (!error && data) {
-      setComments(prev => [...prev, data as Comment])
+      setComments(prev => [...(prev ?? []), data as Comment])
       setBody('')
     }
     setSubmitting(false)
@@ -41,55 +49,73 @@ export function CommentSection({ postId, userId, initialComments }: Props) {
 
   async function handleDelete(commentId: string) {
     await supabase.from('comments').delete().eq('id', commentId)
-    setComments(prev => prev.filter(c => c.id !== commentId))
+    setComments(prev => (prev ?? []).filter(c => c.id !== commentId))
   }
+
+  const loaded = comments !== null
 
   return (
     <div className="px-4 pt-2 pb-6">
       <p className="text-xs font-semibold mb-3" style={{ color: 'var(--text-muted)' }}>
-        コメント {comments.length > 0 && `(${comments.length})`}
+        コメント {loaded && comments.length > 0 && `(${comments.length})`}
       </p>
 
-      {comments.length === 0 && (
+      {!loaded && (
+        <div className="flex flex-col gap-3 mb-5">
+          {[1, 2].map(i => (
+            <div key={i} className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full animate-pulse flex-shrink-0" style={{ background: 'var(--bg-elevated)' }} />
+              <div className="flex-1 flex flex-col gap-1.5">
+                <div className="h-3 w-20 rounded animate-pulse" style={{ background: 'var(--bg-elevated)' }} />
+                <div className="h-3 w-40 rounded animate-pulse" style={{ background: 'var(--bg-elevated)' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loaded && comments.length === 0 && (
         <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>まだコメントはありません</p>
       )}
 
-      <div className="flex flex-col gap-4 mb-5">
-        {comments.map(comment => (
-          <div key={comment.id} className="flex items-start gap-2.5">
-            <Link href={`/profile/${comment.profiles?.username ?? ''}`}>
-              <Avatar src={comment.profiles?.avatar_url} username={comment.profiles?.username} size="xs" />
-            </Link>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-1.5">
-                <div className="flex items-center gap-1">
-                  <Link href={`/profile/${comment.profiles?.username ?? ''}`}>
-                    <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
-                      {comment.profiles?.display_name ?? comment.profiles?.username}
-                    </span>
-                  </Link>
-                  <AccountBadges isOfficial={comment.profiles?.is_official} isCosmohypeCreator={comment.profiles?.is_cosmohype_creator} />
+      {loaded && (
+        <div className="flex flex-col gap-4 mb-5">
+          {comments.map(comment => (
+            <div key={comment.id} className="flex items-start gap-2.5">
+              <Link href={`/profile/${comment.profiles?.username ?? ''}`}>
+                <Avatar src={comment.profiles?.avatar_url} username={comment.profiles?.username} size="xs" />
+              </Link>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-1.5">
+                  <div className="flex items-center gap-1">
+                    <Link href={`/profile/${comment.profiles?.username ?? ''}`}>
+                      <span className="text-xs font-semibold" style={{ color: 'var(--text)' }}>
+                        {comment.profiles?.display_name ?? comment.profiles?.username}
+                      </span>
+                    </Link>
+                    <AccountBadges isOfficial={comment.profiles?.is_official} isCosmohypeCreator={comment.profiles?.is_cosmohype_creator} />
+                  </div>
+                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                    {formatRelativeTime(comment.created_at)}
+                  </span>
                 </div>
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {formatRelativeTime(comment.created_at)}
-                </span>
+                <p className="text-sm mt-0.5 break-words" style={{ color: 'var(--text-sub)' }}>{comment.body}</p>
               </div>
-              <p className="text-sm mt-0.5 break-words" style={{ color: 'var(--text-sub)' }}>{comment.body}</p>
+              {userId === comment.user_id && (
+                <button
+                  onClick={() => handleDelete(comment.id)}
+                  className="shrink-0 p-1"
+                  aria-label="削除"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
-            {userId === comment.user_id && (
-              <button
-                onClick={() => handleDelete(comment.id)}
-                className="shrink-0 p-1"
-                aria-label="削除"
-              >
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} fill="none" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {userId && (
         <form onSubmit={handleSubmit} className="flex items-center gap-2">

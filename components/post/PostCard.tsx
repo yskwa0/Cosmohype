@@ -135,6 +135,14 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         saveFeedScroll(scrollTop, panelIdx)
         armFeedScrollRestore()
         sessionStorage.setItem('post_slide_from_feed', '1')
+        sessionStorage.setItem('feed_post_preview', JSON.stringify({
+          imageUrl: images[0]?.url ?? null,
+          aspectRatio: post.image_aspect_ratio ?? '4:5',
+          caption: post.caption,
+          username: profile?.username ?? null,
+          displayName: profile?.display_name ?? null,
+          avatarUrl: profile?.avatar_url ?? null,
+        }))
         router.push(`/post/${post.id}`, { scroll: false })
       }}
     >
