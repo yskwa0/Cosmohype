@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, useTransition, type ReactNode } from 'react'
 import { readFeedScroll, clearFeedScroll } from '@/lib/feedScrollStore'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 
 const TABS = [
   { value: 'recommended' as const, label: 'おすすめ',  href: '/feed' },
@@ -31,6 +31,7 @@ export function FeedSlider({
   dm: ReactNode
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [isPending, startRefresh] = useTransition()
 
   const initIdx = initialTab === 'following' ? 1 : 0
@@ -203,6 +204,14 @@ export function FeedSlider({
   const goToRef = useRef(goTo)
   goToRef.current = goTo
 
+  function handleScrollToTop() {
+    cleanupRestore()
+    const panel = [p0.current, p1.current, p2.current][activeIdxRef.current] ?? null
+    if (!panel) return
+    panel.scrollTo({ top: 0, behavior: 'smooth' })
+    if (!tabIsVisible.current) setTabVisible(true)
+  }
+
   useEffect(() => {
     const handler = () => goToRef.current(2)
     window.addEventListener('cosmo:go-to-dm', handler)
@@ -359,6 +368,41 @@ export function FeedSlider({
   const indicatorIdx = activeIdx < TABS.length ? activeIdx : TABS.length - 1
 
   return (
+    <>
+    {/*
+      Transparent tap-to-scroll-top overlay — mimics iOS "tap status bar" behaviour.
+      Only rendered when the feed route is active so it never intercepts taps on other pages.
+      pointer-events:none on the wrapper passes all other clicks through to the TopBar.
+    */}
+    {pathname === '/feed' && (
+      <div
+        aria-hidden
+        className="fixed inset-x-0 top-0 pointer-events-none"
+        style={{ height: topBarH, zIndex: 45 }}
+      >
+        {/* ① Safe-area strip — the iOS status bar zone above TopBar content.
+              Full width is safe: no interactive elements live there. */}
+        <div
+          className="absolute inset-x-0 top-0 pointer-events-auto"
+          style={{ height: 'env(safe-area-inset-top, 0px)', touchAction: 'manipulation' }}
+          onClick={handleScrollToTop}
+        />
+        {/* ② TopBar center strip — between the COSMO logo (≈170px from left on a 390px
+              screen ≈ 44%) and the DM icon (≈60px from right ≈ 15%).
+              Using 46% / 16% leaves a comfortable margin around both buttons. */}
+        <div
+          className="absolute pointer-events-auto"
+          style={{
+            top: 'env(safe-area-inset-top, 0px)',
+            bottom: 0,
+            left: '46%',
+            right: '16%',
+            touchAction: 'manipulation',
+          }}
+          onClick={handleScrollToTop}
+        />
+      </div>
+    )}
     <div
       className="relative overflow-hidden"
       style={{ height: `calc(100svh - ${topBarH})` }}
@@ -553,5 +597,6 @@ export function FeedSlider({
         </div>
       </div>
     </div>
+    </>
   )
 }
