@@ -23,7 +23,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const themeClass = theme !== 'cosmic-black' ? `theme-${theme}` : ''
 
   return (
-    <div className={`min-h-screen ${themeClass}`} style={{ background: 'var(--bg)' }}>
+    <div className={`min-h-screen ${themeClass}`} style={{ background: 'var(--bg)', overflowX: 'clip' }}>
       <EdgeSwipeBack />
       {theme === 'cosmic-black' && <StarField />}
       <main className="relative z-10 max-w-md mx-auto pb-20">
