@@ -230,28 +230,30 @@ export function FeedSlider({
         }
       }
 
-      // Content not tall enough yet — re-attempt each time images load and expand it
+      // Content not tall enough yet — poll every 100ms until scroll target is reached
       let done = false
+      let pollId = 0
+
       function finish() {
         if (done) return
         done = true
-        ro.disconnect()
+        window.clearTimeout(pollId)
         clearTimeout(tid)
         clearFeedScroll()
         if (panel) scrollPositions.current[panelIdx] = panel.scrollTop
         signalReady()
       }
 
-      const ro = new ResizeObserver(() => {
-        if (!panel || done) return
+      function tryScrollRestore() {
+        if (done || !panel) return
         panel.scrollTop = target
-        if (Math.abs(panel.scrollTop - target) <= 5) finish()
-      })
-      const child = panel?.firstElementChild
-      if (child) ro.observe(child)
+        if (Math.abs(panel.scrollTop - target) <= 5) { finish(); return }
+        pollId = window.setTimeout(tryScrollRestore, 100)
+      }
 
-      const tid = setTimeout(finish, 4000)
-      return () => { done = true; ro.disconnect(); clearTimeout(tid) }
+      tryScrollRestore()
+      const tid = setTimeout(finish, 3000)
+      return () => { done = true; window.clearTimeout(pollId); clearTimeout(tid) }
     }
 
     const cleanup = applyRestore()

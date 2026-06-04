@@ -123,6 +123,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
       data-post-id={post.id}
       className="px-4 py-3"
       style={{ borderBottom: '1px solid var(--border)', position: 'relative' }}
+      onPointerDown={() => { router.prefetch(`/post/${post.id}`) }}
       onClick={(e) => {
         let node: HTMLElement | null = e.currentTarget as HTMLElement
         while (node && getComputedStyle(node).overflowY !== 'auto') {
