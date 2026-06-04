@@ -138,10 +138,15 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         sessionStorage.setItem('feed_post_preview', JSON.stringify({
           imageUrl: images[0]?.url ?? null,
           aspectRatio: post.image_aspect_ratio ?? '4:5',
-          caption: post.caption,
+          caption: post.caption ?? null,
           username: profile?.username ?? null,
           displayName: profile?.display_name ?? null,
           avatarUrl: profile?.avatar_url ?? null,
+          liked,
+          saved,
+          likeCount,
+          commentCount: commentsCount ?? 0,
+          createdAt: post.created_at,
         }))
         router.push(`/post/${post.id}`, { scroll: false })
       }}
