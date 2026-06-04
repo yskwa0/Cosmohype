@@ -1,11 +1,7 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { SlideBackButton } from '@/components/ui/SlideBackButton'
 
 export default function PrivacyPage() {
-  const router = useRouter()
-  const [backPressed, setBackPressed] = useState(false)
-
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
       <div
@@ -16,32 +12,7 @@ export default function PrivacyPage() {
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        <button
-          onClick={() => router.back()}
-          aria-label="戻る"
-          onPointerDown={() => setBackPressed(true)}
-          onPointerUp={() => setBackPressed(false)}
-          onPointerLeave={() => setBackPressed(false)}
-          onPointerCancel={() => setBackPressed(false)}
-          style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            background: 'rgba(124,58,237,0.18)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            transform: backPressed ? 'scale(0.82)' : 'scale(1)',
-            transition: backPressed
-              ? 'transform 70ms ease-in'
-              : 'transform 480ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-          }}
-        >
-          <svg viewBox="0 0 24 24" width={20} height={20} fill="none" stroke="#7C3AED" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
+        <SlideBackButton aria-label="戻る" />
         <h1 className="text-base font-semibold" style={{ color: 'var(--text)' }}>プライバシーポリシー</h1>
       </div>
 
