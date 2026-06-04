@@ -220,7 +220,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
           {/* 画像 */}
           {images.length > 0 && (
             <div
-              className="relative rounded-xl overflow-hidden mb-2 select-none"
+              className="relative rounded-xl overflow-hidden mb-2 select-none mx-2"
               style={post.image_aspect_ratio ? { aspectRatio: post.image_aspect_ratio.replace(':', '/') } : undefined}
               onClick={handleImageTap}
             >
