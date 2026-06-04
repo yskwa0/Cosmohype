@@ -53,6 +53,20 @@ export function FeedSlider({
   const lastScrollTopRef = useRef(0)
   const scrollDeltaRef = useRef(0)
 
+  // Scroll restoration controller — holds all async handles so cleanup is always complete
+  type RestoreCtrl = {
+    obs: ResizeObserver | null
+    tid: number | null
+    retryTid: number | null
+    cancelled: boolean
+    panel: HTMLDivElement
+    panelIdx: number
+  }
+  const restoreRef = useRef<RestoreCtrl | null>(null)
+  // Set to true immediately before each programmatic scrollTop write; cleared in handlePanelScroll
+  // so the resulting scroll event is not misread as a user gesture.
+  const ignoreNextScrollRef = useRef(false)
+
   const pullStartY = useRef(0)
   const pullOffset = useRef(0)
   const isPullingRef = useRef(false)
@@ -175,6 +189,17 @@ export function FeedSlider({
     setTabVisible(idx < TABS.length)
   }
 
+  // Cancel any in-progress scroll restoration — safe to call at any time
+  function cleanupRestore() {
+    const r = restoreRef.current
+    if (!r) return
+    r.cancelled = true
+    r.obs?.disconnect()
+    if (r.tid !== null)      clearTimeout(r.tid)
+    if (r.retryTid !== null) clearTimeout(r.retryTid)
+    restoreRef.current = null
+  }
+
   const goToRef = useRef(goTo)
   goToRef.current = goTo
 
@@ -202,103 +227,117 @@ export function FeedSlider({
       window.dispatchEvent(new Event('cosmohype:feed-ready'))
     }
 
-    function applyRestore() {
-      // Explicit ARM check — lets us clean up stale flags even when scrollTop is missing
-      const isArmed = sessionStorage.getItem('feed_scroll_restore') === '1'
-      if (!isArmed) return
+    // Guard: ARM flag must be set (by PostCard onClick before forward nav)
+    if (sessionStorage.getItem('feed_scroll_restore') !== '1') return
 
-      const restore = readFeedScroll()
-      if (!restore) {
-        // ARM flag set but no scrollTop data (e.g. direct URL nav) — clear stale flag
-        clearFeedScroll()
-        signalReady()
-        return
-      }
-
-      const { scrollTop: target, panelIdx } = restore
-
-      if (panelIdx !== activeIdxRef.current) {
-        setTransform(panelIdx, 0, false)
-        activeIdxRef.current = panelIdx
-        setActiveIdx(panelIdx)
-        setTabVisible(panelIdx < TABS.length)
-      }
-
-      if (target === 0) { clearFeedScroll(); signalReady(); return }
-
-      const panel = ([p0.current, p1.current] as const)[panelIdx] ?? null
-      if (!panel) { clearFeedScroll(); signalReady(); return }
-
-      function applyScroll() {
-        if (!panel) return false
-        panel.scrollTop = target
-        return Math.abs(panel.scrollTop - target) <= 5
-      }
-
-      function finish() {
-        if (!panel) return
-        clearFeedScroll()
-        scrollPositions.current[panelIdx] = panel.scrollTop
-        // Sync scroll tracking so the programmatic set doesn't trigger tab-bar hide
-        lastScrollTopRef.current = panel.scrollTop
-        scrollDeltaRef.current = 0
-        signalReady()
-      }
-
-      // Immediate attempt — succeeds when content is already tall enough (router cache)
-      if (applyScroll()) { finish(); return }
-
-      // Content not yet tall enough — watch the panel's first child for size changes.
-      // ResizeObserver fires once per content growth event (image load, etc.) rather
-      // than polling blindly, so there are no visible scroll jumps between checks.
-      let done = false
-      let obs: ResizeObserver | null = null
-      let tid = 0
-
-      function onGrow() {
-        if (done) return
-        if (applyScroll()) {
-          done = true
-          obs?.disconnect()
-          clearTimeout(tid)
-          finish()
-        }
-      }
-
-      obs = new ResizeObserver(onGrow)
-
-      // Observe the FeedPosts wrapper div; if it isn't mounted yet, retry briefly.
-      function startObserving() {
-        if (done) return
-        const child = panel!.firstElementChild
-        if (child) {
-          obs!.observe(child)
-        } else {
-          window.setTimeout(startObserving, 32)
-        }
-      }
-      startObserving()
-
-      tid = window.setTimeout(() => {
-        done = true
-        obs?.disconnect()
-        finish()
-      }, 3000)
-
-      return () => {
-        done = true
-        obs?.disconnect()
-        clearTimeout(tid)
-      }
+    const restore = readFeedScroll()
+    if (!restore) {
+      // ARM set but no scrollTop — stale flag (e.g. direct URL nav → back). Clean up.
+      clearFeedScroll()
+      signalReady()
+      return
     }
 
-    return applyRestore()
+    const { scrollTop: target, panelIdx } = restore
+
+    // Switch to saved tab before first paint (synchronous, no animation)
+    if (panelIdx !== activeIdxRef.current) {
+      setTransform(panelIdx, 0, false)
+      activeIdxRef.current = panelIdx
+      setActiveIdx(panelIdx)
+      setTabVisible(panelIdx < TABS.length)
+    }
+
+    if (target === 0) { clearFeedScroll(); signalReady(); return }
+
+    const panel = ([p0.current, p1.current] as const)[panelIdx] ?? null
+    if (!panel) { clearFeedScroll(); signalReady(); return }
+
+    // Write scrollTop and absorb the resulting scroll event so handlePanelScroll
+    // doesn't treat it as a user gesture or modify the tab-bar state.
+    function attemptScroll(): boolean {
+      ignoreNextScrollRef.current = true
+      panel!.scrollTop = target
+      const actual = panel!.scrollTop
+      // Keep scroll tracking in sync so the absorbed event has dy≈0
+      lastScrollTopRef.current = actual
+      scrollDeltaRef.current = 0
+      return Math.abs(actual - target) <= 5
+    }
+
+    // ── Immediate attempt ──
+    // Succeeds on almost every back-navigation because Next.js router cache
+    // preserves the rendered content and browser has images cached.
+    if (attemptScroll()) {
+      clearFeedScroll()
+      scrollPositions.current[panelIdx] = panel.scrollTop
+      signalReady()
+      return
+    }
+
+    // ── Deferred: watch content height with ResizeObserver ──
+    // Only needed when content isn't tall enough yet (e.g. images not yet cached).
+    // We stop as soon as we succeed, timeout, or the user scrolls manually.
+    const ctrl: RestoreCtrl = {
+      obs: null, tid: null, retryTid: null,
+      cancelled: false, panel, panelIdx,
+    }
+    restoreRef.current = ctrl
+
+    function finish(success: boolean) {
+      cleanupRestore()
+      clearFeedScroll()
+      if (success) scrollPositions.current[panelIdx] = panel!.scrollTop
+      signalReady()
+    }
+
+    ctrl.obs = new ResizeObserver(() => {
+      if (ctrl.cancelled) return
+      if (attemptScroll()) finish(true)
+    })
+
+    // Observe FeedPosts wrapper div — grows as images load.
+    // If firstElementChild isn't available yet (edge case), retry in 32ms.
+    function startObserving() {
+      if (ctrl.cancelled) return
+      const child = panel!.firstElementChild
+      if (child) {
+        ctrl.obs!.observe(child)
+      } else {
+        ctrl.retryTid = window.setTimeout(startObserving, 32)
+      }
+    }
+    startObserving()
+
+    // Give up after 1.5s — don't fight the user's scroll if content never grows
+    ctrl.tid = window.setTimeout(() => finish(false), 1500)
+
+    return () => cleanupRestore()
   }, [])
 
   function handlePanelScroll(e: React.UIEvent<HTMLDivElement>) {
     if (activeIdxRef.current >= TABS.length) return
     const el = e.currentTarget
     const scrollTop = el.scrollTop
+
+    // Absorb the scroll event caused by a programmatic scrollTop write (restoration attempt).
+    // ignoreNextScrollRef is set to true immediately before each panel.scrollTop assignment
+    // and cleared here so subsequent user scrolls are handled normally.
+    if (ignoreNextScrollRef.current) {
+      ignoreNextScrollRef.current = false
+      lastScrollTopRef.current = scrollTop
+      scrollDeltaRef.current = 0
+      return
+    }
+
+    // User scrolled while restoration is pending on this panel → cancel restoration
+    // immediately so the user's gesture is never fought against.
+    const r = restoreRef.current
+    if (r && r.panel === el) {
+      cleanupRestore()
+      clearFeedScroll()
+    }
+
     const dy = scrollTop - lastScrollTopRef.current
     lastScrollTopRef.current = scrollTop
     if (scrollTop < TAB_H / 2) {

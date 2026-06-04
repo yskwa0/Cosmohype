@@ -222,28 +222,20 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
           {images.length > 0 && (
             <div
               className="relative rounded-xl overflow-hidden mb-2 select-none mx-2"
-              style={post.image_aspect_ratio ? { aspectRatio: post.image_aspect_ratio.replace(':', '/') } : undefined}
+              style={{ aspectRatio: (post.image_aspect_ratio ?? '4:5').replace(':', '/') }}
               onClick={handleImageTap}
             >
-              {post.image_aspect_ratio ? (
-                <Image
-                  src={images[currentImage].url}
-                  alt={post.caption ?? 'コーデ'}
-                  fill
-                  sizes="(max-width: 448px) 80vw, 360px"
-                  style={{ objectFit: 'cover', objectPosition: `${(images[currentImage].position_x ?? 0.5) * 100}% ${(images[currentImage].position_y ?? 0.5) * 100}%` }}
-                  draggable={false}
-                />
-              ) : (
-                <Image
-                  src={images[currentImage].url}
-                  alt={post.caption ?? 'コーデ'}
-                  width={0}
-                  height={0}
-                  sizes="(max-width: 448px) 80vw, 360px"
-                  style={{ width: '100%', height: 'auto', display: 'block' }}
-                />
-              )}
+              {/* Always use fill + objectFit:cover with a fixed aspect-ratio container.
+                  This reserves height before image load, preventing layout shifts that
+                  would displace the scroll restoration target. */}
+              <Image
+                src={images[currentImage].url}
+                alt={post.caption ?? 'コーデ'}
+                fill
+                sizes="(max-width: 448px) 80vw, 360px"
+                style={{ objectFit: 'cover', objectPosition: `${(images[currentImage].position_x ?? 0.5) * 100}% ${(images[currentImage].position_y ?? 0.5) * 100}%` }}
+                draggable={false}
+              />
 
               {heartPos && (
                 <div className="absolute pointer-events-none"
