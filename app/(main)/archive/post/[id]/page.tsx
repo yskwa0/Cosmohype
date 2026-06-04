@@ -4,14 +4,14 @@ import { createClient } from '@/lib/supabase/server'
 import { PostDetail } from '@/components/post/PostDetail'
 import { PostDetailSlide } from '@/components/post/PostDetailSlide'
 import { CommentSection } from '@/components/post/CommentSection'
-import type { Post, Comment } from '@/types/database'
+import type { Post } from '@/types/database'
 
 async function ArchivePostContent({ id }: { id: string }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: post }, { data: commentsRaw }] = await Promise.all([
+  const [{ data: post }, { data: postItems }] = await Promise.all([
     supabase
       .from('posts')
       .select(`*, profiles!posts_user_id_fkey(*), post_images(*)`)
@@ -19,11 +19,7 @@ async function ArchivePostContent({ id }: { id: string }) {
       .eq('user_id', user.id)
       .eq('is_archived', true)
       .maybeSingle(),
-    supabase
-      .from('comments')
-      .select(`*, profiles(*)`)
-      .eq('post_id', id)
-      .order('created_at', { ascending: true }),
+    supabase.from('post_items').select('*').eq('post_id', id).order('display_order', { ascending: true }),
   ])
 
   if (!post) {
@@ -35,10 +31,9 @@ async function ArchivePostContent({ id }: { id: string }) {
     )
   }
 
-  const [isLiked, isSaved, { data: postItems }] = await Promise.all([
+  const [isLiked, isSaved] = await Promise.all([
     supabase.from('likes').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data),
     supabase.from('saved_posts').select('id').eq('user_id', user.id).eq('post_id', id).maybeSingle().then(({ data }) => !!data),
-    supabase.from('post_items').select('*').eq('post_id', id).order('display_order', { ascending: true }),
   ])
 
   return (
@@ -49,11 +44,7 @@ async function ArchivePostContent({ id }: { id: string }) {
         isLiked={isLiked}
         isSaved={isSaved}
       />
-      <CommentSection
-        postId={id}
-        userId={user.id}
-        initialComments={(commentsRaw ?? []) as Comment[]}
-      />
+      <CommentSection postId={id} userId={user.id} />
     </>
   )
 }
