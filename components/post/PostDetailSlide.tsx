@@ -1,12 +1,14 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar } from '@/components/layout/TopBar'
 import { armFeedScrollRestore } from '@/lib/feedScrollStore'
 
 export function PostDetailSlide({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(false)
+  const [exiting, setExiting] = useState(false)
   const [pressed, setPressed] = useState(false)
+  const exitingRef = useRef(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -14,6 +16,7 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('post_slide_from_feed')
 
     if (fromFeed) {
+      // Double rAF ensures translateX(100%) is painted before the slide-in starts.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => setVisible(true))
       })
@@ -23,9 +26,34 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
   }, [])
 
   function handleBack() {
-    window.dispatchEvent(new Event('cosmohype:cover-show'))
+    if (exitingRef.current) return
+    exitingRef.current = true
+
     armFeedScrollRestore()
-    router.back()
+    setExiting(true)
+    setVisible(false)
+
+    setTimeout(() => {
+      const overlay = document.createElement('div')
+      overlay.style.cssText =
+        'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg,#090714);'
+      document.body.appendChild(overlay)
+
+      router.back()
+
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setTimeout(() => overlay.remove(), 80)
+        })
+      )
+    }, 270)
+  }
+
+  let transition = 'none'
+  if (visible) {
+    transition = 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)'
+  } else if (exiting) {
+    transition = 'transform 260ms cubic-bezier(0.4, 0, 1, 1)'
   }
 
   const backBtn = (
@@ -46,7 +74,7 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
         justifyContent: 'center',
         flexShrink: 0,
         userSelect: 'none',
-        WebkitUserSelect: 'none',
+        WebkitUserSelect: 'none' as React.CSSProperties['WebkitUserSelect'],
         transform: pressed ? 'scale(0.82)' : 'scale(1)',
         transition: pressed
           ? 'transform 70ms ease-in'
@@ -67,8 +95,9 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
         zIndex: 100,
         background: 'var(--bg)',
         overflowY: 'auto',
+        overflowX: 'hidden',
         transform: visible ? 'translateX(0)' : 'translateX(100%)',
-        transition: visible ? 'transform 180ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
+        transition,
         willChange: 'transform',
       }}
     >

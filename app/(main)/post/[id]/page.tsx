@@ -1,9 +1,8 @@
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { TopBar } from '@/components/layout/TopBar'
-import { BackButton } from '@/components/ui/BackButton'
 import { PostDetail } from '@/components/post/PostDetail'
 import { CommentSection } from '@/components/post/CommentSection'
+import { PostDetailSlide } from '@/components/post/PostDetailSlide'
 import type { Post, Comment } from '@/types/database'
 
 export default async function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -29,14 +28,13 @@ export default async function PostDetailPage({ params }: { params: Promise<{ id:
   ])
 
   return (
-    <div className="feed-animate-in">
-      <TopBar title="投稿" left={<BackButton variant="purple" />} />
+    <PostDetailSlide>
       <PostDetail post={{ ...post, post_items: postItems ?? [] } as Post} userId={user?.id} isLiked={isLiked} isSaved={isSaved} />
       <CommentSection
         postId={id}
         userId={user?.id ?? null}
         initialComments={(commentsRaw ?? []) as Comment[]}
       />
-    </div>
+    </PostDetailSlide>
   )
 }

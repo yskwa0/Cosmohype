@@ -229,6 +229,13 @@ export function PostEditForm({
                 onPointerUp={() => { editDragRef.current = null }}
                 onPointerCancel={() => { editDragRef.current = null }}
               />
+              {/* 3×3 グリッドオーバーレイ */}
+              <div className="absolute inset-0 pointer-events-none" aria-hidden>
+                <div className="absolute inset-0" style={{
+                  backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.25) 1px, transparent 1px)',
+                  backgroundSize: '33.333% 33.333%',
+                }} />
+              </div>
               {initialImages.length > 1 && (
                 <>
                   {editPreviewIndex > 0 && (
