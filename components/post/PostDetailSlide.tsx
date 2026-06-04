@@ -19,17 +19,20 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
     const fromFeed = sessionStorage.getItem('post_slide_from_feed') === '1'
     sessionStorage.removeItem('post_slide_from_feed')
     sessionStorage.removeItem('post_slide_in_progress')
+    // Clean up stale preview data in case loading was too fast for the shell to mount.
+    sessionStorage.removeItem('feed_post_preview')
 
     if (fromFeed) {
-      // Double rAF ensures the initial translateX(100%) off-screen state is painted
-      // before we flip to translateX(0), so the CSS transition has a "from" value.
+      // Shell didn't mount (server resolved before loading.tsx had a chance to show).
+      // Do the slide ourselves with the usual double-rAF pattern.
       raf1Ref.current = requestAnimationFrame(() => {
         raf2Ref.current = requestAnimationFrame(() => {
           if (!exitingRef.current) setVisible(true)
         })
       })
     } else {
-      // Direct navigation (URL bar, share link) — appear instantly.
+      // Either: direct URL navigation, OR the loading shell already consumed the flag
+      // and slid in — appear instantly so there's no second slide animation.
       setVisible(true)
     }
 

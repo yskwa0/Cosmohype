@@ -1,6 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { armFeedScrollRestore } from '@/lib/feedScrollStore'
 
 type Preview = {
   imageUrl: string | null
@@ -22,7 +23,11 @@ function Pulse({ style }: { style?: React.CSSProperties }) {
 
 export function PostDetailLoadingShell({ children: _children }: { children?: React.ReactNode }) {
   const router = useRouter()
+  const [visible, setVisible] = useState(false)
   const [pressed, setPressed] = useState(false)
+  const raf1Ref = useRef(0)
+  const raf2Ref = useRef(0)
+
   const [preview] = useState<Preview>(() => {
     if (typeof window === 'undefined') return null
     try {
@@ -35,12 +40,39 @@ export function PostDetailLoadingShell({ children: _children }: { children?: Rea
     }
   })
 
+  useLayoutEffect(() => {
+    const fromFeed = sessionStorage.getItem('post_slide_from_feed') === '1'
+    if (fromFeed) {
+      // Consume the flag now so PostDetailSlide won't see it.
+      // PostDetailSlide will appear instantly when it replaces us — no second slide.
+      sessionStorage.removeItem('post_slide_from_feed')
+      // Same double-rAF pattern as PostDetailSlide so the CSS transition has a painted "from" state.
+      raf1Ref.current = requestAnimationFrame(() => {
+        raf2Ref.current = requestAnimationFrame(() => {
+          setVisible(true)
+        })
+      })
+    } else {
+      // Direct URL or back navigation — appear instantly, no slide.
+      setVisible(true)
+    }
+    return () => {
+      cancelAnimationFrame(raf1Ref.current)
+      cancelAnimationFrame(raf2Ref.current)
+    }
+  }, [])
+
   const [w, h] = (preview?.aspectRatio ?? '4:5').split(':').map(Number)
   const paddingBottom = `${((h / w) * 100).toFixed(2)}%`
 
   return (
-    <div style={{ minHeight: '100dvh' }}>
-
+    <div
+      style={{
+        transform: visible ? 'translateX(0)' : 'translateX(100%)',
+        transition: visible ? 'transform 300ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none',
+        minHeight: '100dvh',
+      }}
+    >
       {/* TopBar — identical to PostDetailSlide's TopBar */}
       <header
         className="sticky top-0 z-40"
@@ -53,7 +85,7 @@ export function PostDetailLoadingShell({ children: _children }: { children?: Rea
               onPointerUp={() => setPressed(false)}
               onPointerLeave={() => setPressed(false)}
               onPointerCancel={() => setPressed(false)}
-              onClick={() => router.back()}
+              onClick={() => { armFeedScrollRestore(); router.back() }}
               aria-label="戻る"
               style={{
                 width: 44, height: 44, borderRadius: '50%',
@@ -104,7 +136,7 @@ export function PostDetailLoadingShell({ children: _children }: { children?: Rea
             </>
           )}
         </div>
-        {/* Menu icon placeholder — keeps layout stable when real PostDetail shows menu */}
+        {/* Placeholder matching PostDetail's menu icon width so layout is stable */}
         <div style={{ width: 36, height: 36, flexShrink: 0 }} />
       </div>
 
@@ -148,21 +180,18 @@ export function PostDetailLoadingShell({ children: _children }: { children?: Rea
         {/* Divider */}
         <div style={{ borderTop: '1px solid var(--border)' }} />
 
-        {/* Action bar — same icons/layout as PostDetail, dimmed */}
+        {/* Action bar — same icons/layout as PostDetail, dimmed to signal "loading" */}
         <div className="flex items-center gap-6 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
-          {/* Like */}
           <svg viewBox="0 0 24 24" className="w-6 h-6"
             style={{ color: 'var(--text-muted)', opacity: 0.45 }}
             fill="none" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
           </svg>
-          {/* Comment */}
           <svg viewBox="0 0 24 24" className="w-6 h-6"
             style={{ color: 'var(--text-muted)', opacity: 0.45 }}
             fill="none" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
           </svg>
-          {/* Save — ml-auto matches PostDetail */}
           <svg viewBox="0 0 24 24" className="w-6 h-6 ml-auto"
             style={{ color: 'var(--text-muted)', opacity: 0.45 }}
             fill="none" stroke="currentColor" strokeWidth={2}>
