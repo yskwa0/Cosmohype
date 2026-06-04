@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useLayoutEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { TopBar } from '@/components/layout/TopBar'
 import { armFeedScrollRestore } from '@/lib/feedScrollStore'
@@ -9,21 +9,38 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
   const [exiting, setExiting] = useState(false)
   const [pressed, setPressed] = useState(false)
   const exitingRef = useRef(false)
+  const backCalledRef = useRef(false)
+  const backTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const fromFeed = sessionStorage.getItem('post_slide_from_feed') === '1'
+    const inProgress = sessionStorage.getItem('post_slide_in_progress') === '1'
     sessionStorage.removeItem('post_slide_from_feed')
+    sessionStorage.removeItem('post_slide_in_progress')
 
-    if (fromFeed) {
-      // Double rAF ensures translateX(100%) is painted before the slide-in starts.
+    if (inProgress) {
+      // Loading shell was already at translateX(0) — appear instantly before first paint.
+      // setVisible(true) here re-renders before the browser paints, so no CSS transition fires.
+      setVisible(true)
+    } else if (fromFeed) {
+      // Double rAF ensures the translateX(100%) initial state is painted first,
+      // so the CSS transition has a "from" state to animate from.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => setVisible(true))
       })
     } else {
+      // Direct navigation (URL bar, share link) — appear instantly.
       setVisible(true)
     }
   }, [])
+
+  function doBack() {
+    if (backCalledRef.current) return
+    backCalledRef.current = true
+    if (backTimerRef.current) clearTimeout(backTimerRef.current)
+    router.back()
+  }
 
   function handleBack() {
     if (exitingRef.current) return
@@ -33,20 +50,9 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
     setExiting(true)
     setVisible(false)
 
-    setTimeout(() => {
-      const overlay = document.createElement('div')
-      overlay.style.cssText =
-        'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg,#090714);'
-      document.body.appendChild(overlay)
-
-      router.back()
-
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          setTimeout(() => overlay.remove(), 80)
-        })
-      )
-    }, 270)
+    // Fallback: call router.back() if transitionend doesn't fire within 400ms
+    // (e.g. reduced-motion, animation disabled in tests).
+    backTimerRef.current = setTimeout(doBack, 400)
   }
 
   let transition = 'none'
@@ -99,6 +105,11 @@ export function PostDetailSlide({ children }: { children: React.ReactNode }) {
         transform: visible ? 'translateX(0)' : 'translateX(100%)',
         transition,
         willChange: 'transform',
+      }}
+      onTransitionEnd={(e) => {
+        // Only act on our own transform transition, not bubbled child transitions.
+        if (e.target !== e.currentTarget || e.propertyName !== 'transform') return
+        if (exitingRef.current) doBack()
       }}
     >
       <TopBar title="投稿" left={backBtn} />
