@@ -35,6 +35,11 @@ export function FeedPosts({
     return null
   })
 
+  // Skip entry animation when coming back from post detail (scroll restore positions us instantly)
+  const [skipAnimation] = useState(() =>
+    typeof window !== 'undefined' && sessionStorage.getItem('feed_scroll_restore') === '1'
+  )
+
   const [posts, setPosts] = useState<Post[]>(initialPosts)
   const [isLoading, setIsLoading] = useState(false)
   const [hasMore, setHasMore] = useState(initialPosts.length >= 20)
@@ -118,7 +123,7 @@ export function FeedPosts({
   }
 
   return (
-    <div className="flex flex-col gap-3 py-4 feed-animate-in">
+    <div className={`flex flex-col gap-3 py-4${skipAnimation ? '' : ' feed-animate-in'}`}>
       {posts.map(post => (
         <PostCard
           key={post.id}

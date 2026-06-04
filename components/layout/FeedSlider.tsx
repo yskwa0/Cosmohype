@@ -203,8 +203,17 @@ export function FeedSlider({
     }
 
     function applyRestore() {
+      // Explicit ARM check — lets us clean up stale flags even when scrollTop is missing
+      const isArmed = sessionStorage.getItem('feed_scroll_restore') === '1'
+      if (!isArmed) return
+
       const restore = readFeedScroll()
-      if (!restore) return
+      if (!restore) {
+        // ARM flag set but no scrollTop data (e.g. direct URL nav) — clear stale flag
+        clearFeedScroll()
+        signalReady()
+        return
+      }
 
       const { scrollTop: target, panelIdx } = restore
 
@@ -218,55 +227,72 @@ export function FeedSlider({
       if (target === 0) { clearFeedScroll(); signalReady(); return }
 
       const panel = ([p0.current, p1.current] as const)[panelIdx] ?? null
+      if (!panel) { clearFeedScroll(); signalReady(); return }
 
-      // Immediate attempt — works if content is already tall enough
-      if (panel) {
+      function applyScroll() {
+        if (!panel) return false
         panel.scrollTop = target
-        if (Math.abs(panel.scrollTop - target) <= 5) {
-          clearFeedScroll()
-          scrollPositions.current[panelIdx] = panel.scrollTop
-          signalReady()
-          return
-        }
+        return Math.abs(panel.scrollTop - target) <= 5
       }
 
-      // Content not tall enough yet — poll every 100ms until scroll target is reached
-      let done = false
-      let pollId = 0
-
       function finish() {
-        if (done) return
-        done = true
-        window.clearTimeout(pollId)
-        clearTimeout(tid)
+        if (!panel) return
         clearFeedScroll()
-        if (panel) scrollPositions.current[panelIdx] = panel.scrollTop
+        scrollPositions.current[panelIdx] = panel.scrollTop
+        // Sync scroll tracking so the programmatic set doesn't trigger tab-bar hide
+        lastScrollTopRef.current = panel.scrollTop
+        scrollDeltaRef.current = 0
         signalReady()
       }
 
-      function tryScrollRestore() {
-        if (done || !panel) return
-        panel.scrollTop = target
-        if (Math.abs(panel.scrollTop - target) <= 5) { finish(); return }
-        pollId = window.setTimeout(tryScrollRestore, 100)
+      // Immediate attempt — succeeds when content is already tall enough (router cache)
+      if (applyScroll()) { finish(); return }
+
+      // Content not yet tall enough — watch the panel's first child for size changes.
+      // ResizeObserver fires once per content growth event (image load, etc.) rather
+      // than polling blindly, so there are no visible scroll jumps between checks.
+      let done = false
+      let obs: ResizeObserver | null = null
+      let tid = 0
+
+      function onGrow() {
+        if (done) return
+        if (applyScroll()) {
+          done = true
+          obs?.disconnect()
+          clearTimeout(tid)
+          finish()
+        }
       }
 
-      tryScrollRestore()
-      const tid = setTimeout(finish, 3000)
-      return () => { done = true; window.clearTimeout(pollId); clearTimeout(tid) }
+      obs = new ResizeObserver(onGrow)
+
+      // Observe the FeedPosts wrapper div; if it isn't mounted yet, retry briefly.
+      function startObserving() {
+        if (done) return
+        const child = panel!.firstElementChild
+        if (child) {
+          obs!.observe(child)
+        } else {
+          window.setTimeout(startObserving, 32)
+        }
+      }
+      startObserving()
+
+      tid = window.setTimeout(() => {
+        done = true
+        obs?.disconnect()
+        finish()
+      }, 3000)
+
+      return () => {
+        done = true
+        obs?.disconnect()
+        clearTimeout(tid)
+      }
     }
 
-    const cleanup = applyRestore()
-
-    const onPopState = () => {
-      applyRestore()
-    }
-    window.addEventListener('popstate', onPopState)
-
-    return () => {
-      cleanup?.()
-      window.removeEventListener('popstate', onPopState)
-    }
+    return applyRestore()
   }, [])
 
   function handlePanelScroll(e: React.UIEvent<HTMLDivElement>) {
