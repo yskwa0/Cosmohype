@@ -4,17 +4,19 @@ import { SlideBackButton } from '@/components/ui/SlideBackButton'
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen" style={{ background: 'var(--bg)' }}>
-      <div
-        className="sticky top-0 z-40 flex items-center gap-3 px-4 h-14"
+      <header
+        className="sticky top-0 z-40"
         style={{
           background: 'var(--bg)',
           borderBottom: '1px solid var(--border)',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
       >
-        <SlideBackButton aria-label="戻る" />
-        <h1 className="text-base font-semibold" style={{ color: 'var(--text)' }}>プライバシーポリシー</h1>
-      </div>
+        <div className="flex items-center gap-3 px-4 h-14">
+          <SlideBackButton aria-label="戻る" />
+          <h1 className="text-base font-semibold" style={{ color: 'var(--text)' }}>プライバシーポリシー</h1>
+        </div>
+      </header>
 
       <div className="max-w-md mx-auto px-5 py-8 pb-16">
         <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>制定日：2026年5月26日</p>

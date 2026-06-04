@@ -15,6 +15,7 @@ export type Profile = {
   suspension_reason: string | null
   is_official: boolean
   is_cosmohype_creator: boolean
+  is_admin: boolean
   follow_activity_last_read_at: string | null
   followers_count: number
   following_count: number
@@ -201,6 +202,7 @@ export type Database = {
           is_private: boolean
           is_official: boolean
           is_cosmohype_creator: boolean
+          is_admin: boolean
           follow_activity_last_read_at: string | null
           followers_count: number
           following_count: number
@@ -222,6 +224,7 @@ export type Database = {
           is_private?: boolean
           is_official?: boolean
           is_cosmohype_creator?: boolean
+          is_admin?: boolean
           follow_activity_last_read_at?: string | null
           followers_count?: number
           following_count?: number
@@ -243,6 +246,7 @@ export type Database = {
           is_private?: boolean
           is_official?: boolean
           is_cosmohype_creator?: boolean
+          is_admin?: boolean
           follow_activity_last_read_at?: string | null
           followers_count?: number
           following_count?: number
