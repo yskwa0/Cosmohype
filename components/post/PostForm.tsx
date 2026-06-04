@@ -22,7 +22,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
   const supabase = createClient()
 
   const [images, setImages] = useState<File[]>([])
-  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '16:9'>('4:5')
+  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '4:3' | '16:9'>('4:5')
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [previewIndex, setPreviewIndex] = useState(0)
   const [imagePositions, setImagePositions] = useState<{ x: number; y: number }[]>([])
@@ -38,7 +38,24 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
     const urls = images.map(f => URL.createObjectURL(f))
     setPreviewUrls(urls)
     setPreviewIndex(prev => Math.min(prev, images.length - 1))
-    return () => urls.forEach(u => URL.revokeObjectURL(u))
+
+    let cancelled = false
+    const img = new window.Image()
+    img.onload = () => {
+      if (cancelled) return
+      const r = img.naturalWidth / img.naturalHeight
+      if (r < 0.9) setAspectRatio('4:5')
+      else if (r <= 1.15) setAspectRatio('1:1')
+      else if (r <= 1.45) setAspectRatio('4:3')
+      else setAspectRatio('16:9')
+    }
+    img.onerror = () => { if (!cancelled) setAspectRatio('4:5') }
+    img.src = urls[0]
+
+    return () => {
+      cancelled = true
+      urls.forEach(u => URL.revokeObjectURL(u))
+    }
   }, [images])
 
   useEffect(() => {
@@ -205,7 +222,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
               style={{
                 position: 'relative',
                 width: '100%',
-                maxWidth: ({ '1:1': 360, '4:5': 288, '16:9': 640 } as Record<string, number>)[aspectRatio] ?? 288,
+                maxWidth: ({ '1:1': 360, '4:5': 288, '4:3': 480, '16:9': 640 } as Record<string, number>)[aspectRatio] ?? 288,
                 aspectRatio: aspectRatio.replace(':', '/'),
               }}
             >
@@ -283,24 +300,6 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
               )}
             </div>
           )}
-          {/* 比率選択ボタン */}
-          <div className="flex gap-2">
-            {(['1:1', '4:5', '16:9'] as const).map(r => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setAspectRatio(r)}
-                className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
-                style={{
-                  background: aspectRatio === r ? 'var(--purple)' : 'var(--bg-subtle)',
-                  color: aspectRatio === r ? '#fff' : 'var(--text-muted)',
-                  border: `1px solid ${aspectRatio === r ? 'var(--purple)' : 'var(--border)'}`,
-                }}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
         </div>
       )}
 

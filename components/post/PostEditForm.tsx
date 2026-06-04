@@ -44,7 +44,7 @@ export function PostEditForm({
   initialTags: string[]
   initialBrandTags: string[]
   initialHypeTheme?: string
-  initialAspectRatio: '1:1' | '4:5' | '16:9' | null
+  initialAspectRatio: string | null
   initialImages: EditImage[]
   initialItems: PostItem[]
 }) {
@@ -52,7 +52,7 @@ export function PostEditForm({
   const supabase = createClient()
 
   const [caption, setCaption] = useState(initialCaption)
-  const [aspectRatio, setAspectRatio] = useState<'1:1' | '4:5' | '16:9' | null>(initialAspectRatio)
+  const aspectRatio = initialAspectRatio
   const [tagInput, setTagInput] = useState('')
   const [brandInput, setBrandInput] = useState('')
   const [tags, setTags] = useState<string[]>(initialTags)
@@ -196,7 +196,7 @@ export function PostEditForm({
               className="overflow-hidden rounded-xl relative mx-auto"
               style={{
                 width: '100%',
-                maxWidth: ({ '1:1': 360, '4:5': 288, '16:9': 640 } as Record<string, number>)[aspectRatio ?? '4:5'] ?? 288,
+                maxWidth: ({ '1:1': 360, '4:5': 288, '4:3': 480, '16:9': 640 } as Record<string, number>)[aspectRatio ?? '4:5'] ?? 288,
                 aspectRatio: (aspectRatio ?? '4:5').replace(':', '/'),
               }}
             >
@@ -276,30 +276,6 @@ export function PostEditForm({
               ドラッグして表示位置を調整できます
             </p>
           </div>
-        )}
-        {/* 比率選択ボタン */}
-        <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>表示比率</p>
-        <div className="flex gap-2">
-          {(['1:1', '4:5', '16:9'] as const).map(r => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setAspectRatio(r)}
-              className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
-              style={{
-                background: aspectRatio === r ? 'var(--purple)' : 'var(--bg-subtle)',
-                color: aspectRatio === r ? '#fff' : 'var(--text-muted)',
-                border: `1px solid ${aspectRatio === r ? 'var(--purple)' : 'var(--border)'}`,
-              }}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
-        {aspectRatio === null && (
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            この投稿は比率未設定です。選択すると次回の表示から適用されます。
-          </p>
         )}
       </div>
 

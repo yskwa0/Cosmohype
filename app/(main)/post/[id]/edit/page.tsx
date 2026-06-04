@@ -43,7 +43,7 @@ export default async function PostEditPage({ params }: { params: Promise<{ id: s
           initialTags={post.tags ?? []}
           initialBrandTags={post.brand_tags ?? []}
           initialHypeTheme={post.hype_theme ?? undefined}
-          initialAspectRatio={(post.image_aspect_ratio as '1:1' | '4:5' | '16:9' | null) ?? null}
+          initialAspectRatio={post.image_aspect_ratio ?? null}
           initialImages={(postImages ?? []) as { id: string; url: string; position_x: number; position_y: number }[]}
           initialItems={(postItems ?? []) as PostItem[]}
         />
