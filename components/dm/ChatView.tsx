@@ -86,7 +86,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       appliedBottom = 0
     }
 
-    inputBarRef.current.style.bottom = `${appliedBottom}px`
+    inputBarRef.current.style.transform = `translate3d(0, -${appliedBottom}px, 0)`
     setKbBottom(kbFromVv)
   }
 
@@ -96,7 +96,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     let prevVvHeight = vv ? vv.height : window.innerHeight
 
     if (inputBarRef.current) {
-      inputBarRef.current.style.bottom = '0px'
+      inputBarRef.current.style.transform = 'translate3d(0,0,0)'
     }
 
     function onVvResize() {
@@ -237,6 +237,11 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   function handleInputFocus() {
     isInputFocusedRef.current = true
+    const bar = inputBarRef.current
+    if (bar) {
+      bar.style.transition = 'none'
+      bar.style.willChange = 'transform'
+    }
 
     const resetAndSync = () => {
       window.scrollTo(0, 0)
@@ -245,13 +250,23 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
     requestAnimationFrame(resetAndSync)
     setTimeout(resetAndSync, 150)
-    setTimeout(resetAndSync, 300)
+    setTimeout(() => {
+      resetAndSync()
+      if (bar) {
+        bar.style.transition = ''
+        bar.style.willChange = ''
+      }
+    }, 300)
   }
 
   function handleInputBlur() {
     isInputFocusedRef.current = false
     const bar = inputBarRef.current
-    if (bar) bar.style.bottom = '0px'
+    if (bar) {
+      bar.style.transition = 'none'
+      bar.style.willChange = ''
+      bar.style.transform = 'translate3d(0,0,0)'
+    }
     setKbBottom(0)
   }
 
@@ -396,6 +411,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             position: 'fixed',
             left: 0,
             right: 0,
+            bottom: 0,
             zIndex: 10,
             background: 'var(--nav-bg)',
             borderTop: '1px solid var(--border)',
