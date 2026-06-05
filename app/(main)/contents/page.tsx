@@ -2,6 +2,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { StyleIdInfoModal } from '@/components/search/StyleIdInfoModal'
 import { CosmoInfoModal } from '@/components/search/CosmoInfoModal'
 import { HypeInfoModal } from '@/components/search/HypeInfoModal'
+import { AiFittingInfoModal } from '@/components/search/AiFittingInfoModal'
 import { SpringCard } from '@/components/ui/SpringCard'
 
 const DOTS_A: [number, number][] = [[18, 14], [75, 42], [130, 10], [48, 72], [105, 82], [158, 48], [90, 20]]
@@ -47,6 +48,7 @@ export default function ContentsPage() {
             dots={DOTS_A}
             label="AI Fitting"
             description="自分の写真で、気になる服をバーチャル試着"
+            infoButton={<AiFittingInfoModal />}
           >
             <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden fill="none">
               {/* シャツシルエット */}
