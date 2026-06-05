@@ -100,7 +100,10 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   let likedPostIds = new Set<string>()
   let savedPostIds = new Set<string>()
 
-  const [usersResult, postsByTag, postsByCaption, brandItems, likedData, savedData] = await Promise.all([
+  // brand_tags は addTag() で小文字保存されるため、クエリも小文字に揃える
+  const queryLower = query.toLowerCase()
+
+  const [usersResult, postsByTag, postsByCaption, postsByBrandTag, brandItems, likedData, savedData] = await Promise.all([
     supabase
       .from('profiles')
       .select('*')
@@ -112,7 +115,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     supabase
       .from('posts')
       .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
-      .contains('tags', [query])
+      .contains('tags', [queryLower])
       .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .limit(20),
@@ -123,6 +126,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .limit(10),
+    // posts.brand_tags は小文字保存なので queryLower で exact match
+    supabase
+      .from('posts')
+      .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
+      .contains('brand_tags', [queryLower])
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false })
+      .limit(20),
+    // post_items.brand_name は任意ケースで保存されるため ilike で検索
     supabase
       .from('post_items')
       .select('post_id')
@@ -135,11 +147,15 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   users = (usersResult.data ?? []) as Profile[]
 
   const postMap = new Map<string, Post>()
-  for (const p of [...(postsByTag.data ?? []), ...(postsByCaption.data ?? [])]) {
+  for (const p of [
+    ...(postsByTag.data ?? []),
+    ...(postsByCaption.data ?? []),
+    ...(postsByBrandTag.data ?? []),
+  ]) {
     postMap.set(p.id, p as Post)
   }
 
-  // brand_name 検索でヒットした投稿のうち、まだ postMap にないものを追加取得
+  // post_items.brand_name 検索でヒットした投稿のうち、まだ postMap にないものを追加取得
   const brandPostIdsNew = [...new Set((brandItems.data ?? []).map(r => r.post_id))]
     .filter(id => !postMap.has(id))
   if (brandPostIdsNew.length > 0) {

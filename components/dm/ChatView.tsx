@@ -59,24 +59,15 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     const baselineHeight = vv ? vv.height : window.innerHeight
     let prevVvHeight = baselineHeight
 
-    function update() {
-      const vvHeight = vv ? vv.height    : window.innerHeight
-      const vvOffset = vv ? vv.offsetTop : 0
-
-      el!.style.top    = `${vvOffset}px`
-      el!.style.height = `${vvHeight}px`
-      el!.style.bottom = ''
-
-      // baselineHeight との差分 = キーボード高さ相当
-      setKbBottom(Math.max(0, baselineHeight - vvHeight))
-    }
-
     function onVvResize() {
       const newHeight = vv ? vv.height : window.innerHeight
       const decreased = newHeight < prevVvHeight - 50
       prevVvHeight = newHeight
-      update()
-      // キーボード出現時は最新メッセージへスクロール
+      const kb = Math.max(0, baselineHeight - newHeight)
+      // コンテナ全体をリサイズせず、paddingBottom でキーボード分だけ内側を押し上げる。
+      // こうするとコンテナ高さが変わらないため iOS のラバーバンド感が保たれる。
+      el!.style.paddingBottom = kb > 0 ? `${kb}px` : ''
+      setKbBottom(kb)
       if (decreased && scrollRef.current) {
         requestAnimationFrame(() => {
           scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight
@@ -84,16 +75,9 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       }
     }
 
-    update() // 初期配置
-
     if (vv) {
-      // scroll は登録しない: iOS rubber-band 中に vv.offsetTop が変化してコンテナが
-      // 飛び回り、スクロール方向が反転して見える問題の原因になるため。
-      // キーボード高さの検出には resize だけで十分。
       vv.addEventListener('resize', onVvResize)
-      return () => {
-        vv.removeEventListener('resize', onVvResize)
-      }
+      return () => vv.removeEventListener('resize', onVvResize)
     }
   }, [])
 
@@ -251,11 +235,12 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   return (
     <>
-      {/* top/bottom は useLayoutEffect で管理。TopBarをコンテナ内に含めることでiOSスクロールの影響を受けない */}
+      {/* height は CSS (100svh) で定義し、JS はキーボード時の paddingBottom 調整だけに使う。
+          コンテナ高さを JS でリサイズしないことで iOS のラバーバンド感が生きる。 */}
       <div
         ref={containerRef}
         className="flex flex-col"
-        style={{ position: 'fixed', left: 0, right: 0 }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '100svh' }}
       >
         {/* TopBar: fixed コンテナ内に配置することでiOSキーボードによる画面押し上げを防ぐ */}
         {topBar}
@@ -286,8 +271,9 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             </p>
           )}
 
-          {/* メッセージ一覧 */}
-          <div className="flex flex-col gap-1.5 px-4 pt-2 pb-4">
+          {/* メッセージ一覧 — minHeight: calc(100% + 56px) でメッセージ0件でも常に
+              わずかにスクロール可能な高さを確保し、iOS のラバーバンドが発動できるようにする */}
+          <div className="flex flex-col gap-1.5 px-4 pt-2 pb-4" style={{ minHeight: 'calc(100% + 56px)' }}>
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
