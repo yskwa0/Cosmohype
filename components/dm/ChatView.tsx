@@ -33,10 +33,25 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   // kbBottom: distance from bottom of visual viewport to bottom of layout viewport (= keyboard height, 0 when hidden)
   const [kbBottom, setKbBottom] = useState(0)
 
+  // ── TEMP DEBUG ──
+  type DebugInfo = {
+    innerH: number; baseline: number
+    vvH: number | null; vvOT: number | null; vvPT: number | null
+    kb: number; styleBot: string
+    rTop: number | null; rBot: number | null; rH: number | null
+    distBot: number | null; diff: number | null
+  }
+  const [dbg, setDbg] = useState<DebugInfo>({
+    innerH: 0, baseline: 0, vvH: null, vvOT: null, vvPT: null,
+    kb: 0, styleBot: '–',
+    rTop: null, rBot: null, rH: null, distBot: null, diff: null,
+  })
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputBarRef = useRef<HTMLDivElement>(null)
+  const baselineRef = useRef(0)
   const isInitial = useRef(true)
   const isPrepending = useRef(false)
   const confirmedIds = useRef(new Set(initialMessages.map(m => m.id)))
@@ -49,6 +64,16 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
 
+  // ── DEBUG LOG 3: kbBottom state 変化と、その時点での inputBarRef.bottom ──
+  // React re-render で bottom が上書きされているかを確認する
+  useEffect(() => {
+    console.log('[DM kbBottom state]', {
+      kbBottom,
+      inputRefBottom: inputBarRef.current?.style.bottom,
+      match: inputBarRef.current?.style.bottom === `${kbBottom}px`,
+    })
+  }, [kbBottom])
+
   // iOS キーボード対応
   // height = vv.height, top = vv.offsetTop でコンテナをビジュアルビューポートに正確に合わせる。
   // bottom ベースだと iOS Safari の fixed 座標系と二重補正になり入力欄が高くなりすぎるため使わない。
@@ -57,6 +82,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     // コンテナは inset:0 なので window.innerHeight を基準にする。
     // vv.height はキーボード表示で縮むため差分 = keyboardHeight になる。
     const baselineHeight = window.innerHeight
+    baselineRef.current = baselineHeight
     let prevVvHeight = vv ? vv.height : window.innerHeight
 
     // 初期位置を直接 DOM に設定（React レンダリング前に確定させる）
@@ -69,9 +95,44 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       const decreased = newHeight < prevVvHeight - 50
       prevVvHeight = newHeight
       const kb = Math.max(0, baselineHeight - newHeight)
+      const vvPT = (vv as unknown as { pageTop?: number })?.pageTop ?? null
+
+      // ── DEBUG LOG 1: viewport 値と計算結果 ──
+      console.log('[DM viewport]', {
+        innerHeight: window.innerHeight, baselineHeight,
+        vvHeight: vv?.height, vvOffsetTop: vv?.offsetTop, vvPageTop: vvPT, calculatedKb: kb,
+        inputBottomBefore: inputBarRef.current?.style.bottom,
+      })
+
+      // DEBUG: viewport 値を state に反映
+      setDbg(prev => ({
+        ...prev,
+        innerH: window.innerHeight, baseline: baselineHeight,
+        vvH: vv?.height ?? null, vvOT: vv?.offsetTop ?? null, vvPT,
+        kb, styleBot: `${kb}px`,
+      }))
+
       // 入力バーは DOM 直接操作で即時反映（React state 経由だとキーボードアニメーション中に遅れる）
       if (inputBarRef.current) {
         inputBarRef.current.style.bottom = `${kb}px`
+
+        // ── DEBUG LOG 2 + rect を state に反映 ──
+        requestAnimationFrame(() => {
+          const rect = inputBarRef.current?.getBoundingClientRect()
+          const distBot = rect ? window.innerHeight - rect.bottom : null
+          const diff = distBot !== null ? distBot - kb : null
+          console.log('[DM input rect]', {
+            top: rect?.top, bottom: rect?.bottom, height: rect?.height,
+            innerHeight: window.innerHeight, distanceFromBottom: distBot,
+            styleBottom: inputBarRef.current?.style.bottom, kbExpected: kb, diff,
+          })
+          setDbg(prev => ({
+            ...prev,
+            styleBot: inputBarRef.current?.style.bottom ?? prev.styleBot,
+            rTop: rect?.top ?? null, rBot: rect?.bottom ?? null, rH: rect?.height ?? null,
+            distBot, diff,
+          }))
+        })
       }
       // メッセージ一覧の paddingBottom は React state で更新（多少遅れても問題ない）
       setKbBottom(kb)
@@ -411,6 +472,39 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             </button>
           </div>
         </div>
+      </div>
+
+      {/* ── TEMP DEBUG PANEL ── pointer-events:none で操作を邪魔しない */}
+      <div
+        style={{
+          position: 'fixed', top: 52, right: 4, zIndex: 9999,
+          pointerEvents: 'none',
+          background: 'rgba(0,0,0,0.85)',
+          color: '#00ff88',
+          fontFamily: 'monospace',
+          fontSize: 9,
+          lineHeight: 1.6,
+          padding: '5px 7px',
+          borderRadius: 6,
+          border: '1px solid rgba(0,255,136,0.25)',
+          whiteSpace: 'pre',
+          userSelect: 'none',
+        }}
+      >
+        {`innerH   ${dbg.innerH}
+base     ${dbg.baseline}
+vvH      ${dbg.vvH ?? '–'}
+vvOT     ${dbg.vvOT ?? '–'}
+vvPT     ${dbg.vvPT ?? '–'}
+kb       ${dbg.kb}
+kbState  ${kbBottom}
+styleBot ${dbg.styleBot}
+─────────────
+rTop     ${dbg.rTop ?? '–'}
+rBot     ${dbg.rBot ?? '–'}
+rH       ${dbg.rH ?? '–'}
+distBot  ${dbg.distBot ?? '–'}
+diff     ${dbg.diff ?? '–'}`}
       </div>
 
       {/* 削除確認ボトムシート */}
