@@ -30,36 +30,14 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   const [loadingOlder, setLoadingOlder] = useState(false)
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
-  // kbBottom: distance from bottom of visual viewport to bottom of layout viewport (= keyboard height, 0 when hidden)
+  // kbBottom: キーボード高さ (px)。メッセージ一覧の paddingBottom に使う
   const [kbBottom, setKbBottom] = useState(0)
-  const [isInputFocused, setIsInputFocused] = useState(false)
-  const isInputFocusedRef = useRef(false)
-
-  // ── TEMP DEBUG ──
-  type DebugInfo = {
-    innerH: number; baseline: number
-    vvH: number | null; vvOT: number | null; vvPT: number | null
-    kb: number; styleBot: string
-    rTop: number | null; rBot: number | null; rH: number | null
-    distBot: number | null; diff: number | null
-    scrollY: number | null; docST: number | null; bodyST: number | null
-    outerTop: number | null; outerBot: number | null
-    focused: boolean; visHeight: number | null; viewportBot: number | null
-    inputRectBot: number | null; appliedBot: number | null
-  }
-  const [dbg, setDbg] = useState<DebugInfo>({
-    innerH: 0, baseline: 0, vvH: null, vvOT: null, vvPT: null,
-    kb: 0, styleBot: '–',
-    rTop: null, rBot: null, rH: null, distBot: null, diff: null,
-    scrollY: null, docST: null, bodyST: null, outerTop: null, outerBot: null,
-    focused: false, visHeight: null, viewportBot: null, inputRectBot: null, appliedBot: null,
-  })
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputBarRef = useRef<HTMLDivElement>(null)
-  const baselineRef = useRef(0)
+  const isInputFocusedRef = useRef(false)
   const isInitial = useRef(true)
   const isPrepending = useRef(false)
   const confirmedIds = useRef(new Set(initialMessages.map(m => m.id)))
@@ -72,8 +50,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
 
-  // iOS の input focus auto-scroll 対策: body/html に overflow:hidden をかけてドキュメント自体のスクロールを封じる
-  // unmount 時に必ず元の値に戻す
+  // iOS の input focus auto-scroll 対策: body/html の scroll を封じ、unmount で復元
   useEffect(() => {
     const prevBody = document.body.style.overflow
     const prevHtml = document.documentElement.style.overflow
@@ -94,16 +71,15 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     const offsetTop = vv?.offsetTop ?? 0
     const viewportBottom = offsetTop + visibleHeight
     const kbFromVv = Math.max(0, window.innerHeight - visibleHeight)
-    const vvPT = (vv as unknown as { pageTop?: number })?.pageTop ?? null
 
     const rect = inputBarRef.current.getBoundingClientRect()
 
     let appliedBottom: number
     if (kbFromVv > 50) {
-      // vv が正常に縮んだ場合: そのまま使う
+      // vv が正常に縮んだ: そのまま使う
       appliedBottom = kbFromVv
     } else if (isInputFocusedRef.current && rect.bottom > viewportBottom - 10) {
-      // vv が縮まなかった場合: rect vs viewportBottom で補正
+      // vv が縮まなかった: rect vs viewportBottom で補正
       const overflow = rect.bottom - viewportBottom
       appliedBottom = overflow > 0 ? Math.round(overflow + rect.height + 4) : 0
     } else {
@@ -112,41 +88,13 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
     inputBarRef.current.style.bottom = `${appliedBottom}px`
     setKbBottom(kbFromVv)
-
-    const outerRect = containerRef.current?.getBoundingClientRect()
-    setDbg(prev => ({
-      ...prev,
-      innerH: window.innerHeight, baseline: baselineRef.current,
-      vvH: Math.round(visibleHeight), vvOT: Math.round(offsetTop), vvPT,
-      kb: kbFromVv, styleBot: `${appliedBottom}px`,
-      rTop: Math.round(rect.top), rBot: Math.round(rect.bottom), rH: Math.round(rect.height),
-      distBot: Math.round(window.innerHeight - rect.bottom),
-      diff: Math.round((window.innerHeight - rect.bottom) - kbFromVv),
-      scrollY: Math.round(window.scrollY),
-      docST: Math.round(document.documentElement.scrollTop),
-      bodyST: Math.round(document.body.scrollTop),
-      outerTop: outerRect ? Math.round(outerRect.top) : null,
-      outerBot: outerRect ? Math.round(outerRect.bottom) : null,
-      focused: isInputFocusedRef.current,
-      visHeight: Math.round(visibleHeight),
-      viewportBot: Math.round(viewportBottom),
-      inputRectBot: Math.round(rect.bottom),
-      appliedBot: appliedBottom,
-    }))
   }
 
-  // iOS キーボード対応
-  // height = vv.height, top = vv.offsetTop でコンテナをビジュアルビューポートに正確に合わせる。
-  // bottom ベースだと iOS Safari の fixed 座標系と二重補正になり入力欄が高くなりすぎるため使わない。
+  // iOS キーボード対応: visualViewport.resize で高さ変化を検知して補正
   useLayoutEffect(() => {
     const vv = window.visualViewport
-    // コンテナは inset:0 なので window.innerHeight を基準にする。
-    // vv.height はキーボード表示で縮むため差分 = keyboardHeight になる。
-    const baselineHeight = window.innerHeight
-    baselineRef.current = baselineHeight
     let prevVvHeight = vv ? vv.height : window.innerHeight
 
-    // 初期位置を直接 DOM に設定（React レンダリング前に確定させる）
     if (inputBarRef.current) {
       inputBarRef.current.style.bottom = '0px'
     }
@@ -252,7 +200,6 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       setHasMore(newHasMore)
       hasMoreRef.current = newHasMore
 
-      // スクロール位置を保持（DOM更新後）
       requestAnimationFrame(() => {
         if (el) {
           const newScrollHeight = el.scrollHeight
@@ -290,16 +237,28 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   // onPointerDown / onTouchStart で呼ぶ。onFocus より早く発火するため、
   // iOS のキーボード起動・auto-scroll が始まる前に入力バーを隠せる。
+  // visibility:hidden + opacity:0 の両方で compositor の残像も防ぐ。
   function prepareInputBarForFocus() {
     const bar = inputBarRef.current
     if (!bar) return
     bar.style.transition = 'none'
     bar.style.opacity = '0'
-    bar.style.willChange = 'bottom, opacity'
+    bar.style.visibility = 'hidden'
+    bar.style.pointerEvents = 'none'
+    bar.style.willChange = 'bottom, transform, opacity'
+    bar.style.transform = 'translate3d(0,0,0)'
+  }
+
+  // 補正済みの position で入力バーを再表示する
+  function showInputBar() {
+    const bar = inputBarRef.current
+    if (!bar) return
+    bar.style.visibility = 'visible'
+    bar.style.opacity = '1'
+    bar.style.pointerEvents = ''
   }
 
   function handleInputFocus() {
-    setIsInputFocused(true)
     isInputFocusedRef.current = true
 
     // onPointerDown/onTouchStart で隠せていない場合の念押し
@@ -311,40 +270,37 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       syncInputBarPosition()
     }
 
-    // rAF を 2回ネストして「iOS auto-scroll 完了 → scroll reset → 補正確定」の後に表示
-    requestAnimationFrame(() => {
-      resetAndSync()
-      requestAnimationFrame(() => {
-        if (inputBarRef.current) inputBarRef.current.style.opacity = '1'
-      })
-    })
+    // rAF で scroll reset + 補正、50ms 後に表示
+    requestAnimationFrame(resetAndSync)
+    setTimeout(showInputBar, 50)
 
     // キーボードアニメーション中も複数回補正
-    setTimeout(resetAndSync, 50)
     setTimeout(resetAndSync, 150)
-    // 300ms でキーボードが安定したら transition / willChange を戻す
+    // 300ms でキーボードが安定したら transform / willChange / transition を戻す
     setTimeout(() => {
       resetAndSync()
       const bar = inputBarRef.current
       if (bar) {
         bar.style.transition = ''
-        bar.style.willChange = 'auto'
+        bar.style.willChange = ''
+        bar.style.transform = ''
       }
     }, 300)
   }
 
   function handleInputBlur() {
-    setIsInputFocused(false)
     isInputFocusedRef.current = false
     const bar = inputBarRef.current
     if (bar) {
       bar.style.transition = 'none'
       bar.style.opacity = '1'
-      bar.style.willChange = 'auto'
+      bar.style.visibility = 'visible'
+      bar.style.pointerEvents = ''
+      bar.style.willChange = ''
+      bar.style.transform = ''
       bar.style.bottom = '0px'
     }
     setKbBottom(0)
-    setDbg(prev => ({ ...prev, focused: false, appliedBot: 0, styleBot: '0px' }))
   }
 
   async function handleSend() {
@@ -384,14 +340,11 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   return (
     <>
-      {/* コンテナは inset:0 の fixed。入力バーは独立した fixed 要素なので、
-          このコンテナの paddingBottom はキーボードに連動させない。 */}
       <div
         ref={containerRef}
         className="flex flex-col"
         style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}
       >
-        {/* TopBar: fixed コンテナ内に配置することでiOSキーボードによる画面押し上げを防ぐ */}
         {topBar}
 
         {/* スクロール可能なメッセージ領域 */}
@@ -403,7 +356,6 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             WebkitOverflowScrolling: 'touch',
           }}
         >
-          {/* 追加読み込みインジケーター */}
           {loadingOlder && (
             <div className="flex justify-center py-3">
               <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--purple)' }}>
@@ -413,15 +365,14 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             </div>
           )}
 
-          {/* 全件読み込み済み表示 */}
           {!hasMore && messages.length > 0 && !loadingOlder && (
             <p className="text-center text-xs py-3" style={{ color: 'var(--text-muted)' }}>
               これ以上メッセージはありません
             </p>
           )}
 
-          {/* メッセージ一覧 — paddingBottom で固定入力バーに隠れないよう余白を確保。
-              minHeight: calc(100% + 56px) で 0 件でも iOS ラバーバンドが発動できるようにする。 */}
+          {/* メッセージ一覧 — paddingBottom で入力バーに隠れないよう余白確保。
+              minHeight: calc(100% + 56px) で空でも iOS ラバーバンドが発動する。 */}
           <div
             className="flex flex-col gap-1.5 px-4 pt-2"
             style={{
@@ -485,9 +436,8 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
           </div>
         </div>
 
-        {/* 入力バー — position:fixed で親コンテナから独立させ、キーボード上に直接固定する。
-            bottom は useLayoutEffect で inputBarRef を通じて直接 DOM 操作する（React state 経由だとキーボードアニメーション中に遅れるため）。
-            JSX の style に bottom を書かないことで React の re-render が DOM 値を上書きしない。 */}
+        {/* 入力バー — bottom は useLayoutEffect / syncInputBarPosition で直接 DOM 操作する。
+            JSX の style に bottom を書かないことで React の re-render が上書きしない。 */}
         <div
           ref={inputBarRef}
           style={{
@@ -504,7 +454,6 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
           <div
             className="flex items-center gap-2 px-4 pt-3"
             style={{
-              // キーボード表示中 (kbBottom > 50) は safe-area 不要（キーボードが覆うため）
               paddingBottom: kbBottom > 50
                 ? '12px'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
@@ -558,51 +507,6 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             </button>
           </div>
         </div>
-      </div>
-
-      {/* ── TEMP DEBUG PANEL ── pointer-events:none で操作を邪魔しない */}
-      <div
-        style={{
-          position: 'fixed', top: 52, right: 4, zIndex: 9999,
-          pointerEvents: 'none',
-          background: 'rgba(0,0,0,0.85)',
-          color: '#00ff88',
-          fontFamily: 'monospace',
-          fontSize: 9,
-          lineHeight: 1.6,
-          padding: '5px 7px',
-          borderRadius: 6,
-          border: '1px solid rgba(0,255,136,0.25)',
-          whiteSpace: 'pre',
-          userSelect: 'none',
-        }}
-      >
-        {`innerH   ${dbg.innerH}
-base     ${dbg.baseline}
-vvH      ${dbg.vvH ?? '–'}
-vvOT     ${dbg.vvOT ?? '–'}
-vvPT     ${dbg.vvPT ?? '–'}
-kb       ${dbg.kb}
-kbState  ${kbBottom}
-styleBot ${dbg.styleBot}
-─────────────
-rTop     ${dbg.rTop ?? '–'}
-rBot     ${dbg.rBot ?? '–'}
-rH       ${dbg.rH ?? '–'}
-distBot  ${dbg.distBot ?? '–'}
-diff     ${dbg.diff ?? '–'}
-─── scroll ───
-scrollY  ${dbg.scrollY ?? '–'}
-docST    ${dbg.docST ?? '–'}
-bodyST   ${dbg.bodyST ?? '–'}
-outerTop ${dbg.outerTop ?? '–'}
-outerBot ${dbg.outerBot ?? '–'}
-─── focus ────
-focused  ${dbg.focused}
-visH     ${dbg.visHeight ?? '–'}
-viewBot  ${dbg.viewportBot ?? '–'}
-iRectBot ${dbg.inputRectBot ?? '–'}
-applied  ${dbg.appliedBot ?? '–'}`}
       </div>
 
       {/* 削除確認ボトムシート */}
