@@ -52,21 +52,19 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   // height = vv.height, top = vv.offsetTop でコンテナをビジュアルビューポートに正確に合わせる。
   // bottom ベースだと iOS Safari の fixed 座標系と二重補正になり入力欄が高くなりすぎるため使わない。
   useLayoutEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-
     const vv = window.visualViewport
-    const baselineHeight = vv ? vv.height : window.innerHeight
-    let prevVvHeight = baselineHeight
+    // コンテナは inset:0 なので window.innerHeight を基準にする。
+    // vv.height はキーボード表示で縮むため差分 = keyboardHeight になる。
+    const baselineHeight = window.innerHeight
+    let prevVvHeight = vv ? vv.height : window.innerHeight
 
     function onVvResize() {
       const newHeight = vv ? vv.height : window.innerHeight
       const decreased = newHeight < prevVvHeight - 50
       prevVvHeight = newHeight
       const kb = Math.max(0, baselineHeight - newHeight)
-      // コンテナ全体をリサイズせず、paddingBottom でキーボード分だけ内側を押し上げる。
-      // こうするとコンテナ高さが変わらないため iOS のラバーバンド感が保たれる。
-      el!.style.paddingBottom = kb > 0 ? `${kb}px` : ''
+      // kbBottom だけ更新。コンテナは一切触らない。
+      // 入力バーは position:fixed で独立しているため親の paddingBottom は不要。
       setKbBottom(kb)
       if (decreased && scrollRef.current) {
         requestAnimationFrame(() => {
@@ -235,8 +233,8 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   return (
     <>
-      {/* height は CSS (100svh) で定義し、JS はキーボード時の paddingBottom 調整だけに使う。
-          コンテナ高さを JS でリサイズしないことで iOS のラバーバンド感が生きる。 */}
+      {/* コンテナは inset:0 の fixed。入力バーは独立した fixed 要素なので、
+          このコンテナの paddingBottom はキーボードに連動させない。 */}
       <div
         ref={containerRef}
         className="flex flex-col"
@@ -271,9 +269,17 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
             </p>
           )}
 
-          {/* メッセージ一覧 — minHeight: calc(100% + 56px) でメッセージ0件でも常に
-              わずかにスクロール可能な高さを確保し、iOS のラバーバンドが発動できるようにする */}
-          <div className="flex flex-col gap-1.5 px-4 pt-2 pb-4" style={{ minHeight: 'calc(100% + 56px)' }}>
+          {/* メッセージ一覧 — paddingBottom で固定入力バーに隠れないよう余白を確保。
+              minHeight: calc(100% + 56px) で 0 件でも iOS ラバーバンドが発動できるようにする。 */}
+          <div
+            className="flex flex-col gap-1.5 px-4 pt-2"
+            style={{
+              minHeight: 'calc(100% + 56px)',
+              paddingBottom: kbBottom > 50
+                ? `${kbBottom + 64}px`
+                : 'calc(env(safe-area-inset-bottom, 0px) + 64px)',
+            }}
+          >
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -328,10 +334,15 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
           </div>
         </div>
 
-        {/* 入力バー — flex コンテナの末尾に固定、window スクロール不使用 */}
+        {/* 入力バー — position:fixed で親コンテナから独立させ、キーボード上に直接固定する。
+            bottom: kbBottom でキーボード高さ分だけ浮かせる。親の paddingBottom と無関係。 */}
         <div
-          className="flex-shrink-0"
           style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: kbBottom,
+            zIndex: 10,
             background: 'var(--nav-bg)',
             borderTop: '1px solid var(--border)',
             backdropFilter: 'blur(16px)',
@@ -341,7 +352,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
           <div
             className="flex items-center gap-2 px-4 pt-3"
             style={{
-              // キーボード表示中(kbBottom>50)はsafe-areaを外す。コンテナbottomがキーボード上端に揃うため二重加算を防ぐ
+              // キーボード表示中 (kbBottom > 50) は safe-area 不要（キーボードが覆うため）
               paddingBottom: kbBottom > 50
                 ? '12px'
                 : 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
