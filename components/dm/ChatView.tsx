@@ -240,7 +240,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       <div
         ref={containerRef}
         className="flex flex-col"
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '100svh' }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
       >
         {/* TopBar: fixed コンテナ内に配置することでiOSキーボードによる画面押し上げを防ぐ */}
         {topBar}
