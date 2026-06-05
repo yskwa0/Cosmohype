@@ -288,38 +288,48 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     setSelectedMsgId(null)
   }
 
+  // onPointerDown / onTouchStart で呼ぶ。onFocus より早く発火するため、
+  // iOS のキーボード起動・auto-scroll が始まる前に入力バーを隠せる。
+  function prepareInputBarForFocus() {
+    const bar = inputBarRef.current
+    if (!bar) return
+    bar.style.transition = 'none'
+    bar.style.opacity = '0'
+    bar.style.willChange = 'bottom, opacity'
+  }
+
   function handleInputFocus() {
     setIsInputFocused(true)
     isInputFocusedRef.current = true
 
-    const bar = inputBarRef.current
-    if (bar) {
-      // transition を止めて補正前の位置変化をアニメーションさせない
-      bar.style.transition = 'none'
-      // opacity:0 で補正が効く前の「跳ね」をユーザーに見せない
-      bar.style.opacity = '0'
-      // 即時同期（iOS auto-scroll が起きる前の最速タイミング）
-      syncInputBarPosition()
-    }
+    // onPointerDown/onTouchStart で隠せていない場合の念押し
+    prepareInputBarForFocus()
+    syncInputBarPosition()
 
     const resetAndSync = () => {
       window.scrollTo(0, 0)
       syncInputBarPosition()
     }
 
-    // 1フレーム後: scroll reset + 再測定 → その後 opacity:1 で表示
+    // rAF を 2回ネストして「iOS auto-scroll 完了 → scroll reset → 補正確定」の後に表示
     requestAnimationFrame(() => {
       resetAndSync()
-      if (bar) bar.style.opacity = '1'
+      requestAnimationFrame(() => {
+        if (inputBarRef.current) inputBarRef.current.style.opacity = '1'
+      })
     })
 
     // キーボードアニメーション中も複数回補正
     setTimeout(resetAndSync, 50)
     setTimeout(resetAndSync, 150)
-    // 300ms でキーボードが安定したら transition を戻す
+    // 300ms でキーボードが安定したら transition / willChange を戻す
     setTimeout(() => {
       resetAndSync()
-      if (bar) bar.style.transition = ''
+      const bar = inputBarRef.current
+      if (bar) {
+        bar.style.transition = ''
+        bar.style.willChange = 'auto'
+      }
     }, 300)
   }
 
@@ -329,8 +339,9 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     const bar = inputBarRef.current
     if (bar) {
       bar.style.transition = 'none'
-      bar.style.bottom = '0px'
       bar.style.opacity = '1'
+      bar.style.willChange = 'auto'
+      bar.style.bottom = '0px'
     }
     setKbBottom(0)
     setDbg(prev => ({ ...prev, focused: false, appliedBot: 0, styleBot: '0px' }))
@@ -503,6 +514,8 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
+              onPointerDown={prepareInputBarForFocus}
+              onTouchStart={prepareInputBarForFocus}
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
               onKeyDown={e => {
