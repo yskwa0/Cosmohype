@@ -71,7 +71,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       setKbBottom(Math.max(0, baselineHeight - vvHeight))
     }
 
-    function onVvChange() {
+    function onVvResize() {
       const newHeight = vv ? vv.height : window.innerHeight
       const decreased = newHeight < prevVvHeight - 50
       prevVvHeight = newHeight
@@ -87,11 +87,12 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     update() // 初期配置
 
     if (vv) {
-      vv.addEventListener('resize', onVvChange)
-      vv.addEventListener('scroll', onVvChange)
+      // scroll は登録しない: iOS rubber-band 中に vv.offsetTop が変化してコンテナが
+      // 飛び回り、スクロール方向が反転して見える問題の原因になるため。
+      // キーボード高さの検出には resize だけで十分。
+      vv.addEventListener('resize', onVvResize)
       return () => {
-        vv.removeEventListener('resize', onVvChange)
-        vv.removeEventListener('scroll', onVvChange)
+        vv.removeEventListener('resize', onVvResize)
       }
     }
   }, [])

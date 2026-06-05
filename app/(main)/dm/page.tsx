@@ -92,7 +92,7 @@ export default async function DmPage() {
       sortKey: latestByConv[id]?.created_at ?? updatedAtByConv[id] ?? '',
       unread: unreadByConv[id] ?? 0,
     }))
-    .filter(c => c.otherUser !== null)
+    .filter(c => c.otherUser !== null && c.latestMessage !== null)
     .sort((a, b) => b.sortKey.localeCompare(a.sortKey))
 
   return (
