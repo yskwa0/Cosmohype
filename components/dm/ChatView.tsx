@@ -235,72 +235,23 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     setSelectedMsgId(null)
   }
 
-  // onPointerDown / onTouchStart で呼ぶ。onFocus より早く発火するため、
-  // iOS のキーボード起動・auto-scroll が始まる前に入力バーを隠せる。
-  // visibility:hidden + opacity:0 の両方で compositor の残像も防ぐ。
-  function prepareInputBarForFocus() {
-    const bar = inputBarRef.current
-    if (!bar) return
-    bar.style.transition = 'none'
-    bar.style.opacity = '0'
-    bar.style.visibility = 'hidden'
-    bar.style.pointerEvents = 'none'
-    bar.style.willChange = 'bottom, transform, opacity'
-    bar.style.transform = 'translate3d(0,0,0)'
-  }
-
-  // 補正済みの position で入力バーを再表示する
-  function showInputBar() {
-    const bar = inputBarRef.current
-    if (!bar) return
-    bar.style.visibility = 'visible'
-    bar.style.opacity = '1'
-    bar.style.pointerEvents = ''
-  }
-
   function handleInputFocus() {
     isInputFocusedRef.current = true
-
-    // focus が確定してから hide → 補正 → show の順で処理する
-    // onPointerDown ではなく onFocus で呼ぶことで、focus しない touches では hide しない
-    prepareInputBarForFocus()
-    syncInputBarPosition()
 
     const resetAndSync = () => {
       window.scrollTo(0, 0)
       syncInputBarPosition()
     }
 
-    // rAF で scroll reset + 補正、50ms 後に表示
     requestAnimationFrame(resetAndSync)
-    setTimeout(showInputBar, 50)
-
-    // キーボードアニメーション中も複数回補正
     setTimeout(resetAndSync, 150)
-    // 300ms でキーボードが安定したら transform / willChange / transition を戻す
-    setTimeout(() => {
-      resetAndSync()
-      const bar = inputBarRef.current
-      if (bar) {
-        bar.style.transition = ''
-        bar.style.willChange = ''
-        bar.style.transform = ''
-      }
-    }, 300)
+    setTimeout(resetAndSync, 300)
   }
 
   function handleInputBlur() {
     isInputFocusedRef.current = false
     const bar = inputBarRef.current
-    if (bar) {
-      bar.style.transition = 'none'
-      bar.style.opacity = '1'
-      bar.style.visibility = 'visible'
-      bar.style.pointerEvents = ''
-      bar.style.willChange = ''
-      bar.style.transform = ''
-      bar.style.bottom = '0px'
-    }
+    if (bar) bar.style.bottom = '0px'
     setKbBottom(0)
   }
 
