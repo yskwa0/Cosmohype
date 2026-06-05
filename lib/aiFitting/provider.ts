@@ -2,6 +2,7 @@
 // 本接続時はこのファイルだけを修正すればよい。
 
 export type TryOnRequest = {
+  // Storage path ではなく、API Route が生成した短時間有効な signed URL を渡す
   personImageUrl: string
   garmentImageUrl: string
   tryonId: string

@@ -20,6 +20,8 @@ export type Profile = {
   followers_count: number
   following_count: number
   cosmo_post_id: string | null
+  ai_fitting_body_image_url: string | null
+  ai_fitting_body_image_updated_at: string | null
   created_at: string
   updated_at: string
 }
@@ -207,6 +209,8 @@ export type Database = {
           followers_count: number
           following_count: number
           cosmo_post_id: string | null
+          ai_fitting_body_image_url: string | null
+          ai_fitting_body_image_updated_at: string | null
           created_at: string
           updated_at: string
         }
@@ -229,6 +233,8 @@ export type Database = {
           followers_count?: number
           following_count?: number
           cosmo_post_id?: string | null
+          ai_fitting_body_image_url?: string | null
+          ai_fitting_body_image_updated_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -251,6 +257,8 @@ export type Database = {
           followers_count?: number
           following_count?: number
           cosmo_post_id?: string | null
+          ai_fitting_body_image_url?: string | null
+          ai_fitting_body_image_updated_at?: string | null
           updated_at?: string
         }
         Relationships: []

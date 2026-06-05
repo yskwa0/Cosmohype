@@ -2,154 +2,371 @@
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { compressImage } from '@/lib/compressImage'
+import { formatRelativeTime } from '@/lib/utils'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type GarmentSlot = { file: File | null; preview: string | null; error: string | null }
+type SubmitStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed'
+
+export type TryonRow = {
+  id: string
+  status: string
+  result_image_url: string | null  // Storage path（DBに保存）
+  garment_image_url: string        // Storage path（DBに保存）
+  created_at: string
+  display_url: string | null       // 表示用 signed URL（DBには保存しない）
+}
+
+interface Props {
+  userId: string
+  initialBodyImagePath: string | null   // DBに保存されている Storage path
+  initialBodySignedUrl: string | null   // サーバー側で生成した表示用 signed URL
+  initialTryons: TryonRow[]
+}
+
+const EMPTY_GARMENT: GarmentSlot = { file: null, preview: null, error: null }
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_BYTES = 5 * 1024 * 1024
 
-type UploadSlot = {
-  file: File | null
-  preview: string | null
-  error: string | null
+function validateFile(file: File): string | null {
+  if (!ALLOWED_TYPES.includes(file.type)) return 'JPG / PNG / WebP のみ対応しています'
+  if (file.size > MAX_BYTES) return '5MB 以下の画像を選んでください'
+  return null
 }
 
-const EMPTY_SLOT: UploadSlot = { file: null, preview: null, error: null }
+// ─── Main component ───────────────────────────────────────────────────────────
 
-type TryOnStatus = 'idle' | 'uploading' | 'processing' | 'completed' | 'failed'
+export function AiFittingForm({ userId, initialBodyImagePath, initialBodySignedUrl, initialTryons }: Props) {
+  // 全身写真: path を DB に保存、表示は signed URL を使用
+  const [bodyImagePath, setBodyImagePath] = useState<string | null>(initialBodyImagePath)
+  const [bodyDisplayUrl, setBodyDisplayUrl] = useState<string | null>(initialBodySignedUrl)
+  const [bodyLocalPreview, setBodyLocalPreview] = useState<string | null>(null)
+  const [isSavingBody, setIsSavingBody] = useState(false)
+  const [bodyError, setBodyError] = useState<string | null>(null)
 
-export function AiFittingForm({ userId }: { userId: string }) {
-  const [person, setPerson] = useState<UploadSlot>(EMPTY_SLOT)
-  const [garment, setGarment] = useState<UploadSlot>(EMPTY_SLOT)
-  const [status, setStatus] = useState<TryOnStatus>('idle')
-  const [resultUrl, setResultUrl] = useState<string | null>(null)
+  // 服画像: セッション内のみ保持
+  const [garment, setGarment] = useState<GarmentSlot>(EMPTY_GARMENT)
+
+  // 送信状態
+  const [submitStatus, setSubmitStatus] = useState<SubmitStatus>('idle')
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  const personInputRef = useRef<HTMLInputElement>(null)
+  // 試着履歴
+  const [tryons, setTryons] = useState<TryonRow[]>(initialTryons)
+
+  const bodyInputRef = useRef<HTMLInputElement>(null)
   const garmentInputRef = useRef<HTMLInputElement>(null)
 
-  function validateFile(file: File): string | null {
-    if (!ALLOWED_TYPES.includes(file.type)) return 'JPG / PNG / WebP のみ対応しています'
-    if (file.size > MAX_BYTES) return '5MB 以下の画像を選んでください'
-    return null
-  }
+  // ── 全身写真: ファイル選択と同時にアップロード・プロフィール更新 ────────────
+  async function onBodyFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
 
-  async function handleFileSelect(
-    file: File,
-    setSlot: (s: UploadSlot) => void
-  ) {
     const err = validateFile(file)
-    if (err) { setSlot({ file: null, preview: null, error: err }); return }
+    if (err) { setBodyError(err); return }
+    setBodyError(null)
 
-    const compressed = await compressImage(file, 1024, 0.88)
-    const preview = URL.createObjectURL(compressed)
-    setSlot({ file: compressed, preview, error: null })
-  }
-
-  function onPersonChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    handleFileSelect(file, setPerson)
-    e.target.value = ''
-  }
-
-  function onGarmentChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    handleFileSelect(file, setGarment)
-    e.target.value = ''
-  }
-
-  async function handleSubmit() {
-    setSubmitError(null)
-    if (!person.file) { setSubmitError('全身写真を選択してください'); return }
-    if (!garment.file) { setSubmitError('服の画像を選択してください'); return }
-
-    setStatus('uploading')
-    const supabase = createClient()
+    const compressed = await compressImage(file, 1200, 0.88)
+    const localUrl = URL.createObjectURL(compressed)
+    setBodyLocalPreview(localUrl)
+    setIsSavingBody(true)
 
     try {
-      // 画像を Supabase Storage にアップロード
+      const supabase = createClient()
+      const path = `${userId}/body/body.jpg`
+
+      const { error: upErr } = await supabase.storage
+        .from('ai-tryons')
+        .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+      if (upErr) throw upErr
+
+      // DBには path を保存（public URL ではない）
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({
+          ai_fitting_body_image_url: path,
+          ai_fitting_body_image_updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+      if (profileErr) throw profileErr
+
+      // 表示用 signed URL をクライアント側で生成（1時間有効）
+      const { data: signedData } = await supabase.storage
+        .from('ai-tryons')
+        .createSignedUrl(path, 3600)
+
+      URL.revokeObjectURL(localUrl)
+      setBodyImagePath(path)
+      setBodyDisplayUrl(signedData?.signedUrl ?? null)
+      setBodyLocalPreview(null)
+    } catch {
+      setBodyError('写真の保存に失敗しました。もう一度お試しください。')
+      URL.revokeObjectURL(localUrl)
+      setBodyLocalPreview(null)
+    } finally {
+      setIsSavingBody(false)
+    }
+  }
+
+  // ── 服画像: ローカルプレビューのみ、送信時にアップロード ──────────────────
+  async function onGarmentFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const err = validateFile(file)
+    if (err) { setGarment({ file: null, preview: null, error: err }); return }
+    const compressed = await compressImage(file, 1024, 0.88)
+    setGarment({ file: compressed, preview: URL.createObjectURL(compressed), error: null })
+  }
+
+  // ── 試着送信 ───────────────────────────────────────────────────────────────
+  async function handleSubmit() {
+    setSubmitError(null)
+    if (!bodyImagePath) { setSubmitError('全身写真を登録してください'); return }
+    if (!garment.file) { setSubmitError('服の画像を選択してください'); return }
+
+    setSubmitStatus('uploading')
+    const supabase = createClient()
+    // 新規 tryon カード表示用に blob URL を保持しておく
+    const garmentBlobUrl = garment.preview
+
+    try {
       const ts = Date.now()
-      const personPath = `${userId}/person_${ts}.jpg`
-      const garmentPath = `${userId}/garment_${ts}.jpg`
+      const garmentPath = `${userId}/garments/${ts}.jpg`
 
-      const [personUpload, garmentUpload] = await Promise.all([
-        supabase.storage.from('ai-tryons').upload(personPath, person.file, { upsert: false }),
-        supabase.storage.from('ai-tryons').upload(garmentPath, garment.file, { upsert: false }),
-      ])
+      const { error: gErr } = await supabase.storage
+        .from('ai-tryons')
+        .upload(garmentPath, garment.file, { upsert: false, contentType: garment.file.type })
+      if (gErr) throw new Error('服画像のアップロードに失敗しました')
 
-      if (personUpload.error || garmentUpload.error) {
-        throw new Error('画像のアップロードに失敗しました')
-      }
+      setSubmitStatus('processing')
 
-      const personUrl = supabase.storage.from('ai-tryons').getPublicUrl(personPath).data.publicUrl
-      const garmentUrl = supabase.storage.from('ai-tryons').getPublicUrl(garmentPath).data.publicUrl
-
-      setStatus('processing')
-
+      // API には path を送る（URL ではない）。API 側で signed URL を生成してプロバイダーへ渡す。
       const res = await fetch('/api/ai-fitting', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          personImageUrl: personUrl,
-          garmentImageUrl: garmentUrl,
+          personImagePath: bodyImagePath,
+          garmentImagePath: garmentPath,
           sourceType: 'upload',
         }),
       })
+      const data = await res.json() as { id: string; status: string }
 
-      const data = await res.json()
+      // 履歴先頭に追加。display_url は blob URL（ページリロード後はサーバー側で signed URL を生成）
+      setTryons(prev => [{
+        id: data.id,
+        status: data.status,
+        result_image_url: null,
+        garment_image_url: garmentPath,
+        created_at: new Date().toISOString(),
+        display_url: garmentBlobUrl,
+      }, ...prev])
 
-      if (data.status === 'completed' && data.resultImageUrl) {
-        setResultUrl(data.resultImageUrl)
-        setStatus('completed')
-      } else {
-        // FASHN.ai 未接続のため pending/failed になる（想定内）
-        setStatus('failed')
-        setSubmitError('AI試着の準備中です。まもなく利用可能になります。')
+      setSubmitStatus(data.status === 'completed' ? 'completed' : 'failed')
+      if (data.status !== 'completed') {
+        setSubmitError('AI試着エンジン準備中です。試着リクエストは保存されました。')
       }
+      setGarment(EMPTY_GARMENT)
     } catch (e) {
-      setStatus('failed')
+      setSubmitStatus('failed')
       setSubmitError(e instanceof Error ? e.message : '予期しないエラーが発生しました')
     }
   }
 
-  const canSubmit = !!person.file && !!garment.file && status !== 'uploading' && status !== 'processing'
+  const displayBodyUrl = bodyLocalPreview ?? bodyDisplayUrl
+  const canSubmit = !!bodyImagePath && !!garment.file && !isSavingBody
+    && submitStatus !== 'uploading' && submitStatus !== 'processing'
 
   return (
     <div className="px-4 pt-2 pb-24 flex flex-col gap-6">
 
-      {/* 画像アップロードエリア */}
-      <div className="grid grid-cols-2 gap-3">
-        <ImageUploadSlot
-          label="全身写真"
-          hint="正面・全身が写った写真"
-          preview={person.preview}
-          error={person.error}
-          onTap={() => personInputRef.current?.click()}
-          onRemove={() => setPerson(EMPTY_SLOT)}
-          icon={<PersonIcon />}
-        />
-        <ImageUploadSlot
-          label="服の画像"
-          hint="白背景が推奨"
-          preview={garment.preview}
-          error={garment.error}
-          onTap={() => garmentInputRef.current?.click()}
-          onRemove={() => setGarment(EMPTY_SLOT)}
-          icon={<GarmentIcon />}
-        />
-      </div>
+      {/* ── 全身写真セクション ──────────────────────────────────────────────── */}
+      <section className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+            自分の全身写真
+          </p>
+          {bodyImagePath && !isSavingBody && (
+            <button
+              onClick={() => bodyInputRef.current?.click()}
+              className="flex items-center gap-1 text-xs"
+              style={{ color: 'var(--purple)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              全身写真を変更
+            </button>
+          )}
+        </div>
 
-      <input ref={personInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onPersonChange} />
-      <input ref={garmentInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onGarmentChange} />
+        {displayBodyUrl ? (
+          // 登録済み or アップロード中
+          <div className="flex items-center gap-4">
+            <div
+              className="relative rounded-xl overflow-hidden flex-shrink-0"
+              style={{
+                width: 84,
+                height: 112,
+                border: '1px solid rgba(124,58,237,0.4)',
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={displayBodyUrl} alt="全身写真" className="w-full h-full object-cover" />
+              {isSavingBody && (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+                  <Spinner />
+                </div>
+              )}
+            </div>
+            {!isSavingBody && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#34D399' }} />
+                  <p className="text-xs font-semibold" style={{ color: '#34D399' }}>登録済み</p>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(196,181,253,0.65)' }}>
+                  この写真を使って<br />試着します
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          // 未登録
+          <button
+            onClick={() => bodyInputRef.current?.click()}
+            disabled={isSavingBody}
+            className="flex items-center gap-3 w-full rounded-2xl px-4 py-4 text-left transition-opacity active:opacity-70"
+            style={{
+              background: 'linear-gradient(145deg, rgba(124,58,237,0.10) 0%, rgba(168,85,247,0.05) 100%)',
+              border: '1.5px dashed rgba(124,58,237,0.35)',
+            }}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: 'rgba(124,58,237,0.15)' }}
+            >
+              {isSavingBody ? <Spinner /> : <PersonIcon />}
+            </div>
+            <div>
+              <p className="text-sm font-semibold mb-0.5" style={{ color: '#EDE9FE' }}>
+                全身写真を登録する
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: 'rgba(196,181,253,0.6)' }}>
+                一度登録すると次回から自動で使用します
+              </p>
+            </div>
+          </button>
+        )}
 
-      {/* エラーメッセージ */}
+        {bodyError && (
+          <p className="text-[11px]" style={{ color: '#F87171' }}>{bodyError}</p>
+        )}
+      </section>
+
+      {/* ── 服画像セクション ────────────────────────────────────────────────── */}
+      <section className="flex flex-col gap-2">
+        <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>服の画像</p>
+        <div className="flex items-start gap-4">
+          {/* サムネイル or アップロード枠 */}
+          <div
+            onClick={garment.preview ? undefined : () => garmentInputRef.current?.click()}
+            className="relative rounded-xl overflow-hidden flex-shrink-0"
+            style={{
+              width: 84,
+              height: 112,
+              background: garment.preview
+                ? 'transparent'
+                : 'linear-gradient(145deg, rgba(124,58,237,0.10) 0%, rgba(168,85,247,0.05) 100%)',
+              border: garment.error
+                ? '1.5px solid #F87171'
+                : garment.preview
+                ? '1px solid rgba(124,58,237,0.4)'
+                : '1.5px dashed rgba(124,58,237,0.35)',
+              cursor: garment.preview ? 'default' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {garment.preview ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={garment.preview} alt="服" className="w-full h-full object-cover" />
+                <button
+                  onClick={(e) => { e.stopPropagation(); setGarment(EMPTY_GARMENT) }}
+                  className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(0,0,0,0.55)' }}
+                  aria-label="削除"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
+                    <path d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </>
+            ) : (
+              <GarmentIcon />
+            )}
+          </div>
+
+          {/* ラベル */}
+          <div className="flex-1 pt-1 flex flex-col gap-2">
+            {garment.preview ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#A855F7' }} />
+                  <p className="text-xs font-semibold" style={{ color: '#C4B5FD' }}>選択済み</p>
+                </div>
+                <button
+                  onClick={() => garmentInputRef.current?.click()}
+                  className="text-xs self-start"
+                  style={{ color: 'var(--purple)' }}
+                >
+                  変更する
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold" style={{ color: '#EDE9FE' }}>
+                  服の画像を選ぶ
+                </p>
+                <p className="text-xs leading-relaxed" style={{ color: 'rgba(196,181,253,0.6)' }}>
+                  白背景の商品画像が推奨
+                </p>
+                <button
+                  onClick={() => garmentInputRef.current?.click()}
+                  className="text-xs self-start px-3 py-1.5 rounded-xl transition-opacity active:opacity-70"
+                  style={{
+                    background: 'rgba(124,58,237,0.2)',
+                    border: '1px solid rgba(168,85,247,0.35)',
+                    color: '#C4B5FD',
+                  }}
+                >
+                  写真を選択
+                </button>
+              </>
+            )}
+            {garment.error && (
+              <p className="text-[11px]" style={{ color: '#F87171' }}>{garment.error}</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* hidden inputs */}
+      <input ref={bodyInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onBodyFileChange} />
+      <input ref={garmentInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onGarmentFileChange} />
+
+      {/* エラー */}
       {submitError && (
-        <p className="text-sm text-center px-2" style={{ color: '#F87171' }}>
-          {submitError}
-        </p>
+        <p className="text-sm text-center" style={{ color: '#F87171' }}>{submitError}</p>
       )}
 
-      {/* 試着する ボタン */}
+      {/* 試着するボタン */}
       <button
         onClick={handleSubmit}
         disabled={!canSubmit}
@@ -163,118 +380,138 @@ export function AiFittingForm({ userId }: { userId: string }) {
           boxShadow: canSubmit ? '0 4px 20px rgba(124,58,237,0.4)' : 'none',
         }}
       >
-        {status === 'uploading' && (
-          <span className="flex items-center justify-center gap-2">
-            <Spinner /> アップロード中…
-          </span>
+        {submitStatus === 'uploading' && (
+          <span className="flex items-center justify-center gap-2"><Spinner /> アップロード中…</span>
         )}
-        {status === 'processing' && (
-          <span className="flex items-center justify-center gap-2">
-            <Spinner /> AI処理中…
-          </span>
+        {submitStatus === 'processing' && (
+          <span className="flex items-center justify-center gap-2"><Spinner /> AI処理中…</span>
         )}
-        {(status === 'idle' || status === 'completed' || status === 'failed') && '試着する'}
+        {submitStatus !== 'uploading' && submitStatus !== 'processing' && '試着する'}
       </button>
 
-      {/* 結果表示 */}
-      {status === 'completed' && resultUrl && (
-        <div className="flex flex-col items-center gap-3">
-          <div
-            className="rounded-2xl overflow-hidden w-full"
-            style={{ border: '1px solid rgba(124,58,237,0.35)' }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={resultUrl} alt="試着結果" className="w-full object-cover" />
-          </div>
+      {/* AI エンジン準備中バナー */}
+      <div
+        className="rounded-2xl px-4 py-4 flex items-start gap-3"
+        style={{
+          background: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(168,85,247,0.07) 100%)',
+          border: '1px solid rgba(124,58,237,0.22)',
+        }}
+      >
+        <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="#A855F7" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+        </svg>
+        <div>
+          <p className="text-sm font-semibold mb-0.5" style={{ color: '#C4B5FD' }}>AI試着エンジンを準備中</p>
+          <p className="text-xs leading-relaxed" style={{ color: 'rgba(196,181,253,0.65)' }}>
+            写真を登録しておくと、エンジン公開後すぐに試着できます。
+          </p>
         </div>
-      )}
+      </div>
 
-      {/* Coming Soon バナー（FASHN.ai 未接続時）*/}
-      {status === 'idle' && (
-        <div
-          className="rounded-2xl px-4 py-4 flex items-start gap-3"
-          style={{
-            background: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(168,85,247,0.07) 100%)',
-            border: '1px solid rgba(124,58,237,0.22)',
-          }}
-        >
-          <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="#A855F7" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-          </svg>
-          <div>
-            <p className="text-sm font-semibold mb-0.5" style={{ color: '#C4B5FD' }}>
-              AI試着エンジンを準備中
+      {/* ── 試着履歴セクション ──────────────────────────────────────────────── */}
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
+          試着履歴
+        </p>
+        {tryons.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3"
+              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="#A855F7" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.57a1 1 0 00.99.86H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.86l.58-3.57a2 2 0 00-1.34-2.23z" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold mb-1" style={{ color: 'var(--text)' }}>
+              まだ試着履歴はありません
             </p>
-            <p className="text-xs leading-relaxed" style={{ color: 'rgba(196,181,253,0.65)' }}>
-              写真をアップロードしておくと、エンジン公開後すぐに試着できます。画像は安全に保存されます。
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              気になる服を選んで、AI Fittingを試してみましょう
             </p>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {tryons.map(t => <TryonCard key={t.id} tryon={t} />)}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
 
-// ─── 画像アップロードスロット ──────────────────────────────────────────────────
+// ─── 試着履歴カード ───────────────────────────────────────────────────────────
 
-function ImageUploadSlot({
-  label, hint, preview, error, onTap, onRemove, icon,
-}: {
-  label: string
-  hint: string
-  preview: string | null
-  error: string | null
-  onTap: () => void
-  onRemove: () => void
-  icon: React.ReactNode
-}) {
+function TryonCard({ tryon }: { tryon: TryonRow }) {
+  const isCompleted = tryon.status === 'completed' && tryon.result_image_url
+  const isFailed = tryon.status === 'failed'
+  const isPending = tryon.status === 'pending' || tryon.status === 'processing'
+
+  // display_url: サーバー生成 signed URL または送信直後の blob URL
+  const displayImage = tryon.display_url
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>{label}</p>
-      <div
-        onClick={preview ? undefined : onTap}
-        className="relative rounded-2xl overflow-hidden flex flex-col items-center justify-center"
-        style={{
-          aspectRatio: '3/4',
-          background: preview
-            ? 'transparent'
-            : 'linear-gradient(145deg, rgba(124,58,237,0.10) 0%, rgba(168,85,247,0.05) 100%)',
-          border: error
-            ? '1.5px solid #F87171'
-            : preview
-            ? '1px solid rgba(124,58,237,0.35)'
-            : '1.5px dashed rgba(124,58,237,0.35)',
-          cursor: preview ? 'default' : 'pointer',
-        }}
-      >
-        {preview ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={preview} alt={label} className="w-full h-full object-cover" />
-            <button
-              onClick={(e) => { e.stopPropagation(); onRemove() }}
-              className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-              aria-label="削除"
+    <div
+      className="flex flex-col rounded-2xl overflow-hidden"
+      style={{ border: '1px solid var(--border)' }}
+    >
+      <div className="relative" style={{ aspectRatio: '3/4', background: 'var(--bg-elevated)' }}>
+        {displayImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={displayImage}
+            alt="試着"
+            className="w-full h-full object-cover"
+            style={{ opacity: (isPending || isFailed) ? 0.45 : 1 }}
+          />
+        )}
+
+        {isPending && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2"
+            style={{ background: 'rgba(0,0,0,0.35)' }}>
+            <Spinner />
+            <p className="text-[10px] text-white/80">生成中</p>
+          </div>
+        )}
+
+        {isFailed && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1"
+            style={{ background: 'rgba(0,0,0,0.45)' }}>
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="#F87171" strokeWidth={2} strokeLinecap="round">
+              <circle cx="12" cy="12" r="9" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <circle cx="12" cy="16" r="0.5" fill="#F87171" />
+            </svg>
+            <p className="text-[10px]" style={{ color: '#F87171' }}>失敗</p>
+          </div>
+        )}
+
+        {isCompleted && (
+          <div className="absolute top-2 left-2">
+            <span
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+              style={{
+                background: 'rgba(52,211,153,0.2)',
+                color: '#34D399',
+                border: '1px solid rgba(52,211,153,0.3)',
+              }}
             >
-              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round">
-                <path d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </>
-        ) : (
-          <div className="flex flex-col items-center gap-2 px-3 py-4">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.15)' }}>
-              {icon}
-            </div>
-            <p className="text-[10px] text-center leading-snug" style={{ color: 'rgba(196,181,253,0.6)' }}>{hint}</p>
+              完成
+            </span>
           </div>
         )}
       </div>
-      {error && <p className="text-[10px]" style={{ color: '#F87171' }}>{error}</p>}
+
+      <div className="px-2.5 py-2" style={{ background: 'var(--bg-elevated)' }}>
+        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          {formatRelativeTime(tryon.created_at)}
+        </p>
+      </div>
     </div>
   )
 }
+
+// ─── Icons / Spinner ──────────────────────────────────────────────────────────
 
 function PersonIcon() {
   return (
@@ -295,9 +532,9 @@ function GarmentIcon() {
 
 function Spinner() {
   return (
-    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <circle className="opacity-25" cx="12" cy="12" r="10" strokeWidth="3" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" stroke="none" />
     </svg>
   )
 }
