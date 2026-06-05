@@ -1,6 +1,5 @@
 import { TopBar } from '@/components/layout/TopBar'
 import { StyleIdInfoModal } from '@/components/search/StyleIdInfoModal'
-import { StyleCheckInfoModal } from '@/components/search/StyleCheckInfoModal'
 import { CosmoInfoModal } from '@/components/search/CosmoInfoModal'
 import { HypeInfoModal } from '@/components/search/HypeInfoModal'
 import { SpringCard } from '@/components/ui/SpringCard'
@@ -41,24 +40,24 @@ export default function ContentsPage() {
             </svg>
           </SpringCard>
 
-          {/* AIコーデ診断 */}
+          {/* AI Fitting */}
           <SpringCard
-            href="/style-check"
-            gradient="linear-gradient(145deg, #0C1A3A 0%, #1E3A6E 50%, #3B82F6 100%)"
+            href="/ai-fitting"
+            gradient="linear-gradient(145deg, #0A0320 0%, #2D0A6B 50%, #7C3AED 100%)"
             dots={DOTS_A}
-            label="AIコーデ診断"
-            description="あなたのコーデをAIがチェック"
-            infoButton={<StyleCheckInfoModal />}
+            label="AI Fitting"
+            description="自分の写真で、気になる服をバーチャル試着"
           >
-            <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden>
-              <circle cx={30} cy={22} r={11} fill="#BFDBFE" opacity={0.9} />
-              <path d="M20 42 Q30 34 40 42" stroke="#93C5FD" strokeWidth={1.8} fill="none" strokeLinecap="round" opacity={0.8} />
-              <circle cx={26} cy={21} r={2.5} fill="#1D4ED8" />
-              <circle cx={34} cy={21} r={2.5} fill="#1D4ED8" />
-              <path d="M26 28 Q30 31 34 28" stroke="#1D4ED8" strokeWidth={1.2} fill="none" strokeLinecap="round" />
-              <text x={42} y={14} fontSize={10} fill="#FCD34D">✦</text>
-              <circle cx={14} cy={38} r={3} fill="#60A5FA" opacity={0.6} />
-              <circle cx={46} cy={38} r={2.5} fill="#93C5FD" opacity={0.5} />
+            <svg viewBox="0 0 60 60" width={48} height={48} aria-hidden fill="none">
+              {/* シャツシルエット */}
+              <path d="M22 8 L14 16 L20 18 L20 48 L40 48 L40 18 L46 16 L38 8 Q35 12 30 12 Q25 12 22 8Z" fill="#DDD6FE" opacity={0.85} />
+              {/* 首元 */}
+              <path d="M22 8 Q25 12 30 12 Q35 12 38 8" stroke="#A78BFA" strokeWidth={1.2} fill="none" />
+              {/* キラキラ */}
+              <text x={44} y={16} fontSize={9} fill="#FCD34D">✦</text>
+              <circle cx={13} cy={38} r={1.5} fill="#C4B5FD" opacity={0.5} />
+              {/* AI光彩 */}
+              <ellipse cx={30} cy={29} rx={7} ry={9} fill="none" stroke="#A855F7" strokeWidth={0.8} opacity={0.5} strokeDasharray="2 2" />
             </svg>
           </SpringCard>
 

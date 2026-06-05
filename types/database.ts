@@ -743,6 +743,47 @@ export type Database = {
           }
         ]
       }
+      virtual_tryons: {
+        Row: {
+          id: string
+          user_id: string
+          person_image_url: string
+          garment_image_url: string
+          source_type: string
+          status: string
+          result_image_url: string | null
+          error_message: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          person_image_url: string
+          garment_image_url: string
+          source_type?: string
+          status?: string
+          result_image_url?: string | null
+          error_message?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          status?: string
+          result_image_url?: string | null
+          error_message?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "virtual_tryons_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       style_diagnoses: {
         Row: {
           id: string
