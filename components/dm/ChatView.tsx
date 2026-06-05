@@ -36,6 +36,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const inputBarRef = useRef<HTMLDivElement>(null)
   const isInitial = useRef(true)
   const isPrepending = useRef(false)
   const confirmedIds = useRef(new Set(initialMessages.map(m => m.id)))
@@ -58,13 +59,21 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     const baselineHeight = window.innerHeight
     let prevVvHeight = vv ? vv.height : window.innerHeight
 
+    // 初期位置を直接 DOM に設定（React レンダリング前に確定させる）
+    if (inputBarRef.current) {
+      inputBarRef.current.style.bottom = '0px'
+    }
+
     function onVvResize() {
       const newHeight = vv ? vv.height : window.innerHeight
       const decreased = newHeight < prevVvHeight - 50
       prevVvHeight = newHeight
       const kb = Math.max(0, baselineHeight - newHeight)
-      // kbBottom だけ更新。コンテナは一切触らない。
-      // 入力バーは position:fixed で独立しているため親の paddingBottom は不要。
+      // 入力バーは DOM 直接操作で即時反映（React state 経由だとキーボードアニメーション中に遅れる）
+      if (inputBarRef.current) {
+        inputBarRef.current.style.bottom = `${kb}px`
+      }
+      // メッセージ一覧の paddingBottom は React state で更新（多少遅れても問題ない）
       setKbBottom(kb)
       if (decreased && scrollRef.current) {
         requestAnimationFrame(() => {
@@ -335,13 +344,14 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
         </div>
 
         {/* 入力バー — position:fixed で親コンテナから独立させ、キーボード上に直接固定する。
-            bottom: kbBottom でキーボード高さ分だけ浮かせる。親の paddingBottom と無関係。 */}
+            bottom は useLayoutEffect で inputBarRef を通じて直接 DOM 操作する（React state 経由だとキーボードアニメーション中に遅れるため）。
+            JSX の style に bottom を書かないことで React の re-render が DOM 値を上書きしない。 */}
         <div
+          ref={inputBarRef}
           style={{
             position: 'fixed',
             left: 0,
             right: 0,
-            bottom: kbBottom,
             zIndex: 10,
             background: 'var(--nav-bg)',
             borderTop: '1px solid var(--border)',
