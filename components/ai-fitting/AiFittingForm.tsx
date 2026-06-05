@@ -484,46 +484,240 @@ export function AiFittingForm({ userId, initialBodyImagePath, initialBodySignedU
   )
 }
 
-// ─── 試着結果ビューア ─────────────────────────────────────────────────────────
+// ─── 試着結果ビューア（ピンチズーム・スワイプクローズ対応）────────────────────
+
+const VIEWER_CLOSE_THRESHOLD = 120
+const VIEWER_VELOCITY_THRESHOLD = 0.5
+const VIEWER_MAX_SCALE = 5
 
 function TryonViewer({ url, onClose }: { url: string; onClose: () => void }) {
   const [visible, setVisible] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [swipeOut, setSwipeOut] = useState(false)
+  const [drag, setDrag] = useState({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
+
+  const [scale, setScaleState] = useState(1)
+  const [panX, setPanXState] = useState(0)
+  const [panY, setPanYState] = useState(0)
+  const [isPinching, setIsPinching] = useState(false)
+  const scaleRef = useRef(1)
+  const panXRef = useRef(0)
+  const panYRef = useRef(0)
+  const isPinchingRef = useRef(false)
+
   const closingRef = useRef(false)
+  const startX = useRef(0)
+  const startY = useRef(0)
+  const startTime = useRef(0)
+  const dragDir = useRef<'vert' | 'horiz' | null>(null)
+  const prevPinchDist = useRef(0)
+  const prevPinchMidX = useRef(0)
+  const prevPinchMidY = useRef(0)
+  const panStartX = useRef(0)
+  const panStartY = useRef(0)
+  const justPinchedRef = useRef(false)
+  const imageContainerRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   useEffect(() => { setVisible(true) }, [])
 
-  function close() {
+  function setScale(v: number) { scaleRef.current = v; setScaleState(v) }
+  function setPanX(v: number) { panXRef.current = v; setPanXState(v) }
+  function setPanY(v: number) { panYRef.current = v; setPanYState(v) }
+
+  function getPinchDist(touches: React.TouchList) {
+    return Math.hypot(
+      touches[1].clientX - touches[0].clientX,
+      touches[1].clientY - touches[0].clientY,
+    )
+  }
+
+  function closeTap() {
     if (closingRef.current) return
     closingRef.current = true
     setClosing(true)
     setVisible(false)
-    setTimeout(onClose, 200)
+    setTimeout(() => onCloseRef.current(), 170)
   }
+
+  function closeSwipe() {
+    if (closingRef.current) return
+    closingRef.current = true
+    setSwipeOut(true)
+    setClosing(true)
+    setIsDragging(false)
+    setVisible(false)
+    setTimeout(() => onCloseRef.current(), 260)
+  }
+
+  const dragRatio = Math.min(Math.max(drag.y, 0) / VIEWER_CLOSE_THRESHOLD, 1)
+  const bgAlpha = visible
+    ? (isDragging ? Math.max(0.15, 0.93 - dragRatio * 0.78) : 0.93)
+    : 0
+
+  const ty = swipeOut ? drag.y + 420 : drag.y
+  const imgOpenScale = visible ? 1 : (closing && !swipeOut ? 0.96 : 0.92)
+
+  const imgTransform = scale > 1
+    ? `translate(${panX}px, ${panY}px) scale(${scale})`
+    : `translate(${drag.x}px, ${ty}px) scale(${imgOpenScale})`
+
+  const imgTransition = isDragging || isPinching || isPanning
+    ? 'none'
+    : swipeOut
+      ? 'transform 220ms ease-in, opacity 200ms ease-in'
+      : closing
+        ? 'transform 140ms ease-in, opacity 130ms ease-in'
+        : 'transform 120ms ease-out, opacity 100ms ease-out'
+
+  const bgTransition = isDragging
+    ? 'none'
+    : closing
+      ? 'background-color 200ms ease-in'
+      : 'background-color 160ms ease-out'
 
   return createPortal(
     <div
       className="fixed inset-0"
       style={{
         zIndex: 9999,
-        backgroundColor: `rgba(0,0,0,${visible ? 0.93 : 0})`,
-        transition: 'background-color 160ms ease-out',
+        backgroundColor: `rgba(0,0,0,${bgAlpha})`,
+        transition: bgTransition,
         touchAction: 'none',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}
-      onClick={close}
+      onClick={closeTap}
+      onTouchStart={e => {
+        e.stopPropagation()
+        if (closingRef.current) return
+        if (e.touches.length === 2) {
+          isPinchingRef.current = true
+          setIsPinching(true)
+          setIsPanning(false)
+          prevPinchDist.current = getPinchDist(e.touches)
+          prevPinchMidX.current = (e.touches[0].clientX + e.touches[1].clientX) / 2 - window.innerWidth / 2
+          prevPinchMidY.current = (e.touches[0].clientY + e.touches[1].clientY) / 2 - window.innerHeight / 2
+          return
+        }
+        startX.current = e.touches[0].clientX
+        startY.current = e.touches[0].clientY
+        startTime.current = Date.now()
+        dragDir.current = null
+        panStartX.current = panXRef.current
+        panStartY.current = panYRef.current
+        if (scaleRef.current > 1) setIsPanning(true)
+      }}
+      onTouchMove={e => {
+        e.stopPropagation()
+        if (closingRef.current) return
+        if (e.touches.length === 2) {
+          if (!isPinchingRef.current) {
+            isPinchingRef.current = true
+            setIsPinching(true)
+            setIsPanning(false)
+            prevPinchDist.current = getPinchDist(e.touches)
+            prevPinchMidX.current = (e.touches[0].clientX + e.touches[1].clientX) / 2 - window.innerWidth / 2
+            prevPinchMidY.current = (e.touches[0].clientY + e.touches[1].clientY) / 2 - window.innerHeight / 2
+          }
+          const dist = getPinchDist(e.touches)
+          const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - window.innerWidth / 2
+          const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - window.innerHeight / 2
+          const rawScale = scaleRef.current * (dist / prevPinchDist.current)
+          const newScale = Math.max(1, Math.min(VIEWER_MAX_SCALE, rawScale))
+          const actualRatio = newScale / scaleRef.current
+          const newPanX = mx + actualRatio * (panXRef.current - prevPinchMidX.current)
+          const newPanY = my + actualRatio * (panYRef.current - prevPinchMidY.current)
+          setScale(newScale)
+          if (newScale <= 1) { setPanX(0); setPanY(0) }
+          else { setPanX(newPanX); setPanY(newPanY) }
+          prevPinchDist.current = dist
+          prevPinchMidX.current = mx
+          prevPinchMidY.current = my
+          return
+        }
+        if (e.touches.length === 1) {
+          const dx = e.touches[0].clientX - startX.current
+          const dy = e.touches[0].clientY - startY.current
+          if (scaleRef.current > 1) {
+            if (!isPanning) setIsPanning(true)
+            setPanX(panStartX.current + dx)
+            setPanY(panStartY.current + dy)
+            return
+          }
+          if (dragDir.current === null) {
+            if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
+            dragDir.current = Math.abs(dy) >= Math.abs(dx) ? 'vert' : 'horiz'
+          }
+          if (dragDir.current === 'vert' && dy > 0) {
+            setIsDragging(true)
+            setDrag({ x: dx * 0.2, y: dy })
+          }
+        }
+      }}
+      onTouchEnd={e => {
+        e.stopPropagation()
+        if (closingRef.current) return
+        if (isPinchingRef.current && e.touches.length === 1) {
+          startX.current = e.touches[0].clientX
+          startY.current = e.touches[0].clientY
+          panStartX.current = panXRef.current
+          panStartY.current = panYRef.current
+          dragDir.current = null
+          return
+        }
+        if (e.touches.length === 0) {
+          setIsPanning(false)
+          if (isPinchingRef.current) {
+            isPinchingRef.current = false
+            setIsPinching(false)
+            justPinchedRef.current = true
+            setTimeout(() => { justPinchedRef.current = false }, 200)
+          }
+          if (scaleRef.current > 1) {
+            setIsDragging(false)
+            setDrag({ x: 0, y: 0 })
+            return
+          }
+          const dx = e.changedTouches[0].clientX - startX.current
+          const dy = e.changedTouches[0].clientY - startY.current
+          const elapsed = Math.max(1, Date.now() - startTime.current)
+          const vy = dy / elapsed
+          if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+            if (!justPinchedRef.current) {
+              // 画像上のタップは閉じない、背景タップのみ閉じる
+              const target = e.changedTouches[0].target as Element
+              if (!imageContainerRef.current?.contains(target)) closeTap()
+            }
+            return
+          }
+          if (dragDir.current === 'vert') {
+            if (dy > VIEWER_CLOSE_THRESHOLD || (dy > 50 && vy > VIEWER_VELOCITY_THRESHOLD)) {
+              closeSwipe()
+            } else {
+              setIsDragging(false)
+              setDrag({ x: 0, y: 0 })
+            }
+            return
+          }
+          setDrag({ x: 0, y: 0 })
+        }
+      }}
     >
       <button
-        onClick={e => { e.stopPropagation(); close() }}
+        onClick={e => { e.stopPropagation(); closeTap() }}
         className="absolute right-4 flex items-center justify-center w-9 h-9 rounded-full"
         style={{
           top: 'calc(1rem + env(safe-area-inset-top, 0px))',
           background: 'rgba(255,255,255,0.15)',
           zIndex: 10,
-          opacity: visible ? 1 : 0,
+          opacity: visible && !isDragging ? 1 : 0,
           transition: 'opacity 200ms ease',
+          pointerEvents: isDragging ? 'none' : 'auto',
         }}
       >
         <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="white" strokeWidth={2}>
@@ -531,22 +725,29 @@ function TryonViewer({ url, onClose }: { url: string; onClose: () => void }) {
         </svg>
       </button>
 
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={url}
-        alt="試着結果"
+      <div
+        ref={imageContainerRef}
         onClick={e => e.stopPropagation()}
         style={{
+          opacity: visible ? 1 : 0,
+          transform: imgTransform,
+          transition: imgTransition,
+          willChange: 'transform, opacity',
           maxWidth: '100%',
           maxHeight: '90svh',
-          objectFit: 'contain',
-          opacity: visible ? 1 : 0,
-          transform: visible ? 'scale(1)' : (closing ? 'scale(0.96)' : 'scale(0.92)'),
-          transition: closing
-            ? 'transform 140ms ease-in, opacity 130ms ease-in'
-            : 'transform 120ms ease-out, opacity 100ms ease-out',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
-      />
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt="試着結果"
+          style={{ maxWidth: '100%', maxHeight: '90svh', objectFit: 'contain', display: 'block' }}
+          draggable={false}
+        />
+      </div>
     </div>,
     document.body
   )
