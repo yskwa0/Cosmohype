@@ -261,7 +261,8 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
   function handleInputFocus() {
     isInputFocusedRef.current = true
 
-    // onPointerDown/onTouchStart で隠せていない場合の念押し
+    // focus が確定してから hide → 補正 → show の順で処理する
+    // onPointerDown ではなく onFocus で呼ぶことで、focus しない touches では hide しない
     prepareInputBarForFocus()
     syncInputBarPosition()
 
@@ -463,8 +464,6 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
-              onPointerDown={prepareInputBarForFocus}
-              onTouchStart={prepareInputBarForFocus}
               onFocus={handleInputFocus}
               onBlur={handleInputBlur}
               onKeyDown={e => {
