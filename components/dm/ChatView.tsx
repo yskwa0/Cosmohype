@@ -40,11 +40,15 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     kb: number; styleBot: string
     rTop: number | null; rBot: number | null; rH: number | null
     distBot: number | null; diff: number | null
+    scrollY: number | null; docST: number | null; bodyST: number | null
+    outerTop: number | null; outerBot: number | null
   }
   const [dbg, setDbg] = useState<DebugInfo>({
     innerH: 0, baseline: 0, vvH: null, vvOT: null, vvPT: null,
     kb: 0, styleBot: '–',
     rTop: null, rBot: null, rH: null, distBot: null, diff: null,
+    scrollY: null, docST: null, bodyST: null,
+    outerTop: null, outerBot: null,
   })
 
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -63,6 +67,19 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
 
   useEffect(() => { messagesRef.current = messages }, [messages])
   useEffect(() => { setMounted(true) }, [])
+
+  // iOS の input focus auto-scroll 対策: body/html に overflow:hidden をかけてドキュメント自体のスクロールを封じる
+  // unmount 時に必ず元の値に戻す
+  useEffect(() => {
+    const prevBody = document.body.style.overflow
+    const prevHtml = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prevBody
+      document.documentElement.style.overflow = prevHtml
+    }
+  }, [])
 
   // ── DEBUG LOG 3: kbBottom state 変化と、その時点での inputBarRef.bottom ──
   // React re-render で bottom が上書きされているかを確認する
@@ -266,6 +283,23 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     setSelectedMsgId(null)
   }
 
+  function handleInputFocus() {
+    // iOS Safari/PWA の input focus 時の自動スクロールを打ち消す
+    // rAF でブラウザの scroll 処理が終わった後に scrollTo(0,0) で戻す
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0)
+      const outerRect = containerRef.current?.getBoundingClientRect()
+      setDbg(prev => ({
+        ...prev,
+        scrollY: window.scrollY,
+        docST: document.documentElement.scrollTop,
+        bodyST: document.body.scrollTop,
+        outerTop: outerRect?.top ?? null,
+        outerBot: outerRect?.bottom ?? null,
+      }))
+    })
+  }
+
   async function handleSend() {
     const body = input.trim()
     if (!body || sending) return
@@ -308,7 +342,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
       <div
         ref={containerRef}
         className="flex flex-col"
-        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+        style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden' }}
       >
         {/* TopBar: fixed コンテナ内に配置することでiOSキーボードによる画面押し上げを防ぐ */}
         {topBar}
@@ -433,6 +467,7 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
+              onFocus={handleInputFocus}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
@@ -504,7 +539,13 @@ rTop     ${dbg.rTop ?? '–'}
 rBot     ${dbg.rBot ?? '–'}
 rH       ${dbg.rH ?? '–'}
 distBot  ${dbg.distBot ?? '–'}
-diff     ${dbg.diff ?? '–'}`}
+diff     ${dbg.diff ?? '–'}
+─── onFocus ──
+scrollY  ${dbg.scrollY ?? '–'}
+docST    ${dbg.docST ?? '–'}
+bodyST   ${dbg.bodyST ?? '–'}
+outerTop ${dbg.outerTop ?? '–'}
+outerBot ${dbg.outerBot ?? '–'}`}
       </div>
 
       {/* 削除確認ボトムシート */}
