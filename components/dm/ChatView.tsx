@@ -292,24 +292,45 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
     setIsInputFocused(true)
     isInputFocusedRef.current = true
 
-    // iOS は input focus 時にページ or visual viewport をスクロールさせる。
-    // rAF + setTimeout で複数回リセット＆再測定してキーボード表示後の正しい位置を確定する。
+    const bar = inputBarRef.current
+    if (bar) {
+      // transition を止めて補正前の位置変化をアニメーションさせない
+      bar.style.transition = 'none'
+      // opacity:0 で補正が効く前の「跳ね」をユーザーに見せない
+      bar.style.opacity = '0'
+      // 即時同期（iOS auto-scroll が起きる前の最速タイミング）
+      syncInputBarPosition()
+    }
+
     const resetAndSync = () => {
       window.scrollTo(0, 0)
       syncInputBarPosition()
     }
 
-    requestAnimationFrame(resetAndSync)
+    // 1フレーム後: scroll reset + 再測定 → その後 opacity:1 で表示
+    requestAnimationFrame(() => {
+      resetAndSync()
+      if (bar) bar.style.opacity = '1'
+    })
+
+    // キーボードアニメーション中も複数回補正
     setTimeout(resetAndSync, 50)
     setTimeout(resetAndSync, 150)
-    setTimeout(resetAndSync, 300)
+    // 300ms でキーボードが安定したら transition を戻す
+    setTimeout(() => {
+      resetAndSync()
+      if (bar) bar.style.transition = ''
+    }, 300)
   }
 
   function handleInputBlur() {
     setIsInputFocused(false)
     isInputFocusedRef.current = false
-    if (inputBarRef.current) {
-      inputBarRef.current.style.bottom = '0px'
+    const bar = inputBarRef.current
+    if (bar) {
+      bar.style.transition = 'none'
+      bar.style.bottom = '0px'
+      bar.style.opacity = '1'
     }
     setKbBottom(0)
     setDbg(prev => ({ ...prev, focused: false, appliedBot: 0, styleBot: '0px' }))
