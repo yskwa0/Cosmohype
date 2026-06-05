@@ -75,11 +75,11 @@ export function AiFittingForm({ userId, initialBodyImagePath, initialBodySignedU
 
     try {
       const supabase = createClient()
-      const path = `${userId}/body/body.jpg`
+      const path = `${userId}/body/body-${Date.now()}.jpg`
 
       const { error: upErr } = await supabase.storage
         .from('ai-tryons')
-        .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' })
+        .upload(path, compressed, { upsert: false, contentType: 'image/jpeg' })
       if (upErr) throw upErr
 
       // DBには path を保存（public URL ではない）
@@ -153,21 +153,35 @@ export function AiFittingForm({ userId, initialBodyImagePath, initialBodySignedU
           sourceType: 'upload',
         }),
       })
-      const data = await res.json() as { id: string; status: string }
+      const data = await res.json() as { id?: string; status?: string; error?: string; displayUrl?: string }
 
-      // 履歴先頭に追加。display_url は blob URL（ページリロード後はサーバー側で signed URL を生成）
+      // 429: 上限エラー（レコード作成なし）
+      if (res.status === 429) {
+        setSubmitStatus('failed')
+        setSubmitError(data.error ?? '本日のAI Fittingは使用済みです。明日また試してください。')
+        return
+      }
+
+      if (!data.id) {
+        setSubmitStatus('failed')
+        setSubmitError(data.error ?? '試着リクエストに失敗しました')
+        return
+      }
+
+      // 完成 → displayUrl があれば結果画像、なければ garment blob URL
+      const displayUrl = data.displayUrl ?? garmentBlobUrl
       setTryons(prev => [{
-        id: data.id,
-        status: data.status,
+        id: data.id!,
+        status: data.status ?? 'failed',
         result_image_url: null,
         garment_image_url: garmentPath,
         created_at: new Date().toISOString(),
-        display_url: garmentBlobUrl,
+        display_url: displayUrl,
       }, ...prev])
 
       setSubmitStatus(data.status === 'completed' ? 'completed' : 'failed')
-      if (data.status !== 'completed') {
-        setSubmitError('AI試着エンジン準備中です。試着リクエストは保存されました。')
+      if (data.status === 'failed') {
+        setSubmitError(data.error ?? 'AI試着に失敗しました。再度お試しください。')
       }
       setGarment(EMPTY_GARMENT)
     } catch (e) {
@@ -389,25 +403,6 @@ export function AiFittingForm({ userId, initialBodyImagePath, initialBodySignedU
         {submitStatus !== 'uploading' && submitStatus !== 'processing' && '試着する'}
       </button>
 
-      {/* AI エンジン準備中バナー */}
-      <div
-        className="rounded-2xl px-4 py-4 flex items-start gap-3"
-        style={{
-          background: 'linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(168,85,247,0.07) 100%)',
-          border: '1px solid rgba(124,58,237,0.22)',
-        }}
-      >
-        <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="#A855F7" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-        </svg>
-        <div>
-          <p className="text-sm font-semibold mb-0.5" style={{ color: '#C4B5FD' }}>AI試着エンジンを準備中</p>
-          <p className="text-xs leading-relaxed" style={{ color: 'rgba(196,181,253,0.65)' }}>
-            写真を登録しておくと、エンジン公開後すぐに試着できます。
-          </p>
-        </div>
-      </div>
-
       {/* ── 試着履歴セクション ──────────────────────────────────────────────── */}
       <section>
         <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--text-muted)' }}>
@@ -443,7 +438,7 @@ export function AiFittingForm({ userId, initialBodyImagePath, initialBodySignedU
 // ─── 試着履歴カード ───────────────────────────────────────────────────────────
 
 function TryonCard({ tryon }: { tryon: TryonRow }) {
-  const isCompleted = tryon.status === 'completed' && tryon.result_image_url
+  const isCompleted = tryon.status === 'completed' && (tryon.result_image_url || tryon.display_url)
   const isFailed = tryon.status === 'failed'
   const isPending = tryon.status === 'pending' || tryon.status === 'processing'
 
