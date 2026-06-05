@@ -100,7 +100,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   let likedPostIds = new Set<string>()
   let savedPostIds = new Set<string>()
 
-  const [usersResult, postsByTag, postsByCaption, likedData, savedData] = await Promise.all([
+  const [usersResult, postsByTag, postsByCaption, brandItems, likedData, savedData] = await Promise.all([
     supabase
       .from('profiles')
       .select('*')
@@ -123,6 +123,11 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       .eq('is_hidden', false)
       .order('created_at', { ascending: false })
       .limit(10),
+    supabase
+      .from('post_items')
+      .select('post_id')
+      .ilike('brand_name', `%${query}%`)
+      .limit(50),
     supabase.from('likes').select('post_id').eq('user_id', user.id),
     supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
   ])
@@ -133,6 +138,23 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   for (const p of [...(postsByTag.data ?? []), ...(postsByCaption.data ?? [])]) {
     postMap.set(p.id, p as Post)
   }
+
+  // brand_name 検索でヒットした投稿のうち、まだ postMap にないものを追加取得
+  const brandPostIdsNew = [...new Set((brandItems.data ?? []).map(r => r.post_id))]
+    .filter(id => !postMap.has(id))
+  if (brandPostIdsNew.length > 0) {
+    const { data: brandPosts } = await supabase
+      .from('posts')
+      .select('*, profiles!posts_user_id_fkey(*), post_images(*)')
+      .in('id', brandPostIdsNew)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    for (const p of brandPosts ?? []) {
+      postMap.set(p.id, p as Post)
+    }
+  }
+
   posts = Array.from(postMap.values()).filter(p => !(p.profiles as { is_private?: boolean } | null)?.is_private)
   likedPostIds = new Set((likedData.data ?? []).map(l => l.post_id))
   savedPostIds = new Set((savedData.data ?? []).map(s => s.post_id))

@@ -113,7 +113,7 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
       unread: unreadByConv[id] ?? 0,
       sortKey: latestByConv[id]?.created_at ?? updatedAtByConv[id] ?? '',
     }))
-    .filter(c => c.otherUser !== null)
+    .filter(c => c.otherUser !== null && c.latestMessage !== null)
     .sort((a: DmConversation & { sortKey: string }, b: DmConversation & { sortKey: string }) => b.sortKey.localeCompare(a.sortKey))
 
   return (

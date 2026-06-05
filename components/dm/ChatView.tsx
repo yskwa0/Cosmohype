@@ -261,7 +261,14 @@ export function ChatView({ conversationId, userId, initialMessages, initialHasMo
         {topBar}
 
         {/* スクロール可能なメッセージ領域 */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
           {/* 追加読み込みインジケーター */}
           {loadingOlder && (
             <div className="flex justify-center py-3">
