@@ -43,7 +43,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
   const supabase = createClient()
-  const images = post.post_images ?? []
+  const images = (post.post_images ?? []).filter(img => !!img.url)
   const profile = post.profiles
 
   const [{ liked, saved, likeCount }, updateInteraction] = usePostInteraction(post.id, {

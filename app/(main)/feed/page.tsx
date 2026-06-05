@@ -34,13 +34,15 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
     .eq('blocker_id', user.id)
   const blockedIds = (blocksData ?? []).map(b => b.blocked_id)
 
+  const nullData = { data: null }
+
   // Phase 1: parallel — social graph, unread counts, DM conversation IDs
   const [{ data: likedData }, { data: savedData }, { data: followsData }, { data: unreadData }, { data: convParticipations }] = await Promise.all([
-    supabase.from('likes').select('post_id').eq('user_id', user.id),
-    supabase.from('saved_posts').select('post_id').eq('user_id', user.id),
-    supabase.from('follows').select('following_id').eq('follower_id', user.id),
-    supabase.rpc('get_unread_counts'),
-    supabase.from('conversation_participants').select('conversation_id').eq('user_id', user.id),
+    supabase.from('likes').select('post_id').eq('user_id', user.id).then(r => r, () => { console.error('[feed] likes fetch failed'); return nullData }),
+    supabase.from('saved_posts').select('post_id').eq('user_id', user.id).then(r => r, () => { console.error('[feed] saved_posts fetch failed'); return nullData }),
+    supabase.from('follows').select('following_id').eq('follower_id', user.id).then(r => r, () => { console.error('[feed] follows fetch failed'); return nullData }),
+    supabase.rpc('get_unread_counts').then(r => r, () => { console.error('[feed] get_unread_counts RPC failed'); return nullData }),
+    supabase.from('conversation_participants').select('conversation_id').eq('user_id', user.id).then(r => r, () => { console.error('[feed] conversation_participants fetch failed'); return nullData }),
   ])
 
   const hasUnread = (unreadData ?? []).some(row => Number(row.unread_count) > 0)
@@ -65,8 +67,8 @@ export default async function FeedPage({ searchParams }: { searchParams: Promise
   }
 
   const [recResult, followResult, othersResult, messagesResult, conversationsResult] = await Promise.all([
-    buildRecQ(),
-    validFollowingIds.length > 0 ? buildFollowQ() : Promise.resolve({ data: null }),
+    buildRecQ().then(r => r, () => { console.error('[feed] recommended posts fetch failed'); return nullData }),
+    validFollowingIds.length > 0 ? buildFollowQ().then(r => r, () => { console.error('[feed] following posts fetch failed'); return nullData }) : Promise.resolve(nullData),
     conversationIds.length > 0
       ? supabase.from('conversation_participants').select('conversation_id, profiles(username, display_name, avatar_url, is_official, is_cosmohype_creator)').in('conversation_id', conversationIds).neq('user_id', user.id)
       : Promise.resolve({ data: null }),
