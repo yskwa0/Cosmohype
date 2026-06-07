@@ -87,7 +87,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
           <SearchHistory />
           <RecommendedUsers
             users={recommended}
-            initialFollowingIds={[]}
+            initialFollowingIds={[...followingIds]}
             currentUserId={user.id}
           />
         </div>

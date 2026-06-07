@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -15,7 +15,10 @@ interface Props {
 
 export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: Props) {
   const [followingIds, setFollowingIds] = useState(() => new Set(initialFollowingIds))
+  const [visibleUsers, setVisibleUsers] = useState(users)
   const [loadingIds, setLoadingIds] = useState(() => new Set<string>())
+
+  useEffect(() => { setVisibleUsers(users) }, [users])
   const supabase = createClient()
   const router = useRouter()
 
@@ -38,10 +41,16 @@ export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: 
         setFollowingIds(prev => new Set(prev).add(userId))
       }
     } else {
+      setVisibleUsers(prev => prev.filter(u => u.id !== userId))
       const { error } = await supabase.from('follows').insert({ follower_id: currentUserId, following_id: userId })
       if (error) {
         console.error('[RecommendedUsers] follow insert failed:', error)
         setFollowingIds(prev => { const next = new Set(prev); next.delete(userId); return next })
+        setVisibleUsers(prev => {
+          if (prev.some(u => u.id === userId)) return prev
+          const restored = users.find(u => u.id === userId)
+          return restored ? [...prev, restored] : prev
+        })
       }
     }
 
@@ -54,11 +63,11 @@ export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: 
       <h2 className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>
         おすすめの人
       </h2>
-      {users.length === 0 ? (
+      {visibleUsers.length === 0 ? (
         <p className="text-sm py-4 text-center" style={{ color: 'var(--text-muted)' }}>おすすめの人はいません</p>
       ) : (
       <div className="flex flex-col">
-        {users.map(u => {
+        {visibleUsers.map(u => {
           const isFollowing = followingIds.has(u.id)
           const isLoading = loadingIds.has(u.id)
           return (
