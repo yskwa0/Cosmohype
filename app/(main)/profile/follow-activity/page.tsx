@@ -6,11 +6,12 @@ import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { Avatar } from '@/components/ui/Avatar'
 import { FollowRequestItem } from '@/components/profile/FollowRequestItem'
+import { FollowBackButton } from '@/components/profile/FollowBackButton'
 import { MarkActivityRead } from '@/components/profile/MarkActivityRead'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Profile } from '@/types/database'
 
-type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
+type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_private'>
 type NotifPost = { id: string; post_images: { url: string; display_order: number }[] } | null
 
 type RawNotification = {
@@ -23,6 +24,7 @@ type RawNotification = {
   post: NotifPost
 }
 
+type FollowState = 'not_following' | 'following' | 'pending'
 
 export default async function FollowActivityPage() {
   const supabase = await createClient()
@@ -45,7 +47,7 @@ export default async function FollowActivityPage() {
       .from('notifications')
       .select(`
         id, type, post_id, is_read, created_at,
-        actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url),
+        actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url, is_private),
         post:posts!notifications_post_id_fkey(id, post_images(url, display_order))
       `)
       .eq('user_id', user.id)
@@ -62,6 +64,39 @@ export default async function FollowActivityPage() {
 
   const notifications = (notifResult.data ?? []) as unknown as RawNotification[]
 
+  // フォロー通知の actor に対するフォロー状態を取得（フォローバックボタン用）
+  const followActorIds = [...new Set(
+    notifications
+      .filter(n => n.type === 'follow' && n.actor !== null && n.actor.id !== user.id)
+      .map(n => n.actor!.id)
+  )]
+
+  const followStateMap: Record<string, FollowState> = {}
+
+  if (followActorIds.length > 0) {
+    const [followsResult, requestsResult] = await Promise.all([
+      supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id)
+        .in('following_id', followActorIds),
+      supabase
+        .from('follow_requests')
+        .select('target_id')
+        .eq('requester_id', user.id)
+        .in('target_id', followActorIds),
+    ])
+    for (const f of (followsResult.data ?? [])) {
+      followStateMap[f.following_id] = 'following'
+    }
+    for (const r of (requestsResult.data ?? [])) {
+      if (!followStateMap[r.target_id]) followStateMap[r.target_id] = 'pending'
+    }
+    for (const id of followActorIds) {
+      if (!followStateMap[id]) followStateMap[id] = 'not_following'
+    }
+  }
+
   // Follow requests for private accounts
   let requests: { id: string; requester_id: string; created_at: string }[] = []
   let requesterProfiles: Record<string, ActorProfile> = {}
@@ -73,7 +108,7 @@ export default async function FollowActivityPage() {
     if (requesterIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url')
+        .select('id, username, display_name, avatar_url, is_private')
         .in('id', requesterIds)
       for (const p of profiles ?? []) {
         requesterProfiles[p.id] = p as ActorProfile
@@ -150,6 +185,16 @@ export default async function FollowActivityPage() {
                   ?.slice()
                   .sort((a, b) => a.display_order - b.display_order)[0]?.url ?? null
 
+                // フォローバックボタンを表示するか（follow通知 + actor存在 + 自分以外）
+                const showFollowBack =
+                  notif.type === 'follow' &&
+                  actor !== null &&
+                  actor.id !== user.id
+
+                const followState: FollowState = showFollowBack
+                  ? (followStateMap[actor!.id] ?? 'not_following')
+                  : 'not_following'
+
                 return (
                   <li
                     key={notif.id}
@@ -158,32 +203,47 @@ export default async function FollowActivityPage() {
                       background: notif.is_read ? undefined : 'color-mix(in srgb, var(--purple) 6%, transparent)',
                     }}
                   >
-                    <Link href={href} className="flex items-center gap-3 px-4 py-3 active:opacity-70">
+                    {/* フレックス行：未読ドット ＋ リンク(flex-1) ＋ フォローボタン(shrink-0) */}
+                    <div className="flex items-center gap-3 px-4 py-3">
                       {/* 未読ドット */}
                       <span
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                         style={{ background: notif.is_read ? 'transparent' : 'var(--purple)' }}
                       />
-                      <Avatar src={actor?.avatar_url ?? null} username={actorUsername ?? '?'} size="md" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
-                          <span className="font-semibold">{actorName}</span>
-                          <span style={{ color: 'var(--text-sub)' }}>
-                            {notif.type === 'like' && 'さんがあなたの投稿にいいねしました'}
-                            {notif.type === 'comment' && 'さんがあなたの投稿にコメントしました'}
-                            {notif.type === 'follow' && 'さんがあなたをフォローしました'}
-                          </span>
-                        </p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          {formatRelativeTime(notif.created_at)}
-                        </p>
-                      </div>
-                      {thumb && notif.type !== 'follow' && (
-                        <div className="relative w-10 h-10 flex-shrink-0 rounded overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
-                          <Image src={thumb} alt="" fill className="object-cover" sizes="40px" />
+
+                      {/* タップでプロフィール or 投稿へ遷移 */}
+                      <Link href={href} className="flex items-center gap-2 flex-1 min-w-0 active:opacity-70">
+                        <Avatar src={actor?.avatar_url ?? null} username={actorUsername ?? '?'} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
+                            <span className="font-semibold">{actorName}</span>
+                            <span style={{ color: 'var(--text-sub)' }}>
+                              {notif.type === 'like' && 'さんがあなたの投稿にいいねしました'}
+                              {notif.type === 'comment' && 'さんがあなたの投稿にコメントしました'}
+                              {notif.type === 'follow' && 'さんがあなたをフォローしました'}
+                            </span>
+                          </p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                            {formatRelativeTime(notif.created_at)}
+                          </p>
                         </div>
+                        {thumb && notif.type !== 'follow' && (
+                          <div className="relative w-10 h-10 flex-shrink-0 rounded overflow-hidden" style={{ background: 'var(--bg-elevated)' }}>
+                            <Image src={thumb} alt="" fill className="object-cover" sizes="40px" />
+                          </div>
+                        )}
+                      </Link>
+
+                      {/* フォローバックボタン（follow通知のみ） */}
+                      {showFollowBack && (
+                        <FollowBackButton
+                          currentUserId={user.id}
+                          actorId={actor!.id}
+                          actorIsPrivate={actor!.is_private ?? false}
+                          initialState={followState}
+                        />
                       )}
-                    </Link>
+                    </div>
                   </li>
                 )
               })}
