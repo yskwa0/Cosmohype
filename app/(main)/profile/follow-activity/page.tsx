@@ -10,7 +10,7 @@ import { MarkActivityRead } from '@/components/profile/MarkActivityRead'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Profile } from '@/types/database'
 
-type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url' | 'is_official' | 'is_cosmohype_creator'>
+type ActorProfile = Pick<Profile, 'id' | 'username' | 'display_name' | 'avatar_url'>
 type NotifPost = { id: string; post_images: { url: string; display_order: number }[] } | null
 
 type RawNotification = {
@@ -38,11 +38,9 @@ export default async function FollowActivityPage() {
   if (!profileRaw) redirect('/login')
   const profile = profileRaw as Pick<Profile, 'id' | 'username' | 'is_private'>
 
-  // Fetch notifications + mark-as-read + follow_requests all in parallel.
-  // The SELECT and UPDATE run simultaneously; READ COMMITTED isolation means the SELECT
-  // typically reads the pre-update values (showing unread indicators on this view),
-  // while the UPDATE commits in the background so the badge clears on back-navigation.
-  const [notifResult, , reqsResult] = await Promise.all([
+  // SELECT通知 と フォローリクエスト を並列取得。
+  // 既読化は表示後にクライアント側 MarkActivityRead が行う（is_read の表示状態を正確に保つため）。
+  const [notifResult, reqsResult] = await Promise.all([
     supabase
       .from('notifications')
       .select(`
@@ -53,13 +51,6 @@ export default async function FollowActivityPage() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50),
-    // Mark all unread as read server-side so the badge clears after this page is viewed,
-    // regardless of how quickly the user navigates back.
-    supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false),
     profile.is_private
       ? supabase
           .from('follow_requests')
@@ -70,13 +61,6 @@ export default async function FollowActivityPage() {
   ])
 
   const notifications = (notifResult.data ?? []) as unknown as RawNotification[]
-
-  // Only show notifications with a resolved actor. Like/comment notifications also
-  // require a non-null post (so broken post links don't surface). This keeps the
-  // isEmpty check consistent with what the user actually sees in the list.
-  const visibleNotifications = notifications.filter(n =>
-    n.actor !== null && (n.type === 'follow' || n.post !== null)
-  )
 
   // Follow requests for private accounts
   let requests: { id: string; requester_id: string; created_at: string }[] = []
@@ -89,7 +73,7 @@ export default async function FollowActivityPage() {
     if (requesterIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, is_official, is_cosmohype_creator')
+        .select('id, username, display_name, avatar_url')
         .in('id', requesterIds)
       for (const p of profiles ?? []) {
         requesterProfiles[p.id] = p as ActorProfile
@@ -97,12 +81,12 @@ export default async function FollowActivityPage() {
     }
   }
 
-  // isEmpty is based on what the user can actually see, not the raw array length.
-  const isEmpty = visibleNotifications.length === 0 && requests.length === 0
+  // isEmpty は取得件数ベースで判定（JOINの可否に依存しない）
+  const isEmpty = notifications.length === 0 && requests.length === 0
 
   return (
     <>
-      {/* Client-side backup mark-as-read (idempotent — server already marked above) */}
+      {/* 既読化は表示後にクライアント側で行う */}
       <MarkActivityRead userId={user.id} />
       <TopBar title="通知" left={<BackButton href="/profile/me" />} />
 
@@ -140,7 +124,7 @@ export default async function FollowActivityPage() {
                   )
                 })}
               </ul>
-              {visibleNotifications.length > 0 && (
+              {notifications.length > 0 && (
                 <div className="mt-4 mb-1 px-4">
                   <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>
                     通知
@@ -151,14 +135,17 @@ export default async function FollowActivityPage() {
           )}
 
           {/* 通知リスト */}
-          {visibleNotifications.length > 0 && (
+          {notifications.length > 0 && (
             <ul>
-              {visibleNotifications.map(notif => {
-                const actor = notif.actor!
-                const actorName = actor.display_name ?? actor.username
+              {notifications.map(notif => {
+                const actor = notif.actor
+                const actorName = actor?.display_name ?? actor?.username ?? 'ユーザー'
+                const actorUsername = actor?.username ?? null
+
                 const href = notif.type === 'follow'
-                  ? `/profile/${actor.username}?from=follow-activity`
+                  ? (actorUsername ? `/profile/${actorUsername}?from=follow-activity` : '#')
                   : `/post/${notif.post_id}`
+
                 const thumb = notif.post?.post_images
                   ?.slice()
                   .sort((a, b) => a.display_order - b.display_order)[0]?.url ?? null
@@ -172,12 +159,12 @@ export default async function FollowActivityPage() {
                     }}
                   >
                     <Link href={href} className="flex items-center gap-3 px-4 py-3 active:opacity-70">
-                      {/* unread dot */}
+                      {/* 未読ドット */}
                       <span
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                         style={{ background: notif.is_read ? 'transparent' : 'var(--purple)' }}
                       />
-                      <Avatar src={actor.avatar_url} username={actor.username} size="md" />
+                      <Avatar src={actor?.avatar_url ?? null} username={actorUsername ?? '?'} size="md" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
                           <span className="font-semibold">{actorName}</span>

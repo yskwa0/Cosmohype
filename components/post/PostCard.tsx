@@ -39,6 +39,7 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
   const [heartPos, setHeartPos] = useState<{ x: number; y: number } | null>(null)
   const [viewerOpen, setViewerOpen] = useState(false)
   const [viewerIdx, setViewerIdx] = useState(0)
+  const [actionError, setActionError] = useState<string | null>(null)
   const lastTapRef = useRef(0)
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const router = useRouter()
@@ -72,9 +73,12 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         .select('*', { count: 'exact', head: true })
         .eq('post_id', post.id)
       if (count !== null) updateInteraction({ liked: next, likeCount: count })
-    } catch {
+    } catch (err) {
+      console.error('[PostCard] like toggle failed:', err)
       updateInteraction({ liked: !next, likeCount: prevCount })
       onLikeToggle?.(post.id, !next)
+      setActionError('いいねに失敗しました。もう一度お試しください。')
+      setTimeout(() => setActionError(null), 3000)
     }
   }
 
@@ -91,9 +95,12 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
         const { error } = await supabase.from('saved_posts').delete().eq('user_id', userId).eq('post_id', post.id)
         if (error) throw error
       }
-    } catch {
+    } catch (err) {
+      console.error('[PostCard] save toggle failed:', err)
       updateInteraction({ saved: !next })
       onSaveToggle?.(post.id, !next)
+      setActionError('保存に失敗しました。もう一度お試しください。')
+      setTimeout(() => setActionError(null), 3000)
     }
   }
 
@@ -332,6 +339,9 @@ export function PostCard({ post, userId, isLiked = false, isSaved = false, onLik
               </svg>
             </button>
           </div>
+          {actionError && (
+            <p className="text-xs mt-1.5" style={{ color: '#F87171' }}>{actionError}</p>
+          )}
 
         </div>
       </div>

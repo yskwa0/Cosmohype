@@ -37,6 +37,7 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
   const [editPressing, setEditPressing] = useState(false)
   const [sparkling, setSparkling] = useState(false)
   const [showUnfollowModal, setShowUnfollowModal] = useState(false)
+  const [followError, setFollowError] = useState<string | null>(null)
   const starsRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
   const router = useRouter()
@@ -64,18 +65,32 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
     return () => clearTimeout(timeout)
   }, [sparkling])
 
+  function showError(msg: string) {
+    setFollowError(msg)
+    setTimeout(() => setFollowError(null), 3000)
+  }
+
   async function doUnfollow(alsoRemoveFollower: boolean) {
     if (!currentUserId) return
     setLoading(true)
     setShowUnfollowModal(false)
-    // Optimistic: update UI immediately before awaiting DB
     setFollowState('not_following')
     setFollowersCount(c => c - 1)
     if (alsoRemoveFollower) setIsFollowedBy(false)
 
-    await supabase.from('follows').delete()
+    const { error: unfollowErr } = await supabase.from('follows').delete()
       .eq('follower_id', currentUserId)
       .eq('following_id', profile.id)
+
+    if (unfollowErr) {
+      console.error('[ProfileHeader] unfollow failed:', unfollowErr)
+      setFollowState('following')
+      setFollowersCount(c => c + 1)
+      if (alsoRemoveFollower) setIsFollowedBy(true)
+      showError('フォロー解除に失敗しました。もう一度お試しください。')
+      setLoading(false)
+      return
+    }
 
     if (alsoRemoveFollower) {
       await supabase.rpc('remove_follower', { p_follower_id: profile.id })
@@ -96,26 +111,43 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
       }
     } else if (followState === 'pending') {
       setFollowState('not_following')
-      await supabase.from('follow_requests').delete()
+      const { error } = await supabase.from('follow_requests').delete()
         .eq('requester_id', currentUserId)
         .eq('target_id', profile.id)
+      if (error) {
+        console.error('[ProfileHeader] cancel follow_request failed:', error)
+        setFollowState('pending')
+        showError('フォローリクエストのキャンセルに失敗しました。')
+      }
     } else {
       if (profile.is_private) {
         setFollowState('pending')
-        await supabase.from('follow_requests').insert({
+        const { error } = await supabase.from('follow_requests').insert({
           requester_id: currentUserId,
           target_id: profile.id,
         })
+        if (error) {
+          console.error('[ProfileHeader] follow_request insert failed:', error)
+          setFollowState('not_following')
+          showError('フォローリクエストに失敗しました。もう一度お試しください。')
+        }
       } else {
         setSparkling(true)
         setTimeout(() => setSparkling(false), 700)
         setFollowState('following')
         setFollowersCount(c => c + 1)
-        await supabase.from('follows').insert({
+        const { error } = await supabase.from('follows').insert({
           follower_id: currentUserId,
           following_id: profile.id,
         })
-        router.refresh()
+        if (error) {
+          console.error('[ProfileHeader] follow insert failed:', error)
+          setFollowState('not_following')
+          setFollowersCount(c => c - 1)
+          showError('フォローに失敗しました。もう一度お試しください。')
+        } else {
+          router.refresh()
+        }
       }
     }
   }
@@ -233,6 +265,9 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
             />
           )}
         </div>
+      )}
+      {followError && (
+        <p className="text-xs text-center mt-2" style={{ color: '#F87171' }}>{followError}</p>
       )}
 
       {/* フォロー解除確認モーダル */}

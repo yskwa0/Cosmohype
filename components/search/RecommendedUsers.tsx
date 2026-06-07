@@ -31,10 +31,18 @@ export function RecommendedUsers({ users, initialFollowingIds, currentUserId }: 
     })
 
     if (isFollowing) {
-      await supabase.from('follows').delete()
+      const { error } = await supabase.from('follows').delete()
         .eq('follower_id', currentUserId).eq('following_id', userId)
+      if (error) {
+        console.error('[RecommendedUsers] unfollow failed:', error)
+        setFollowingIds(prev => new Set(prev).add(userId))
+      }
     } else {
-      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: userId })
+      const { error } = await supabase.from('follows').insert({ follower_id: currentUserId, following_id: userId })
+      if (error) {
+        console.error('[RecommendedUsers] follow insert failed:', error)
+        setFollowingIds(prev => { const next = new Set(prev); next.delete(userId); return next })
+      }
     }
 
     setLoadingIds(prev => { const next = new Set(prev); next.delete(userId); return next })

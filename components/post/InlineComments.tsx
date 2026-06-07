@@ -19,6 +19,7 @@ export function InlineComments({ postId, userId, onCommentAdded, onCommentDelete
   const [loading, setLoading] = useState(true)
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export function InlineComments({ postId, userId, onCommentAdded, onCommentDelete
     const text = body.trim()
     if (!text || !userId || submitting) return
     setSubmitting(true)
+    setSubmitError(null)
     const { data, error } = await supabase
       .from('comments')
       .insert({ post_id: postId, user_id: userId, body: text })
@@ -47,6 +49,10 @@ export function InlineComments({ postId, userId, onCommentAdded, onCommentDelete
       setComments(prev => [...prev, data as Comment])
       setBody('')
       onCommentAdded?.()
+    } else if (error) {
+      console.error('[InlineComments] comment insert failed:', error)
+      setSubmitError('コメントの送信に失敗しました。もう一度お試しください。')
+      setTimeout(() => setSubmitError(null), 3000)
     }
     setSubmitting(false)
   }
@@ -97,6 +103,9 @@ export function InlineComments({ postId, userId, onCommentAdded, onCommentDelete
         </div>
       ))}
 
+      {submitError && (
+        <p className="text-xs" style={{ color: '#F87171' }}>{submitError}</p>
+      )}
       {userId && (
         <form onSubmit={handleSubmit} className="flex items-center gap-2 mt-1">
           <input
