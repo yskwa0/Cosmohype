@@ -74,6 +74,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
 
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showConfirm, setShowConfirm] = useState(false)
 
   function addTag(input: string, setter: (v: string[]) => void, current: string[], clearInput: () => void) {
     const tag = input.trim().replace(/^#/, '').toLowerCase()
@@ -115,10 +116,14 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
     return Object.keys(newErrors).length === 0
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
+    setShowConfirm(true)
+  }
 
+  async function doSubmit() {
+    setShowConfirm(false)
     setLoading(true)
     try {
       const { data: post, error: postError } = await supabase
@@ -191,6 +196,7 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-4 pb-10">
       {hypeTheme && (
         <div
@@ -505,5 +511,50 @@ export function PostForm({ userId, hypeTheme }: { userId: string; hypeTheme?: st
         スタイルを残す
       </Button>
     </form>
+
+    {showConfirm && (
+      <div
+        className="fixed inset-0 z-50 flex items-end justify-center"
+        style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+        onClick={() => setShowConfirm(false)}
+      >
+        <div
+          className="w-full max-w-lg rounded-t-3xl px-6 pt-6 pb-10 flex flex-col gap-5"
+          style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="w-10 h-1 rounded-full mx-auto" style={{ background: 'var(--border)' }} />
+
+          <div className="flex flex-col gap-2 text-center px-2">
+            <h2 className="text-base font-bold leading-snug" style={{ color: 'var(--text)' }}>
+              これはファッション・コーデに関する投稿ですか？
+            </h2>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              Cosmohypeは、ファッションやコーデを楽しむためのSNSです。服・着こなし・スタイルに関係する投稿をお願いします。
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={doSubmit}
+              className="w-full h-12 rounded-2xl text-sm font-bold transition-opacity active:opacity-70"
+              style={{ background: 'var(--purple-glow)', color: '#fff' }}
+            >
+              投稿する
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowConfirm(false)}
+              className="w-full h-12 rounded-2xl text-sm font-semibold transition-opacity active:opacity-70"
+              style={{ background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
