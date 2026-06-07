@@ -1,23 +1,28 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchHistory } from '@/hooks/useSearchHistory'
 
 export function SearchInput({ defaultValue }: { defaultValue: string }) {
   const router = useRouter()
   const [value, setValue] = useState(defaultValue)
   const { add } = useSearchHistory()
+  // true になるのはユーザーが実際に文字を入力した時のみ。
+  // 初期マウント時（results ページで defaultValue がセットされた場合）は false のまま。
+  const hasTyped = useRef(false)
+
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (value.trim()) {
-        router.push(`/search?q=${encodeURIComponent(value.trim())}`)
+      const trimmed = value.trim()
+      if (trimmed) {
+        if (hasTyped.current) add(trimmed)
+        router.push(`/search?q=${encodeURIComponent(trimmed)}`)
       } else {
         router.push('/search')
       }
     }, 400)
     return () => clearTimeout(timer)
-  }, [value, router])
-
+  }, [value, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="relative">
@@ -29,7 +34,7 @@ export function SearchInput({ defaultValue }: { defaultValue: string }) {
       <input
         type="text"
         value={value}
-        onChange={e => setValue(e.target.value)}
+        onChange={e => { hasTyped.current = true; setValue(e.target.value) }}
         onKeyDown={e => { if (e.key === 'Enter' && value.trim()) add(value.trim()) }}
         placeholder="ユーザー・タグを検索"
         autoComplete="off"
