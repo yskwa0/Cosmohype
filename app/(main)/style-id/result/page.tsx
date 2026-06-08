@@ -108,6 +108,9 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           </div>
         )}
 
+        {/* Set to profile — 特徴セクションより上に配置 */}
+        <StyleIdSetButton styleId={result.primaryStyle} isLoggedIn={isLoggedIn} encodedResult={r} />
+
         {/* Traits */}
         <div>
           <p className="text-xs font-semibold mb-3 tracking-wider uppercase" style={{ color: 'var(--text-muted)' }}>特徴</p>
@@ -202,9 +205,6 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           styleId={result.primaryStyle}
           primary={primary}
         />
-
-        {/* Set to profile */}
-        <StyleIdSetButton styleId={result.primaryStyle} isLoggedIn={isLoggedIn} encodedResult={r} />
 
         {/* Actions */}
         <div className="flex flex-col gap-3 pt-2">
