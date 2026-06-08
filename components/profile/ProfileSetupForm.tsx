@@ -129,6 +129,8 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
         throw error
       }
 
+      // webhook失敗でも登録自体は成功させる
+      await fetch('/api/notify/new-user', { method: 'POST' }).catch(() => {})
       localStorage.removeItem(PENDING_STYLE_KEY)
       window.location.replace('/feed')
     } catch (err) {
