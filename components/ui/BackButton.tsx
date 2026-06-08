@@ -37,7 +37,7 @@ export function BackButton({
     // The overlay matches the app background and is removed after React renders the new page.
     const overlay = document.createElement('div')
     overlay.style.cssText =
-      'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg, #090714);'
+      'position:fixed;inset:0;z-index:9999;pointer-events:none;background:var(--bg, #FFF8F0);'
     document.body.appendChild(overlay)
 
     // Signal SlideIn to skip its enter animation on the next mount.

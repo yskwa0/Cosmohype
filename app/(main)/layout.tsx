@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  let theme = 'cosmic-black'
+  let theme = 'cream-white'
   let showStyleIdPromo = false
   if (user) {
     const { data: profile } = await supabase
@@ -23,7 +23,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     showStyleIdPromo = !profile.style_id
   }
 
-  const themeClass = theme !== 'cosmic-black' ? `theme-${theme}` : ''
+  const themeClass = theme === 'cosmic-black' ? 'theme-cosmic-black' : ''
 
   return (
     <div className={`min-h-screen ${themeClass}`} style={{ background: 'var(--bg)', overflowX: 'clip' }}>

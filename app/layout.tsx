@@ -26,12 +26,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: '#090714',
+  themeColor: '#FFF8F0',
   viewportFit: 'cover',
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  let theme = 'cosmic-black'
+  let theme = 'cream-white'
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -45,7 +45,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     }
   } catch { /* 未認証ページでは無視 */ }
 
-  const themeClass = theme !== 'cosmic-black' ? `theme-${theme}` : ''
+  const themeClass = theme === 'cosmic-black' ? 'theme-cosmic-black' : ''
 
   return (
     <html lang="ja" className={`h-full ${themeClass}`}>

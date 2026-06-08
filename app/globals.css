@@ -1,6 +1,72 @@
 @import "tailwindcss";
 
 :root {
+  /* Cream White (default) */
+  --bg:           #FFF8F0;
+  --bg-elevated:  #FFFFFF;
+  --bg-subtle:    #F5F0EA;
+  --border:       rgba(23, 19, 31, 0.08);
+
+  --purple:       #7C3AED;
+  --purple-mid:   #6D28D9;
+  --purple-glow:  #7C3AED;
+  --purple-dim:   rgba(124, 58, 237, 0.08);
+
+  --text:         #17131F;
+  --text-sub:     #6B6475;
+  --text-muted:   #9B97B2;
+
+  --card-bg:      #FFFFFF;
+  --card-border:  rgba(23, 19, 31, 0.08);
+  --nav-bg:       rgba(255, 248, 240, 0.92);
+
+  --input-bg:          #FFFFFF;
+  --input-border:      rgba(23, 19, 31, 0.15);
+  --input-text:        #17131F;
+  --input-placeholder: #9B97B2;
+
+  --label-text:  #374151;
+  --hint-text:   #6B6475;
+
+  --tag-text:    #7C3AED;
+  --tag-bg:      rgba(124, 58, 237, 0.07);
+  --tag-border:  rgba(124, 58, 237, 0.18);
+}
+
+/* Backward compat: .theme-cream-white is now same as :root */
+.theme-cream-white {
+  --bg:           #FFF8F0;
+  --bg-elevated:  #FFFFFF;
+  --bg-subtle:    #F5F0EA;
+  --border:       rgba(23, 19, 31, 0.08);
+
+  --purple:       #7C3AED;
+  --purple-mid:   #6D28D9;
+  --purple-glow:  #7C3AED;
+  --purple-dim:   rgba(124, 58, 237, 0.08);
+
+  --text:         #17131F;
+  --text-sub:     #6B6475;
+  --text-muted:   #9B97B2;
+
+  --card-bg:      #FFFFFF;
+  --card-border:  rgba(23, 19, 31, 0.08);
+  --nav-bg:       rgba(255, 248, 240, 0.92);
+
+  --input-bg:          #FFFFFF;
+  --input-border:      rgba(23, 19, 31, 0.15);
+  --input-text:        #17131F;
+  --input-placeholder: #9B97B2;
+
+  --label-text:  #374151;
+  --hint-text:   #6B6475;
+
+  --tag-text:    #7C3AED;
+  --tag-bg:      rgba(124, 58, 237, 0.07);
+  --tag-border:  rgba(124, 58, 237, 0.18);
+}
+
+.theme-cosmic-black {
   --bg:           #090714;
   --bg-elevated:  #100D22;
   --bg-subtle:    #181430;
@@ -32,42 +98,10 @@
   --tag-border:  rgba(168, 85, 247, 0.25);
 }
 
-.theme-cream-white {
-  --bg:           #FAFAFA;
-  --bg-elevated:  #FFFFFF;
-  --bg-subtle:    #F3F4F6;
-  --border:       rgba(124, 58, 237, 0.12);
-
-  --purple:       #7C3AED;
-  --purple-mid:   #6D28D9;
-  --purple-glow:  #5B21B6;
-  --purple-dim:   rgba(124, 58, 237, 0.07);
-
-  --text:         #111111;
-  --text-sub:     #4B4B6B;
-  --text-muted:   #9B97B2;
-
-  --card-bg:      #FFFFFF;
-  --card-border:  rgba(124, 58, 237, 0.1);
-  --nav-bg:       rgba(250, 250, 250, 0.9);
-
-  --input-bg:          #FFFFFF;
-  --input-border:      #E5E7EB;
-  --input-text:        #111111;
-  --input-placeholder: #9CA3AF;
-
-  --label-text:  #374151;
-  --hint-text:   #6B7280;
-
-  --tag-text:    #7C3AED;
-  --tag-bg:      rgba(124, 58, 237, 0.07);
-  --tag-border:  rgba(124, 58, 237, 0.18);
-}
-
-.logo-dark  { display: block; }
-.logo-light { display: none; }
-.theme-cream-white .logo-dark  { display: none; }
-.theme-cream-white .logo-light { display: block; }
+.logo-dark  { display: none; }
+.logo-light { display: block; }
+.theme-cosmic-black .logo-dark  { display: block; }
+.theme-cosmic-black .logo-light { display: none; }
 
 html {
   background: var(--bg);

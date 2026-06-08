@@ -25,7 +25,7 @@ export default async function SettingsPage() {
         {/* テーマ */}
         <section>
           <p className="text-xs font-semibold px-1 mb-2" style={{ color: 'var(--text-muted)' }}>テーマ</p>
-          <ThemeForm userId={user.id} initialTheme={profile?.theme ?? 'cosmic-black'} />
+          <ThemeForm userId={user.id} initialTheme={profile?.theme ?? 'cream-white'} />
         </section>
 
         {/* アカウント設定 */}
