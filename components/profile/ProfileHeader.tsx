@@ -167,14 +167,22 @@ export function ProfileHeader({ profile, postsCount, isOwner, currentUserId, ini
               {profile.display_name ?? profile.username}
             </h1>
             <AccountBadges isOfficial={profile.is_official} isCosmohypeCreator={profile.is_cosmohype_creator} />
-            {profile.style_id && STYLE_TYPES[profile.style_id as StyleId] && (
+            {profile.style_id && STYLE_TYPES[profile.style_id as StyleId] ? (
               <Link
                 href={`/cosmo/${profile.style_id}`}
                 className="flex-shrink-0 transition-opacity active:opacity-70"
               >
                 <StyleAlien styleId={profile.style_id as StyleId} size={24} />
               </Link>
-            )}
+            ) : isOwner ? (
+              <Link
+                href="/style-id"
+                className="flex-shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full transition-opacity active:opacity-70"
+                style={{ background: 'var(--purple-dim)', color: 'var(--purple)', border: '1px solid var(--border)' }}
+              >
+                STYLE ID診断をする
+              </Link>
+            ) : null}
           </div>
         </div>
       </div>
