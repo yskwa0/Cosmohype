@@ -76,13 +76,13 @@ export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) 
                 </svg>
                 STYLE IDをプロフィールに設定しました
               </div>
-              <Link
+              <a
                 href="/profile/me"
                 className="text-xs text-center transition-opacity active:opacity-60"
                 style={{ color: 'var(--text-muted)' }}
               >
                 プロフィールを見る →
-              </Link>
+              </a>
             </div>
           ) : (
             <button
