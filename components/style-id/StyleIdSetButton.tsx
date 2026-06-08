@@ -14,6 +14,7 @@ type Props = {
 export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,7 +41,9 @@ export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) 
       setLoading(false)
       return
     }
-    router.push('/profile/me')
+    setDone(true)
+    setLoading(false)
+    setTimeout(() => router.push('/profile/me'), 1200)
   }
 
   // ログイン後に結果ページへ戻るためのリダイレクトURL
@@ -65,18 +68,30 @@ export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) 
 
       {isLoggedIn ? (
         <>
-          <button
-            onClick={handleSet}
-            disabled={loading}
-            className="w-full py-3 rounded-xl flex items-center justify-center text-sm font-bold transition-all active:scale-[0.97] disabled:opacity-50"
-            style={{
-              background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
-              color: '#fff',
-              boxShadow: '0 4px 16px rgba(124,58,237,0.3)',
-            }}
-          >
-            {loading ? '設定中...' : 'このSTYLE IDをプロフィールに設定'}
-          </button>
+          {done ? (
+            <div
+              className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold"
+              style={{ background: 'rgba(124,58,237,0.15)', color: 'var(--purple)', border: '1px solid var(--border)' }}
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              STYLE IDをプロフィールに設定しました
+            </div>
+          ) : (
+            <button
+              onClick={handleSet}
+              disabled={loading}
+              className="w-full py-3 rounded-xl flex items-center justify-center text-sm font-bold transition-all active:scale-[0.97] disabled:opacity-50"
+              style={{
+                background: 'linear-gradient(135deg, #7C3AED 0%, #A855F7 100%)',
+                color: '#fff',
+                boxShadow: '0 4px 16px rgba(124,58,237,0.3)',
+              }}
+            >
+              {loading ? '設定中...' : 'このSTYLE IDをプロフィールに設定する'}
+            </button>
+          )}
           {error && (
             <p className="text-xs text-center" style={{ color: 'rgba(252,165,165,0.9)' }}>
               {error}

@@ -9,8 +9,8 @@ import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { StyleId } from '@/lib/style-id/types'
 
-const STYLE_ID_KEYS = Object.keys(STYLE_TYPES) as StyleId[]
 const PENDING_STYLE_KEY = 'cosmohype_pending_style_id'
+const STYLE_ID_KEYS = Object.keys(STYLE_TYPES) as StyleId[]
 
 const STYLE_TAGS = ['ストリート', 'カジュアル', 'フェミニン', 'モード', 'ヴィンテージ', 'スポーツ', 'ナチュラル', 'ゴシック', 'ミリタリー', 'ワーク']
 
@@ -240,41 +240,29 @@ export function ProfileSetupForm({ userId }: { userId: string }) {
             </div>
           </div>
 
-          {/* STYLE ID選択 */}
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>
-                STYLE ID <span className="text-xs font-normal" style={{ color: 'var(--hint-text)' }}>（任意）</span>
+          {/* STYLE ID - 診断結果からの自動引き継ぎ表示のみ（手動選択不可） */}
+          {selectedStyleId && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>STYLE ID</p>
+              <div
+                className="flex items-center gap-3 rounded-2xl px-3 py-3"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+              >
+                <StyleAlien styleId={selectedStyleId} size={40} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate" style={{ color: 'var(--text)' }}>
+                    {STYLE_TYPES[selectedStyleId].name}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                    {STYLE_TYPES[selectedStyleId].subtitle}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                診断結果のSTYLE IDがプロフィールに設定されます
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--hint-text)' }}>あなたのファッション系統を選んでください</p>
             </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              {STYLE_ID_KEYS.map(id => {
-                const type = STYLE_TYPES[id]
-                const isSelected = selectedStyleId === id
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSelectedStyleId(prev => prev === id ? null : id)}
-                    className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl transition-all active:scale-[0.97]"
-                    style={{
-                      border: isSelected ? '2px solid var(--purple)' : '2px solid var(--border)',
-                      background: isSelected ? 'var(--purple-dim)' : 'var(--bg-elevated)',
-                    }}
-                  >
-                    <StyleAlien styleId={id} size={52} />
-                    <span className="text-[11px] font-semibold text-center leading-tight" style={{ color: isSelected ? 'var(--purple)' : 'var(--text-sub)' }}>
-                      {type.name}
-                    </span>
-                    <span className="text-[10px] text-center leading-tight" style={{ color: 'var(--text-muted)' }}>
-                      {type.subtitle}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+          )}
 
           {errors.submit && (
             <p className="text-sm text-red-500 rounded-xl px-4 py-3" style={{ background: 'rgba(239,68,68,0.1)' }}>{errors.submit}</p>

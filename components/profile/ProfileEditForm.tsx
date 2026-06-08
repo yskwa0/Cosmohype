@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -9,8 +10,6 @@ import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
 import type { Profile } from '@/types/database'
 import type { StyleId } from '@/lib/style-id/types'
-
-const ALL_STYLES = Object.values(STYLE_TYPES)
 
 const STYLE_TAGS = ['ストリート', 'カジュアル', 'フェミニン', 'モード', 'ヴィンテージ', 'スポーツ', 'ナチュラル', 'ゴシック', 'ミリタリー', 'ワーク']
 
@@ -22,9 +21,6 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
   const [displayName, setDisplayName] = useState(profile.display_name ?? '')
   const [bio, setBio] = useState(profile.bio ?? '')
   const [selectedTags, setSelectedTags] = useState<string[]>(profile.style_tags ?? [])
-  const [selectedStyleId, setSelectedStyleId] = useState<StyleId | null>(
-    (profile.style_id as StyleId) ?? null
-  )
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [cropperSrc, setCropperSrc] = useState<string | null>(null)
@@ -134,7 +130,6 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
         bio: bio.trim() || null,
         avatar_url: avatarUrl,
         style_tags: selectedTags,
-        style_id: selectedStyleId,
       }).eq('id', profile.id)
 
       if (error) {
@@ -257,57 +252,49 @@ export function ProfileEditForm({ profile }: { profile: Profile }) {
             </div>
           </div>
 
-          {/* STYLE ID Picker */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>STYLE ID（任意）</p>
-              {selectedStyleId && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedStyleId(null)}
-                  className="text-xs active:opacity-60"
-                  style={{ color: 'var(--text-muted)' }}
+          {/* STYLE ID - 読み取り専用（診断結果から設定） */}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium" style={{ color: 'var(--label-text)' }}>STYLE ID</p>
+            {profile.style_id ? (
+              <>
+                <div
+                  className="flex items-center gap-3 rounded-2xl px-3 py-3"
+                  style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
                 >
-                  選択解除
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              {ALL_STYLES.map(s => {
-                const isSelected = selectedStyleId === s.id
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setSelectedStyleId(isSelected ? null : s.id as StyleId)}
-                    className="flex flex-col items-center gap-1 py-2 rounded-2xl transition-all duration-100 active:scale-[0.93]"
-                    style={{
-                      background: isSelected ? 'var(--purple-dim)' : 'var(--bg-elevated)',
-                      border: `1.5px solid ${isSelected ? 'var(--purple)' : 'var(--border)'}`,
-                    }}
-                  >
-                    <StyleAlien styleId={s.id as StyleId} size={44} />
-                    <span
-                      className="text-[10px] font-semibold leading-tight text-center px-1"
-                      style={{ color: isSelected ? 'var(--purple)' : 'var(--text-muted)' }}
-                    >
-                      {s.name.split(' ')[0]}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            {selectedStyleId && (
-              <div
-                className="flex items-center gap-3 rounded-2xl px-3 py-2"
-                style={{ background: 'var(--purple-dim)', border: '1px solid var(--border)' }}
-              >
-                <StyleAlien styleId={selectedStyleId} size={36} />
-                <div>
-                  <p className="text-xs font-bold" style={{ color: 'var(--text)' }}>{STYLE_TYPES[selectedStyleId].name}</p>
-                  <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{STYLE_TYPES[selectedStyleId].subtitle}</p>
+                  <StyleAlien styleId={profile.style_id as StyleId} size={40} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate" style={{ color: 'var(--text)' }}>
+                      {STYLE_TYPES[profile.style_id as StyleId].name}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+                      {STYLE_TYPES[profile.style_id as StyleId].subtitle}
+                    </p>
+                  </div>
                 </div>
-              </div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  STYLE IDは診断結果から設定できます
+                </p>
+                <Link
+                  href="/style-id"
+                  className="self-start text-xs font-semibold active:opacity-70 transition-opacity"
+                  style={{ color: 'var(--purple)' }}
+                >
+                  変更したい場合は、もう一度STYLE ID診断を行ってください →
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  STYLE IDが設定されていません
+                </p>
+                <Link
+                  href="/style-id"
+                  className="self-start px-4 py-2 rounded-xl text-xs font-semibold transition-opacity active:opacity-70"
+                  style={{ background: 'var(--purple-dim)', color: 'var(--purple)', border: '1px solid var(--border)' }}
+                >
+                  STYLE ID診断をする
+                </Link>
+              </>
             )}
           </div>
 
