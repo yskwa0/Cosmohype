@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { StyleId } from '@/lib/style-id/types'
@@ -12,7 +11,6 @@ type Props = {
 }
 
 export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +27,7 @@ export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) 
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      router.push('/login')
+      window.location.href = '/login'
       return
     }
     const { error: updateError } = await supabase
@@ -43,7 +41,6 @@ export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) 
     }
     setDone(true)
     setLoading(false)
-    setTimeout(() => router.push('/profile/me'), 1200)
   }
 
   // ログイン後に結果ページへ戻るためのリダイレクトURL
@@ -69,14 +66,23 @@ export function StyleIdSetButton({ styleId, isLoggedIn, encodedResult }: Props) 
       {isLoggedIn ? (
         <>
           {done ? (
-            <div
-              className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold"
-              style={{ background: 'rgba(124,58,237,0.15)', color: 'var(--purple)', border: '1px solid var(--border)' }}
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-              STYLE IDをプロフィールに設定しました
+            <div className="flex flex-col gap-2">
+              <div
+                className="w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold"
+                style={{ background: 'rgba(124,58,237,0.15)', color: 'var(--purple)', border: '1px solid var(--border)' }}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                STYLE IDをプロフィールに設定しました
+              </div>
+              <Link
+                href="/profile/me"
+                className="text-xs text-center transition-opacity active:opacity-60"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                プロフィールを見る →
+              </Link>
             </div>
           ) : (
             <button
