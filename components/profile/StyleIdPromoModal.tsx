@@ -86,8 +86,8 @@ export function StyleIdPromoModal({ show }: { show: boolean }) {
           <p className="text-sm leading-relaxed" style={{ color: 'rgba(196,181,253,0.8)' }}>
             STYLE ID診断をすると、自分に近いファッション系統がわかります。
             <br /><br />
-            診断後は「プロフィールを編集」から、自分のSTYLE IDを設定できます。
-            STYLE IDを設定すると、COSMOで感性や雰囲気が近い人のスタイルを見つけやすくなり、コーデの参考にもなります。
+            診断結果画面から「このSTYLE IDをプロフィールに設定する」を押すと、プロフィールに反映されます。
+            STYLE IDを設定すると、感性や雰囲気が近い人のスタイルを見つけやすくなり、コーデの参考にもなります。
           </p>
         </div>
 
