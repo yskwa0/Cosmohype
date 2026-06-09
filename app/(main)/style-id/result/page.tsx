@@ -4,6 +4,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { BackButton } from '@/components/ui/BackButton'
 import { StyleIdShareCard } from '@/components/style-id/StyleIdShareCard'
 import { StyleIdSetButton } from '@/components/style-id/StyleIdSetButton'
+import { StyleIdGuestCta } from '@/components/style-id/StyleIdGuestCta'
 import { StyleAlien } from '@/components/style-id/StyleAlien'
 import { decodeResult } from '@/lib/style-id/scoring'
 import { STYLE_TYPES } from '@/lib/style-id/styleTypes'
@@ -54,6 +55,8 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://cosmohype.vercel.app'
   const shareUrl = `${appUrl}/style-id/card/${r}`
+  // TODO: Set NEXT_PUBLIC_APP_STORE_URL env var when App Store listing is live
+  const appStoreUrl = process.env.NEXT_PUBLIC_APP_STORE_URL ?? null
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -108,8 +111,12 @@ export default async function ResultPage({ searchParams }: { searchParams: Promi
           </div>
         )}
 
-        {/* Set to profile — 特徴セクションより上に配置 */}
-        <StyleIdSetButton styleId={result.primaryStyle} isLoggedIn={isLoggedIn} encodedResult={r} />
+        {/* Set to profile — ログイン済み: 設定ボタン / 未ログイン: 登録CTA */}
+        {isLoggedIn ? (
+          <StyleIdSetButton styleId={result.primaryStyle} isLoggedIn={true} encodedResult={r} />
+        ) : (
+          <StyleIdGuestCta styleId={result.primaryStyle} encodedResult={r} appStoreUrl={appStoreUrl} />
+        )}
 
         {/* Traits */}
         <div>

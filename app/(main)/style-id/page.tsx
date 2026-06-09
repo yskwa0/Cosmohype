@@ -44,11 +44,14 @@ export default function StyleIdTopPage() {
           </div>
 
           <div className="text-center pt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--purple)' }}>
+              1分でわかるSTYLE ID診断
+            </p>
             <h1 className="text-2xl font-bold tracking-tight mb-2" style={{ color: 'var(--text)' }}>
               あなたはどのタイプ？
             </h1>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              15の質問で、自分だけのスタイルIDを診断。<br />ファッション星座を見つけよう。
+              診断結果から、あなたに近い感性のコーデを見つけられます。
             </p>
           </div>
         </div>
