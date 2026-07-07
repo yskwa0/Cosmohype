@@ -205,6 +205,9 @@ export type Database = {
           is_official: boolean
           is_cosmohype_creator: boolean
           is_admin: boolean
+          is_suspended: boolean
+          suspended_at: string | null
+          suspension_reason: string | null
           follow_activity_last_read_at: string | null
           followers_count: number
           following_count: number
@@ -229,6 +232,9 @@ export type Database = {
           is_official?: boolean
           is_cosmohype_creator?: boolean
           is_admin?: boolean
+          is_suspended?: boolean
+          suspended_at?: string | null
+          suspension_reason?: string | null
           follow_activity_last_read_at?: string | null
           followers_count?: number
           following_count?: number
@@ -253,6 +259,9 @@ export type Database = {
           is_official?: boolean
           is_cosmohype_creator?: boolean
           is_admin?: boolean
+          is_suspended?: boolean
+          suspended_at?: string | null
+          suspension_reason?: string | null
           follow_activity_last_read_at?: string | null
           followers_count?: number
           following_count?: number
@@ -272,6 +281,7 @@ export type Database = {
           brand_tags: string[]
           likes_count: number
           saves_count: number
+          comments_count: number
           hype_theme: string | null
           image_aspect_ratio: string | null
           is_archived: boolean
@@ -287,6 +297,7 @@ export type Database = {
           brand_tags?: string[]
           likes_count?: number
           saves_count?: number
+          comments_count?: number
           hype_theme?: string | null
           image_aspect_ratio?: string | null
           is_archived?: boolean
@@ -301,6 +312,7 @@ export type Database = {
           tags?: string[]
           brand_tags?: string[]
           likes_count?: number
+          comments_count?: number
           hype_theme?: string | null
           image_aspect_ratio?: string | null
           is_archived?: boolean
