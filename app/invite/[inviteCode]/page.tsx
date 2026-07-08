@@ -6,10 +6,13 @@ export const dynamic = 'force-dynamic'
 
 // ─── 招待 route 専用 OGP metadata ──────────────────────────────────
 // root layout.tsx の metadata (「Cosmohype — ファッションSNS」+ /icon.jpg fallback = 旧紫ハンガー) を
-// このページだけ上書きする。og:image は最新ブランド asset の /image.png (wordmark) を使う。
-// 画像 aspect は 1358:313 で 1200×630 の推奨とは合わないが、白背景 + 中央 wordmark 表示で
-// LINE / Twitter カード上でも「文字ロゴが中央に見える」という無害な見え方に収まる。
-// 将来的に専用 1200×630 OGP asset が作られたら差し替え推奨。
+// このページだけ上書きする。
+//
+// og:image は同 dir の opengraph-image.tsx (Next.js file convention) が動的に
+// 1200x630 PNG を生成する。file convention による og:image meta 自動注入と
+// 明示的な openGraph.images が競合しないように、ここでは images を書かない。
+// twitter:image も明示指定しない: 現行 crawler (LINE 含む) は og:image を
+// fallback として使うため、単一 opengraph-image で LINE / Twitter 両対応する。
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.cosmohype.jp'),
   title: '友達から Cosmohype に招待されています',
@@ -18,20 +21,13 @@ export const metadata: Metadata = {
     type: 'website',
     title: '友達から Cosmohype に招待されています',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
-    images: [
-      {
-        url: '/image.png',
-        width: 1358,
-        height: 313,
-        alt: 'Cosmohype',
-      },
-    ],
+    // images: opengraph-image.tsx (file convention) が担当
   },
   twitter: {
     card: 'summary_large_image',
     title: '友達から Cosmohype に招待されています',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
-    images: ['/image.png'],
+    // images: og:image を fallback として利用
   },
 }
 
