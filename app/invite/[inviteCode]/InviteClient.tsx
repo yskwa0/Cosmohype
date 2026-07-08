@@ -362,11 +362,11 @@ export function InviteClient({
                 1
               </span>
               <span style={{ fontSize: '13px', color: '#1F1F23', lineHeight: 1.55, fontWeight: 500 }}>
-                App Storeでインストール
+                Cosmohypeをインストール
               </span>
             </div>
 
-            {/* Step 2 — 「アプリはまだ開かず」を強調 */}
+            {/* Step 2 — 「App Store の『開く』は押さず」を強調 */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '10px' }}>
               <span
                 aria-hidden
@@ -387,8 +387,8 @@ export function InviteClient({
                 2
               </span>
               <span style={{ fontSize: '13px', color: '#1F1F23', lineHeight: 1.55, fontWeight: 500 }}>
-                <strong style={{ color: '#F97316', fontWeight: 700 }}>アプリはまだ開かず</strong>、
-                この招待リンクへ戻る
+                <strong style={{ color: '#F97316', fontWeight: 700 }}>App Storeの「開く」は押さず</strong>、
+                このメッセージに戻る
               </span>
             </div>
 
@@ -417,21 +417,6 @@ export function InviteClient({
                 <strong style={{ color: '#F97316', fontWeight: 700 }}>もう一度タップ</strong>
               </span>
             </div>
-
-            <p
-              style={{
-                fontSize: '12px',
-                color: '#6B7280',
-                lineHeight: 1.7,
-                margin: 0,
-                marginTop: '14px',
-                paddingTop: '12px',
-                borderTop: '1px solid rgba(255,122,46,0.12)',
-                textAlign: 'center'
-              }}
-            >
-              これでアプリに招待が自動で適用されます。
-            </p>
           </div>
         )}
 
