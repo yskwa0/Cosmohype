@@ -15,11 +15,11 @@ export const dynamic = 'force-dynamic'
 // LINE / Twitter の URL キャッシュ対策として、ファイル名に -v1 を付与している。
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.cosmohype.jp'),
-  title: '友達から Cosmohype に招待されています',
+  title: '友達からCosmohypeに誘われています🪐',
   description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
   openGraph: {
     type: 'website',
-    title: '友達から Cosmohype に招待されています',
+    title: '友達からCosmohypeに誘われています🪐',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
     images: [
       {
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: '友達から Cosmohype に招待されています',
+    title: '友達からCosmohypeに誘われています🪐',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
     images: ['/invite-appicon-v1.png'],
   },

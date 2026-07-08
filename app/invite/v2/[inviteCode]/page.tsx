@@ -13,11 +13,11 @@ export const dynamic = 'force-dynamic'
 // InviteURLParser は v1 / v2 両方を受け付ける (旧リンク互換維持)。
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.cosmohype.jp'),
-  title: '友達から Cosmohype に招待されています',
+  title: '友達からCosmohypeに誘われています🪐',
   description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
   openGraph: {
     type: 'website',
-    title: '友達から Cosmohype に招待されています',
+    title: '友達からCosmohypeに誘われています🪐',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
     images: [
       {
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: '友達から Cosmohype に招待されています',
+    title: '友達からCosmohypeに誘われています🪐',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
     images: ['/invite-appicon-v1.png'],
   },

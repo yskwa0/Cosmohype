@@ -13,7 +13,7 @@ import Image from 'next/image'
  *   このページの唯一の役割は「App Store 誘導」。
  *
  * 挙動 (Phase 4 から不変):
- *   1. 招待コードが正規形式なら「友達から Cosmohype に招待されています」バナー + App Store CTA を表示
+ *   1. 招待コードが正規形式なら「友達からCosmohypeに誘われています🪐」バナー + App Store CTA を表示
  *   2. 招待コードが正規形式でなければ「無効」表示 + それでも App Store 誘導だけは残す
  *   3. インストール後、ユーザーが LINE / DM / メッセージ側の元招待リンクを **もう一度タップ**すると、
  *      Universal Link で Cosmohype アプリが起動し Swift 側 (Phase 2) が inviteCode を pending 保存 →
@@ -230,9 +230,7 @@ export function InviteClient({
                   lineHeight: 1.55
                 }}
               >
-                友達から Cosmohype に
-                <br />
-                招待されています
+                友達からCosmohypeに誘われています🪐
               </p>
             </div>
           </>
@@ -317,23 +315,124 @@ export function InviteClient({
           </div>
         )}
 
-        {/* Post-install 案内 (valid code + App Store URL 設定済のときのみ) */}
+        {/* Post-install 案内 (valid code + App Store URL 設定済のときのみ) — 3 ステップ強調 */}
         {validFormat && appStoreConfigured && (
-          <p
+          <div
             style={{
-              marginTop: '22px',
-              fontSize: '13px',
-              color: '#6B7280',
-              lineHeight: 1.8
+              marginTop: '24px',
+              padding: '18px 20px',
+              borderRadius: '16px',
+              background: '#FFFFFF',
+              border: '1px solid rgba(255,122,46,0.20)',
+              boxShadow: '0 4px 14px rgba(255,122,46,0.06)',
+              textAlign: 'left'
             }}
           >
-            インストールしたら、この招待リンクを
-            <br />
-            <strong style={{ color: '#F97316', fontWeight: 700 }}>もう一度タップ</strong>
-            してください。
-            <br />
-            アプリで招待が自動で適用されます。
-          </p>
+            <p
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#F97316',
+                letterSpacing: '0.10em',
+                margin: 0,
+                marginBottom: '12px'
+              }}
+            >
+              インストール後の3ステップ
+            </p>
+
+            {/* Step 1 */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '10px' }}>
+              <span
+                aria-hidden
+                style={{
+                  flex: '0 0 auto',
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: '#FFF7ED',
+                  color: '#F97316',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                1
+              </span>
+              <span style={{ fontSize: '13px', color: '#1F1F23', lineHeight: 1.55, fontWeight: 500 }}>
+                App Storeでインストール
+              </span>
+            </div>
+
+            {/* Step 2 — 「アプリはまだ開かず」を強調 */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', marginBottom: '10px' }}>
+              <span
+                aria-hidden
+                style={{
+                  flex: '0 0 auto',
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: '#FFF7ED',
+                  color: '#F97316',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                2
+              </span>
+              <span style={{ fontSize: '13px', color: '#1F1F23', lineHeight: 1.55, fontWeight: 500 }}>
+                <strong style={{ color: '#F97316', fontWeight: 700 }}>アプリはまだ開かず</strong>、
+                この招待リンクへ戻る
+              </span>
+            </div>
+
+            {/* Step 3 — 「もう一度タップ」を強調 */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+              <span
+                aria-hidden
+                style={{
+                  flex: '0 0 auto',
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: '#FFF7ED',
+                  color: '#F97316',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                3
+              </span>
+              <span style={{ fontSize: '13px', color: '#1F1F23', lineHeight: 1.55, fontWeight: 500 }}>
+                同じ招待リンクを
+                <strong style={{ color: '#F97316', fontWeight: 700 }}>もう一度タップ</strong>
+              </span>
+            </div>
+
+            <p
+              style={{
+                fontSize: '12px',
+                color: '#6B7280',
+                lineHeight: 1.7,
+                margin: 0,
+                marginTop: '14px',
+                paddingTop: '12px',
+                borderTop: '1px solid rgba(255,122,46,0.12)',
+                textAlign: 'center'
+              }}
+            >
+              これでアプリに招待が自動で適用されます。
+            </p>
+          </div>
         )}
 
         {/* サービス紹介 (小さめ) — 上に細いオレンジ divider */}
