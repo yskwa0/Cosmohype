@@ -1,5 +1,6 @@
 'use client'
 import dynamic from 'next/dynamic'
+import { usePathname } from 'next/navigation'
 
 const BG = 'linear-gradient(160deg, #090714 0%, #1A0533 35%, #2D0A5F 60%, #090714 100%)'
 
@@ -27,5 +28,10 @@ const SplashScreen = dynamic(
 )
 
 export function SplashScreenMount() {
+  // 招待 Landing (/invite/*) は独自の白×オレンジブランド Landing を持つ。
+  // 全 route 共通の紫 SplashFallback をここで抑止する
+  // (他 route はこれまで通り SplashScreen を通常マウント)。
+  const pathname = usePathname()
+  if (pathname?.startsWith('/invite/')) return null
   return <SplashScreen />
 }

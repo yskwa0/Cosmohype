@@ -158,11 +158,16 @@ export function InviteClient({
         }}
       >
         {/* Logo — 新 Cosmohype wordmark (public/image.png、iOS Assets からコピーした brand asset) */}
+        {/* unoptimized: Vercel Image Optimization は本 project で 402
+            (OPTIMIZED_IMAGE_REQUEST_PAYMENT_REQUIRED、月次クォータ超過) を返すため、
+            /_next/image を経由せず raw /image.png を配信する。asset 単体で 480 KB 程度で、
+            optimizer 無しでも実用範囲。将来クォータが余ったら prop を外す。 */}
         <Image
           src="/image.png"
           alt="Cosmohype"
           width={220}
           height={51}
+          unoptimized
           style={{
             objectFit: 'contain',
             margin: '0 auto 36px',
