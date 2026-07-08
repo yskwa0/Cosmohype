@@ -21,7 +21,7 @@ export default async function InvitePage({
 
   return (
     <>
-      <style>{`html, body { background-color: #090714 !important; }`}</style>
+      <style>{`html, body { background-color: #FFFFFF !important; }`}</style>
       <InviteClient inviteCode={normalized} validFormat={validFormat} />
     </>
   )
