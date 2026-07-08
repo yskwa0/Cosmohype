@@ -8,11 +8,11 @@ export const dynamic = 'force-dynamic'
 // root layout.tsx の metadata (「Cosmohype — ファッションSNS」+ /icon.jpg fallback = 旧紫ハンガー) を
 // このページだけ上書きする。
 //
-// og:image は同 dir の opengraph-image.tsx (Next.js file convention) が動的に
-// 1200x630 PNG を生成する。file convention による og:image meta 自動注入と
-// 明示的な openGraph.images が競合しないように、ここでは images を書かない。
-// twitter:image も明示指定しない: 現行 crawler (LINE 含む) は og:image を
-// fallback として使うため、単一 opengraph-image で LINE / Twitter 両対応する。
+// og:image / twitter:image は現行 iOS AppIcon (Cosmohype ブランドアイコン、1024×1024) を
+// public/invite-appicon-v1.png として配置したものを直接指すこと。
+// (元 asset は CosmohypeNative/Assets.xcassets/AppIcon.appiconset の primary PNG。
+//  SHA-256 一致で verify 済み、リサイズ・トリミング・再生成一切なし)
+// LINE / Twitter の URL キャッシュ対策として、ファイル名に -v1 を付与している。
 export const metadata: Metadata = {
   metadataBase: new URL('https://www.cosmohype.jp'),
   title: '友達から Cosmohype に招待されています',
@@ -21,13 +21,20 @@ export const metadata: Metadata = {
     type: 'website',
     title: '友達から Cosmohype に招待されています',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
-    // images: opengraph-image.tsx (file convention) が担当
+    images: [
+      {
+        url: '/invite-appicon-v1.png',
+        width: 1024,
+        height: 1024,
+        alt: 'Cosmohype',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: '友達から Cosmohype に招待されています',
     description: 'Cosmohype をダウンロードして、ファッションで新しくつながろう。',
-    // images: og:image を fallback として利用
+    images: ['/invite-appicon-v1.png'],
   },
 }
 
