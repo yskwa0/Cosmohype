@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { OpenInAppButton } from './OpenInAppButton'
 
 // ---------------------------------------------------------------------------
 // STYLE ID inline mapping
@@ -385,28 +386,14 @@ function SuccessView({ row, token }: { row: GuessRow; token: string }) {
 
       {/* CTA セクション */}
       <CtaSection token={token} />
-
-      {/* 補足: アプリインストール後の案内 */}
-      <p
-        style={{
-          fontSize: 12,
-          color: '#9B97B2',
-          textAlign: 'center',
-          lineHeight: 1.6,
-          margin: '20px 0 0',
-          padding: '0 4px',
-        }}
-      >
-        アプリをインストールした後は、LINE や Instagram の元のリンクを
-        <br />
-        もう一度タップしてください。
-      </p>
     </div>
   )
 }
 
 function CtaSection({ token }: { token: string }) {
-  const universalLink = `https://www.cosmohype.jp/style-guess/${token}`
+  // フォールバック先: App Store URL があればそれ、無ければ /style-id (診断導線)。
+  // OpenInAppButton の 1.8s フォールバックで使用。
+  const fallbackUrl = APP_STORE_URL ?? '/style-id'
   return (
     <div
       style={{
@@ -417,25 +404,10 @@ function CtaSection({ token }: { token: string }) {
         marginTop: 4,
       }}
     >
-      {/* Primary: アプリで開く (Universal Link、iOS でアプリ起動 or Web 再訪) */}
-      <a
-        href={universalLink}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: 52,
-          borderRadius: 14,
-          backgroundColor: '#FF6A2A',
-          color: '#FFFFFF',
-          fontSize: 15,
-          fontWeight: 700,
-          textDecoration: 'none',
-          boxShadow: '0 8px 24px rgba(255,106,42,0.28)',
-        }}
-      >
-        アプリで開く
-      </a>
+      {/* Primary: アプリで開く (Custom URL Scheme cosmohype://style-guess/{token})。
+          クライアント側で 1.8s フォールバック + visibility 監視を行うため
+          Client Component (OpenInAppButton) に分離。 */}
+      <OpenInAppButton token={token} fallbackUrl={fallbackUrl} />
 
       {/* Secondary: Cosmohype で診断する / App Store 導線 */}
       {APP_STORE_URL ? (

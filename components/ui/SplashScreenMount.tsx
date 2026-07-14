@@ -33,5 +33,8 @@ export function SplashScreenMount() {
   // (他 route はこれまで通り SplashScreen を通常マウント)。
   const pathname = usePathname()
   if (pathname?.startsWith('/invite/')) return null
+  // style-guess (友達の STYLE ID 予想 受取ページ) は Universal Link / Custom URL
+  // Scheme で共有された結果画面。タップ→即時表示が UX 上重要なので splash を挟まない。
+  if (pathname?.startsWith('/style-guess/')) return null
   return <SplashScreen />
 }
