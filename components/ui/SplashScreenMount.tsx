@@ -32,6 +32,9 @@ export function SplashScreenMount() {
   // 全 route 共通の紫 SplashFallback をここで抑止する
   // (他 route はこれまで通り SplashScreen を通常マウント)。
   const pathname = usePathname()
+  // トップページ (公式ホームページ) は SplashScreen を挟まず即表示。
+  // 未認証訪問者が最初に見るページであり、瞬時表示を優先する。
+  if (pathname === '/') return null
   if (pathname?.startsWith('/invite/')) return null
   // style-guess (友達の STYLE ID 予想 受取ページ) は Universal Link / Custom URL
   // Scheme で共有された結果画面。タップ→即時表示が UX 上重要なので splash を挟まない。
