@@ -1,56 +1,26 @@
-import type { StyleId, QuizAnswer, DiagnosisResult } from './types'
-import { QUESTIONS } from './questions'
+// =============================================================================
+// scoring.ts (legacy)
+//
+// 旧 15 問診断 (廃止) が生成した URL 引き渡し用エンコード結果の decodeResult のみ残す。
+// 現行 20 問診断は quiz-v2.ts / quiz-v2-url.ts を使用。
+//
+// 残置理由:
+//   ・過去に生成された `?r=<base64>` 形式の共有 URL / body-type 遷移URL が
+//     まだ有効なうちに切ると、既存の share リンク / body-type 導線が壊れる。
+//   ・decodeResult は quiz 質問データに依存せず、純粋な base64 デコードのみ。
+//     15 問データ (questions.ts) を削除しても影響なし。
+//
+// 消費者:
+//   - app/(main)/body-type/page.tsx  (URL ?r= から STYLE ID を復元)
+//   - app/(main)/style-id/card/[encoded]/page.tsx  (共有カード表示)
+//
+// 15 問 quiz UI と calculateResult / encodeResult は Phase 4 で削除済み。
+// =============================================================================
+
+import type { StyleId, DiagnosisResult } from './types'
 import { STYLE_TYPES } from './styleTypes'
 
 const ALL_STYLE_IDS = Object.keys(STYLE_TYPES) as StyleId[]
-
-export function calculateResult(answers: QuizAnswer[]): DiagnosisResult {
-  const scores = Object.fromEntries(ALL_STYLE_IDS.map(id => [id, 0])) as Record<StyleId, number>
-
-  for (const answer of answers) {
-    const question = QUESTIONS.find(q => q.id === answer.questionId)
-    if (!question) continue
-    const option = question.options[answer.optionIndex]
-    if (!option) continue
-
-    const entries = Object.entries(option.scores) as [StyleId, number][]
-    if (entries.length === 0) {
-      // 「当てはまらない」: 全スタイルに均等1点（中立な分布として扱う）
-      ALL_STYLE_IDS.forEach(id => { scores[id] += 1 })
-    } else {
-      for (const [styleId, points] of entries) {
-        scores[styleId] += points
-      }
-    }
-  }
-
-  const sorted = (Object.entries(scores) as [StyleId, number][]).sort((a, b) => b[1] - a[1])
-  const total = sorted.reduce((sum, [, s]) => sum + s, 0)
-
-  // 全スタイルが同点（全問「当てはまらない」など）の場合は中立スタイルを返す
-  const maxScore = sorted[0][1]
-  const minScore = sorted[sorted.length - 1][1]
-  if (maxScore === minScore) {
-    return {
-      primaryStyle: 'FREE_SPIRIT',
-      secondaryStyle: 'MINIMAL_SOUL',
-      scores,
-      percentage: Math.round(100 / ALL_STYLE_IDS.length),
-      isNeutral: true,
-    }
-  }
-
-  const [primaryStyle, primaryScore] = sorted[0]
-  const [secondaryStyle] = sorted[1]
-  const percentage = Math.round((primaryScore / total) * 100)
-
-  return { primaryStyle, secondaryStyle, scores, percentage }
-}
-
-export function encodeResult(result: DiagnosisResult): string {
-  const payload = JSON.stringify({ p: result.primaryStyle, s: result.secondaryStyle, pct: result.percentage, ...(result.isNeutral ? { n: true } : {}) })
-  return btoa(payload).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
 
 export function decodeResult(encoded: string): DiagnosisResult | null {
   try {
