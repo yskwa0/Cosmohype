@@ -2,7 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Brand Admin 商品一覧の Client 版レンダラ。
@@ -58,6 +59,8 @@ export default function ProductListActions({
   )
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
+  // 単一メニューだけを開くための状態を親側で持つ
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   const visibleItems = items.filter((i) => visibleIds.includes(i.id))
 
@@ -172,6 +175,8 @@ export default function ProductListActions({
                 productName={p.name}
                 status={p.status}
                 disabled={isPending}
+                isOpen={openMenuId === p.id}
+                onOpenChange={(open) => setOpenMenuId(open ? p.id : null)}
                 onArchive={() => doArchive(p.id)}
                 onRevertToDraft={() => doRevertToDraft(p.id)}
                 onDelete={() => doDelete(p.id)}
@@ -186,37 +191,38 @@ export default function ProductListActions({
 
 // -----------------------------------------------------------------------------
 // Row-level menu + confirmation dialog
+//
+// dropdown は親コンテナ (list card / rounded overflow-hidden) に切られないよう
+// React Portal で document.body 直下に描画し、button の
+// getBoundingClientRect() を基準に fixed 座標で配置する。
+// viewport 下端付近では上方向にも開く。
+// scroll / resize / Esc / 外側クリックで close。
+// 「開いているメニュー」は親側 state (openMenuId) で単一化する。
 // -----------------------------------------------------------------------------
 function RowMenu({
-  productName, status, disabled,
+  productName, status, disabled, isOpen, onOpenChange,
   onArchive, onRevertToDraft, onDelete,
 }: {
   productId: string   // 保持: 呼出側からの identifier、将来 log/telemetry 用
   productName: string
   status: string
   disabled: boolean
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
   onArchive: () => void
   onRevertToDraft: () => void
   onDelete: () => void
 }) {
-  const [menuOpen, setMenuOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | {
     title: string; body: string; ctaLabel: string; ctaClass: string; run: () => void
   }>(null)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [menuOpen])
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const menuElRef = useRef<HTMLDivElement | null>(null)
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({ position: 'fixed', opacity: 0 })
 
   const shortName = productName.length > 40 ? productName.slice(0, 40) + '…' : productName
   const openConfirm = (kind: 'delete' | 'archive' | 'revert') => {
-    setMenuOpen(false)
+    onOpenChange(false)
     if (kind === 'delete') {
       // 完全削除: DB + Storage を物理削除、注文履歴があると server 側 guard で拒否される
       setConfirm({
@@ -261,16 +267,70 @@ function RowMenu({
     items.push({ label: '下書きに戻す', onClick: () => openConfirm('revert') })
     items.push({ label: '完全削除', onClick: () => openConfirm('delete'), danger: true })
   }
+
+  const itemCount = items.length
+  const computePosition = useCallback(() => {
+    const btn = buttonRef.current
+    if (!btn) return
+    const rect = btn.getBoundingClientRect()
+    const vh = window.innerHeight
+    const vw = window.innerWidth
+    const gap = 4
+    // menu の推定高さ (項目数 + padding) — 初期表示の flip 判定用
+    const estHeight = itemCount * 32 + 8
+    const spaceBelow = vh - rect.bottom
+    const spaceAbove = rect.top
+    const openUp = spaceBelow < estHeight + 8 && spaceAbove > spaceBelow
+    const rightOffset = Math.max(4, vw - rect.right)
+    setMenuStyle({
+      position: 'fixed',
+      right: rightOffset,
+      zIndex: 60,
+      ...(openUp
+        ? { bottom: vh - rect.top + gap }
+        : { top: rect.bottom + gap }),
+    })
+  }, [itemCount])
+
+  // メニュー open 時: 位置計算 + scroll / resize / Esc / 外側クリック listeners
+  useEffect(() => {
+    if (!isOpen) return
+    computePosition()
+    const closeIt = () => onOpenChange(false)
+    const onScrollOrResize = () => closeIt()
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeIt() }
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (buttonRef.current?.contains(t)) return
+      if (menuElRef.current?.contains(t)) return
+      closeIt()
+    }
+    // capture=true で祖先の scroll (list container など) も拾う
+    window.addEventListener('scroll', onScrollOrResize, true)
+    window.addEventListener('resize', onScrollOrResize)
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true)
+      window.removeEventListener('resize', onScrollOrResize)
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [isOpen, computePosition, onOpenChange])
+
   if (items.length === 0) return null
 
   return (
     <>
-      <div className="relative shrink-0" ref={menuRef}>
+      <div className="shrink-0">
         <button
+          ref={buttonRef}
           type="button"
           disabled={disabled}
           aria-label="商品操作メニュー"
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen((v) => !v) }}
+          aria-haspopup="menu"
+          aria-expanded={isOpen}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenChange(!isOpen) }}
           className="px-2 py-1 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
@@ -279,28 +339,33 @@ function RowMenu({
             <circle cx="16" cy="10" r="1.6" />
           </svg>
         </button>
-        {menuOpen && (
-          <div
-            role="menu"
-            className="absolute right-0 top-full mt-1 z-20 min-w-[10rem] rounded-md border border-neutral-200 bg-white shadow-md py-1"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
-          >
-            {items.map((it) => (
-              <button
-                key={it.label}
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); it.onClick() }}
-                className={
-                  'w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 ' +
-                  (it.danger ? 'text-red-700' : 'text-neutral-800')
-                }
-              >
-                {it.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
+
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          role="menu"
+          ref={menuElRef}
+          style={menuStyle}
+          className="min-w-[10rem] max-w-[calc(100vw-16px)] rounded-md border border-neutral-200 bg-white shadow-md py-1"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
+        >
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); it.onClick() }}
+              className={
+                'w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 ' +
+                (it.danger ? 'text-red-700' : 'text-neutral-800')
+              }
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
 
       {confirm && (
         <div
