@@ -1,7 +1,8 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import ProductListActions, { type ProductListItem } from '@/components/brand-admin/products/ProductListActions'
+import { archiveProductAction, revertToDraftAction } from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,24 +34,7 @@ function statusLabel(s: string): string {
     default:          return s
   }
 }
-function statusColor(s: string): string {
-  switch (s) {
-    case 'published': return 'bg-emerald-100 text-emerald-800'
-    case 'draft':     return 'bg-neutral-100 text-neutral-700'
-    case 'sold_out':  return 'bg-amber-100 text-amber-800'
-    case 'archived':  return 'bg-neutral-100 text-neutral-500'
-    default:          return 'bg-neutral-100 text-neutral-700'
-  }
-}
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}/${m}/${day} ${hh}:${mm}`
-}
+// statusColor / formatDate は ProductListActions.tsx (Client) 側へ移動済
 
 function ErrorBanner({ title, detail }: { title: string; detail: string }) {
   return (
@@ -173,80 +157,44 @@ export default async function BrandAdminProductsPage({
         ))}
       </div>
 
-      {data.length === 0 ? (
-        <div className="text-sm text-neutral-500 border border-neutral-200 rounded-xl bg-white px-5 py-8 text-center">
-          該当する商品はありません。
-        </div>
-      ) : (
-        <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
-          {data.map((p, i) => {
-            const primary = (p.shop_product_images ?? []).slice().sort(
-              (a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.sort_order - b.sort_order
-            )[0] ?? null
-            const variantCount = (p.shop_product_variants ?? []).length
-            // 販売可能数: active variant のみ、reserved を控除
-            const activeAvail = (p.shop_product_variants ?? [])
-              .filter((v) => v.status === 'active' && v.shop_inventory !== null)
-              .reduce(
-                (sum, v) => sum + Math.max(0, (v.shop_inventory?.quantity_available ?? 0) - (v.shop_inventory?.quantity_reserved ?? 0)),
-                0
-              )
-            const hasActiveVariant = (p.shop_product_variants ?? []).some(
-              (v) => v.status === 'active' && v.shop_inventory !== null
+      {(() => {
+        const listItems: ProductListItem[] = data.map((p) => {
+          const primary = (p.shop_product_images ?? []).slice().sort(
+            (a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) || a.sort_order - b.sort_order
+          )[0] ?? null
+          const variantCount = (p.shop_product_variants ?? []).length
+          const activeAvail = (p.shop_product_variants ?? [])
+            .filter((v) => v.status === 'active' && v.shop_inventory !== null)
+            .reduce(
+              (sum, v) => sum + Math.max(0, (v.shop_inventory?.quantity_available ?? 0) - (v.shop_inventory?.quantity_reserved ?? 0)),
+              0
             )
-            const isOutOfStock = p.status === 'published' && hasActiveVariant && activeAvail === 0
-            const priceLabel = new Intl.NumberFormat('ja-JP').format(p.base_price)
-            return (
-              <Link
-                key={p.id}
-                href={`/brand-admin/products/${p.id}`}
-                className={
-                  'flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 ' +
-                  (i > 0 ? 'border-t border-neutral-200' : '')
-                }
-              >
-                <div className="w-14 h-14 rounded-lg bg-neutral-100 overflow-hidden flex items-center justify-center shrink-0 relative">
-                  {primary && publicBase ? (
-                    <Image
-                      src={`${publicBase}${primary.storage_path}`}
-                      alt=""
-                      fill
-                      sizes="56px"
-                      className="object-cover"
-                      unoptimized
-                    />
-                  ) : (
-                    <span className="text-[9px] text-neutral-400">NO IMG</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${statusColor(p.status)}`}>
-                      {statusLabel(p.status)}
-                    </span>
-                    {isOutOfStock && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                        在庫切れ
-                      </span>
-                    )}
-                    <span className="text-[10px] text-neutral-500">
-                      {p.shop_categories?.display_name ?? '—'}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-sm font-semibold text-neutral-900 truncate">{p.name}</div>
-                  <div className="mt-0.5 text-[11px] text-neutral-500">
-                    {formatDate(p.updated_at)} · variants {variantCount} · 販売可能 {activeAvail}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-sm font-semibold font-mono">¥{priceLabel}</div>
-                  <div className="text-[10px] text-neutral-500 mt-1">›</div>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
-      )}
+          const hasActiveVariant = (p.shop_product_variants ?? []).some(
+            (v) => v.status === 'active' && v.shop_inventory !== null
+          )
+          return {
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            base_price: p.base_price,
+            category_display_name: p.shop_categories?.display_name ?? null,
+            primary_storage_path: primary?.storage_path ?? null,
+            variant_count: variantCount,
+            active_avail: activeAvail,
+            is_out_of_stock: p.status === 'published' && hasActiveVariant && activeAvail === 0,
+            updated_at: p.updated_at,
+          }
+        })
+        return (
+          <ProductListActions
+            items={listItems}
+            publicBase={publicBase}
+            canEdit={canEdit}
+            revertToDraftAction={revertToDraftAction}
+            archiveAction={archiveProductAction}
+          />
+        )
+      })()}
     </div>
   )
 }

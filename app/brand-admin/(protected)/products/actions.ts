@@ -407,7 +407,11 @@ export async function publishProductAction(formData: FormData): Promise<void> {
 export async function archiveProductAction(formData: FormData): Promise<void> {
   const { ctx, bypass, supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
-  const back = `/brand-admin/products/${productId}`
+  // 一覧「…」メニューから呼ばれた時は back='list' → 一覧へ redirect (既存詳細ページからの呼出は back 未指定で従来通り詳細へ戻る)
+  const backFrom = String(formData.get('back') || '')
+  const backList = `/brand-admin/products`
+  const backDetail = `/brand-admin/products/${productId}`
+  const back = backFrom === 'list' ? backList : backDetail
 
   const cur = await supabase.from('shop_products').select(
     'brand_id, category_id, name, description, base_price, compare_at_price, currency, style_id_tags, is_new, status'
@@ -418,7 +422,11 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
     style_id_tags: string[] | null; is_new: boolean; status: string
   } | null
   if (!row) redirect(`${back}?err=product_not_found`)
-  if (row!.status === 'archived') redirect(`${back}?err=already_archived`)
+  if (row!.status === 'archived') {
+    // 既 archived の場合、一覧経路では silent success (Optimistic UI と整合)、詳細経路では既存挙動維持
+    if (backFrom === 'list') { revalidatePath(backList); redirect(`${backList}?saved=1&archived=1`) }
+    redirect(`${back}?err=already_archived`)
+  }
 
   if (bypass) {
     const brandId = assertUUID(ctx.currentBrand.brandId)
@@ -448,8 +456,70 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
       redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
     }
   }
+  // list 経路は list を revalidate、詳細経路は詳細を revalidate
   revalidatePath(back)
+  if (backFrom === 'list') { revalidatePath(backList) }
   redirect(`${back}?saved=1&archived=1`)
+}
+
+// =============================================================================
+// revertToDraftAction  (published / archived → draft 手動戻し)
+//   一覧「…」メニューの「下書きに戻す」から呼ばれる。owner/admin のみ許可
+//   (server 側 shop_brand_update_product RPC が manager 権限を要求)。
+//   既存 archiveProductAction と同じパターン: 現在値を SELECT して p_status='draft'
+//   のみ差替、他 field は保持。
+//   revalidate は一覧側 (/brand-admin/products) と詳細側の両方。
+// =============================================================================
+export async function revertToDraftAction(formData: FormData): Promise<void> {
+  const { ctx, bypass, supabase } = await getContextAndClient()
+  const productId = assertUUID(formData.get('product_id'))
+  const backList = `/brand-admin/products`
+  const backDetail = `/brand-admin/products/${productId}`
+
+  const cur = await supabase.from('shop_products').select(
+    'brand_id, category_id, name, description, base_price, compare_at_price, currency, style_id_tags, is_new, status'
+  ).eq('id', productId).maybeSingle()
+  const row = cur.data as {
+    brand_id: string; category_id: string; name: string; description: string | null;
+    base_price: number; compare_at_price: number | null; currency: string;
+    style_id_tags: string[] | null; is_new: boolean; status: string
+  } | null
+  if (!row) redirect(`${backList}?err=product_not_found`)
+  if (row!.status === 'draft') {
+    revalidatePath(backList); redirect(`${backList}?saved=1`)
+  }
+
+  if (bypass) {
+    const brandId = assertUUID(ctx.currentBrand.brandId)
+    if (row!.brand_id !== brandId) redirect(`${backList}?err=forbidden`)
+    const upd = await supabase.from('shop_products').update({
+      status: 'draft',
+    }).eq('id', productId)
+    if (upd.error) {
+      console.error('[brand-admin/products] dev bypass revert-to-draft failed', upd.error)
+      redirect(`${backList}?err=update_failed`)
+    }
+  } else {
+    const res = await supabase.rpc('shop_brand_update_product', {
+      p_product_id:       productId,
+      p_category_id:      row!.category_id,
+      p_name:             row!.name,
+      p_description:      row!.description,
+      p_base_price:       row!.base_price,
+      p_compare_at_price: row!.compare_at_price,
+      p_currency:         row!.currency,
+      p_status:           'draft',
+      p_style_id_tags:    row!.style_id_tags ?? [],
+      p_is_new:           row!.is_new,
+    })
+    if (res.error) {
+      console.error('[brand-admin/products] rpc revert-to-draft failed', res.error)
+      redirect(`${backList}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
+    }
+  }
+  revalidatePath(backList)
+  revalidatePath(backDetail)
+  redirect(`${backList}?saved=1`)
 }
 
 // =============================================================================
