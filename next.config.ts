@@ -13,6 +13,9 @@ const nextConfig: NextConfig = {
     staleTimes: {
       dynamic: 0,
     },
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
   },
   allowedDevOrigins: ['192.168.10.101', '192.168.10.110', '192.168.*.* '],
   images: {
