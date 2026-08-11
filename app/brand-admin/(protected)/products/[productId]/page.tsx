@@ -1,10 +1,10 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { redirect } from 'next/navigation'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import ProductBasicsForm from '@/components/brand-admin/products/ProductBasicsForm'
 import ImageUploadForm from '@/components/brand-admin/products/ImageUploadForm'
+import ProductImageGrid from '@/components/brand-admin/products/ProductImageGrid'
 import VariantEditor from '@/components/brand-admin/products/VariantEditor'
 import AddVariantSection from '@/components/brand-admin/products/AddVariantSection'
 import PublishProductForm from '@/components/brand-admin/products/PublishProductForm'
@@ -275,61 +275,14 @@ export default async function BrandAdminProductEditPage({
         <div className="text-[11px] text-neutral-500 mb-4">
           最大 {MAX_IMAGES_PER_PRODUCT} 枚まで登録できます。「メイン画像」は商品一覧・詳細のトップに表示されます。
         </div>
-        {images.length === 0 ? (
-          <div className="text-[13px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-3 py-3 mb-4">
-            商品画像を追加してください（公開には 1 枚以上必要です）。
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            {images.map((img) => (
-              <div key={img.id} className="border border-neutral-200 rounded-lg overflow-hidden bg-neutral-50">
-                <div className="relative aspect-square">
-                  {publicBase && (
-                    <Image
-                      src={`${publicBase}${img.storage_path}`}
-                      alt=""
-                      fill
-                      sizes="200px"
-                      className="object-cover"
-                      unoptimized
-                    />
-                  )}
-                  {img.is_primary && (
-                    <span className="absolute top-1 left-1 text-[9px] font-semibold bg-neutral-900 text-white px-1.5 py-0.5 rounded">
-                      メイン画像
-                    </span>
-                  )}
-                </div>
-                {canEdit && (
-                  <div className="p-2 space-y-1.5">
-                    {!img.is_primary && (
-                      <form action={setPrimaryImageAction}>
-                        <input type="hidden" name="product_id" value={product.id} />
-                        <input type="hidden" name="image_id" value={img.id} />
-                        <button
-                          type="submit"
-                          className="w-full text-[11px] py-1 rounded border border-neutral-900 text-neutral-900 hover:bg-neutral-50"
-                        >
-                          メイン画像に設定
-                        </button>
-                      </form>
-                    )}
-                    <form action={deleteImageAction}>
-                      <input type="hidden" name="product_id" value={product.id} />
-                      <input type="hidden" name="image_id" value={img.id} />
-                      <button
-                        type="submit"
-                        className="w-full text-[11px] py-1 rounded border border-red-300 text-red-700 hover:bg-red-50"
-                      >
-                        削除
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <ProductImageGrid
+          productId={product.id}
+          images={images}
+          publicBase={publicBase}
+          canEdit={canEdit}
+          deleteAction={deleteImageAction}
+          setPrimaryAction={setPrimaryImageAction}
+        />
         {canEdit && images.length < MAX_IMAGES_PER_PRODUCT && (
           <ImageUploadForm productId={product.id} action={uploadImageAction} />
         )}
