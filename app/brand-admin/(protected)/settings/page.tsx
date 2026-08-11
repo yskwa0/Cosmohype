@@ -1,11 +1,9 @@
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import ReturnAddressForm, {
-  type ReturnAddressInitial,
-} from '@/components/brand-admin/ReturnAddressForm'
-import ShippingRulesForm, {
-  type ShippingRulesInitial,
-} from '@/components/brand-admin/ShippingRulesForm'
+import { type ReturnAddressInitial } from '@/components/brand-admin/ReturnAddressForm'
+import ReturnAddressSection from '@/components/brand-admin/ReturnAddressSection'
+import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRulesForm'
+import ShippingRulesSection from '@/components/brand-admin/ShippingRulesSection'
 import { updateReturnAddressAction, updateShippingRulesAction } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -191,10 +189,10 @@ export default async function BrandAdminSettingsPage({
             通常のブランド住所とは別管理です。
           </div>
         </div>
-        <ReturnAddressForm
+        <ReturnAddressSection
           initial={initial}
           action={updateReturnAddressAction}
-          disabled={!canEdit}
+          canEdit={canEdit}
           disabledReason={disabledReason}
         />
       </section>
@@ -218,10 +216,10 @@ export default async function BrandAdminSettingsPage({
           )}
         </div>
         {!migration136NotApplied && (
-          <ShippingRulesForm
+          <ShippingRulesSection
             initial={shipInitial}
             action={updateShippingRulesAction}
-            disabled={!canEdit}
+            canEdit={canEdit}
             disabledReason={disabledReason}
           />
         )}

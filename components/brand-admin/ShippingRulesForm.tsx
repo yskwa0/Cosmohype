@@ -37,6 +37,8 @@ interface Props {
   action: (formData: FormData) => Promise<void>
   disabled?: boolean
   disabledReason?: string
+  /** 「キャンセル」ボタン表示 (親が閲覧モードへ戻す時に指定) */
+  onCancel?: () => void
 }
 
 function num(v: number | null): string {
@@ -143,6 +145,7 @@ export default function ShippingRulesForm({
   action,
   disabled = false,
   disabledReason,
+  onCancel,
 }: Props) {
   const [completelyFree, setCompletelyFree] = useState(isCompletelyFree(initial))
   const [flatRate, setFlatRate] = useState(num(initial.flatRate))
@@ -344,7 +347,18 @@ export default function ShippingRulesForm({
         </div>
       )}
 
-      <SaveButton enabled={!disabled && isValid} label="送料設定を保存" />
+      <div className="flex items-center gap-3">
+        <SaveButton enabled={!disabled && isValid} label="送料設定を保存" />
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-md text-sm font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+          >
+            キャンセル
+          </button>
+        )}
+      </div>
     </form>
   )
 }

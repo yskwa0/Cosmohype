@@ -18,6 +18,8 @@ interface Props {
   action: (formData: FormData) => Promise<void>
   disabled?: boolean       // staff 等で編集不可の時は true
   disabledReason?: string  // disabled 理由 (表示用)
+  /** 「キャンセル」ボタン表示 (親が閲覧モードへ戻す時に指定) */
+  onCancel?: () => void
 }
 
 function SaveButton({ enabled }: { enabled: boolean }) {
@@ -42,7 +44,7 @@ function SaveButton({ enabled }: { enabled: boolean }) {
  * server action で shop_brand_update_return_address RPC を呼ぶ。
  * client 側でも必須 + 郵便番号 7 桁 (ハイフン許可) を軽く validate。
  */
-export default function ReturnAddressForm({ initial, action, disabled, disabledReason }: Props) {
+export default function ReturnAddressForm({ initial, action, disabled, disabledReason, onCancel }: Props) {
   const [f, setF] = useState<ReturnAddressInitial>(initial)
 
   const postalStripped = f.postalCode.replace(/[-ー－\s]/g, '')
@@ -157,6 +159,15 @@ export default function ReturnAddressForm({ initial, action, disabled, disabledR
 
       <div className="pt-2 flex items-center gap-3">
         <SaveButton enabled={canSubmit} />
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-md text-sm font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+          >
+            キャンセル
+          </button>
+        )}
         {disabled && disabledReason && (
           <span className="text-[11px] text-neutral-500">{disabledReason}</span>
         )}
