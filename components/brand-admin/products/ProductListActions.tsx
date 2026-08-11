@@ -8,19 +8,22 @@ import { useEffect, useOptimistic, useRef, useState, useTransition } from 'react
  * Brand Admin 商品一覧の Client 版レンダラ。
  *
  * 役割:
- *   1. useOptimistic で「アーカイブ / 削除 (=archive)」時に対象行を即時 hide
+ *   1. useOptimistic で「アーカイブ / 完全削除」時に対象行を即時 hide
  *   2. 各行の「…」メニュー + 確認ダイアログ (product 名表示 / 二重押し防止)
  *   3. Server Action を useTransition 経由で呼出、redirect 完了で revalidatePath 反映
  *   4. 失敗時は親再描画で該当 id が visible list に残り、useOptimistic overlay 消滅 → 自動 rollback
  *
  * 変更しないもの:
- *   - Server Action の RPC (shop_brand_update_product) / 権限判定 / status 遷移仕様
  *   - list の見た目 (image / status pill / name / price / metadata)
  *   - primary image / storage / sort_order
  *
- * 「削除」は shop_brand_archive_variant と同じソフト削除パターン (status='archived') を
- * 商品側にも適用。FK RESTRICT / authenticated DELETE grant なしの制約下での既存 pattern。
- * ダイアログ本文で「アーカイブ (非表示化) されます」を明示する。
+ * status ごとのメニュー構成:
+ *   published : 下書きに戻す / アーカイブ           (完全削除は先に非公開化を要求)
+ *   draft     : アーカイブ / 完全削除 (赤)
+ *   archived  : 下書きに戻す / 完全削除 (赤)
+ *
+ * 「アーカイブ」は status='archived' の soft delete (既存 archiveProductAction)。
+ * 「完全削除」は DB + Storage を物理削除 (deleteProductAction)。注文履歴があると server 側 guard で拒否。
  */
 
 export interface ProductListItem {
@@ -42,10 +45,11 @@ interface Props {
   canEdit: boolean
   revertToDraftAction: (formData: FormData) => Promise<void>
   archiveAction: (formData: FormData) => Promise<void>
+  deleteAction: (formData: FormData) => Promise<void>
 }
 
 export default function ProductListActions({
-  items, publicBase, canEdit, revertToDraftAction, archiveAction,
+  items, publicBase, canEdit, revertToDraftAction, archiveAction, deleteAction,
 }: Props) {
   const ids = items.map((i) => i.id)
   const [visibleIds, hideOptimistically] = useOptimistic<string[], string>(
@@ -82,6 +86,19 @@ export default function ProductListActions({
       const fd = new FormData()
       fd.set('product_id', id)
       try { await revertToDraftAction(fd) } catch { /* NEXT_REDIRECT normal path */ }
+      clearPending(id)
+    })
+  }
+
+  const doDelete = (id: string) => {
+    if (pendingIds.has(id)) return
+    markPending(id)
+    startTransition(async () => {
+      // 完全削除: Optimistic に list から除外。失敗時は親再描画で id が残り自動 rollback。
+      hideOptimistically(id)
+      const fd = new FormData()
+      fd.set('product_id', id)
+      try { await deleteAction(fd) } catch { /* NEXT_REDIRECT normal path */ }
       clearPending(id)
     })
   }
@@ -157,6 +174,7 @@ export default function ProductListActions({
                 disabled={isPending}
                 onArchive={() => doArchive(p.id)}
                 onRevertToDraft={() => doRevertToDraft(p.id)}
+                onDelete={() => doDelete(p.id)}
               />
             )}
           </div>
@@ -171,7 +189,7 @@ export default function ProductListActions({
 // -----------------------------------------------------------------------------
 function RowMenu({
   productName, status, disabled,
-  onArchive, onRevertToDraft,
+  onArchive, onRevertToDraft, onDelete,
 }: {
   productId: string   // 保持: 呼出側からの identifier、将来 log/telemetry 用
   productName: string
@@ -179,6 +197,7 @@ function RowMenu({
   disabled: boolean
   onArchive: () => void
   onRevertToDraft: () => void
+  onDelete: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirm, setConfirm] = useState<null | {
@@ -199,17 +218,19 @@ function RowMenu({
   const openConfirm = (kind: 'delete' | 'archive' | 'revert') => {
     setMenuOpen(false)
     if (kind === 'delete') {
+      // 完全削除: DB + Storage を物理削除、注文履歴があると server 側 guard で拒否される
       setConfirm({
-        title: 'この商品を削除しますか？',
-        body: `「${shortName}」を削除 (アーカイブ) します。\n一覧「アーカイブ」タブから復元できますが、公開・購入経路からは即時に消えます。よろしいですか？`,
-        ctaLabel: '削除する',
+        title: 'この商品を完全に削除しますか？',
+        body: `「${shortName}」\n\nこの操作は取り消せません。`,
+        ctaLabel: '完全に削除',
         ctaClass: 'bg-red-600 text-white hover:bg-red-700',
-        run: () => { setConfirm(null); onArchive() },
+        run: () => { setConfirm(null); onDelete() },
       })
     } else if (kind === 'archive') {
+      // アーカイブ: 非表示化のみ、後で復元可
       setConfirm({
         title: 'この商品をアーカイブしますか？',
-        body: `「${shortName}」をアーカイブします。\nHYPE の商品一覧から非表示になります (既存注文には影響しません)。`,
+        body: `「${shortName}」をアーカイブします。\nHYPE の商品一覧から非表示になります (アーカイブ一覧から後で復元できます)。`,
         ctaLabel: 'アーカイブする',
         ctaClass: 'bg-neutral-900 text-white hover:bg-neutral-800',
         run: () => { setConfirm(null); onArchive() },
@@ -225,14 +246,20 @@ function RowMenu({
     }
   }
 
+  // status ごとのメニュー構成
+  //   published: 「下書きに戻す」/「アーカイブ」  (完全削除は先に非公開化を要求)
+  //   draft    : 「アーカイブ」/「完全削除」
+  //   archived : 「下書きに戻す」/「完全削除」
   const items: Array<{ label: string; onClick: () => void; danger?: boolean }> = []
   if (status === 'published') {
     items.push({ label: '下書きに戻す', onClick: () => openConfirm('revert') })
     items.push({ label: 'アーカイブ', onClick: () => openConfirm('archive') })
   } else if (status === 'draft') {
-    items.push({ label: '削除', onClick: () => openConfirm('delete'), danger: true })
+    items.push({ label: 'アーカイブ', onClick: () => openConfirm('archive') })
+    items.push({ label: '完全削除', onClick: () => openConfirm('delete'), danger: true })
   } else if (status === 'archived') {
     items.push({ label: '下書きに戻す', onClick: () => openConfirm('revert') })
+    items.push({ label: '完全削除', onClick: () => openConfirm('delete'), danger: true })
   }
   if (items.length === 0) return null
 

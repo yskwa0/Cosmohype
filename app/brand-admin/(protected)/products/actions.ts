@@ -463,6 +463,124 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
 }
 
 // =============================================================================
+// deleteProductAction  (完全削除 = 本物の DELETE、注文履歴があると拒否)
+// -----------------------------------------------------------------------------
+//   一覧「…」メニュー「完全削除」から呼ばれる。owner/admin のみ許可、staff は forbidden。
+//
+//   Guard (すべて 0 件でなければ削除拒否):
+//     1) shop_order_items.product_id = productId          → has_orders
+//     2) shop_cart_items.variant_id  IN (product.variants)→ has_cart_items
+//     3) shop_inventory_reservations.variant_id IN (...)  → has_reservations
+//
+//   Cascade order (FK 制約に合わせる):
+//     1) collect storage_paths from shop_product_images
+//     2) DELETE shop_product_variants WHERE product_id
+//        (shop_inventory は CASCADE で自動削除、変数は Guard 済のため RESTRICT に当たらない)
+//     3) DELETE shop_products WHERE id
+//        (shop_product_images / shop_product_favorites は CASCADE、
+//         shop_order_items は Guard 済のため RESTRICT に当たらない)
+//     4) storage.remove(paths) — best-effort、DB 側は既に消えているので失敗しても続行
+//
+//   RLS bypass: shop_products は authenticated に DELETE grant が無いため
+//     service_role (createAdminClient) を使う。以下 2 層防御:
+//       ・in-code: role='owner'|'admin' + product.brand_id === ctx.brand.brandId
+//       ・SQL: DELETE 句の WHERE に brand_id を含める (取り違え防止)
+//
+//   Production: SUPABASE_SERVICE_ROLE_KEY は Vercel env に設定済 (81 日前設定)。
+// =============================================================================
+export async function deleteProductAction(formData: FormData): Promise<void> {
+  const ctx = await getBrandAdminContext()
+  const productId = assertUUID(formData.get('product_id'))
+  const backList = '/brand-admin/products'
+
+  if (ctx.currentBrand.role !== 'owner' && ctx.currentBrand.role !== 'admin') {
+    redirect(`${backList}?err=forbidden`)
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    redirect(`${backList}?err=service_role_missing`)
+  }
+
+  // deno-lint-ignore no-explicit-any
+  const admin = createAdminClient() as unknown as any
+
+  // 1) product 存在 + brand 一致確認
+  const prod = await admin.from('shop_products').select('id, brand_id').eq('id', productId).maybeSingle()
+  const row = prod.data as { id: string; brand_id: string } | null
+  if (!row) redirect(`${backList}?err=product_not_found`)
+  if (row!.brand_id !== ctx.currentBrand.brandId) redirect(`${backList}?err=forbidden`)
+
+  // 2) 対象商品の variant id を全部取得 (guard + delete で使用)
+  const varRes = await admin.from('shop_product_variants').select('id').eq('product_id', productId)
+  const variantIds = ((varRes.data as { id: string }[] | null) ?? []).map((v) => v.id)
+
+  // 3) Guard: 注文履歴
+  const orderCheck = await admin
+    .from('shop_order_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('product_id', productId)
+  if ((orderCheck.count ?? 0) > 0) {
+    redirect(`${backList}?err=has_orders`)
+  }
+
+  // 4) Guard: cart / reservation (variant 経由、variant が 1 件でもあれば確認)
+  if (variantIds.length > 0) {
+    const cartCheck = await admin
+      .from('shop_cart_items')
+      .select('id', { count: 'exact', head: true })
+      .in('variant_id', variantIds)
+    if ((cartCheck.count ?? 0) > 0) {
+      redirect(`${backList}?err=has_cart_items`)
+    }
+    const resCheck = await admin
+      .from('shop_inventory_reservations')
+      .select('id', { count: 'exact', head: true })
+      .in('variant_id', variantIds)
+    if ((resCheck.count ?? 0) > 0) {
+      redirect(`${backList}?err=has_reservations`)
+    }
+  }
+
+  // 5) storage_paths を先に取得 (DB DELETE 後に取れなくなるため)
+  const imgRes = await admin.from('shop_product_images').select('storage_path').eq('product_id', productId)
+  const storagePaths = ((imgRes.data as { storage_path: string }[] | null) ?? []).map((i) => i.storage_path)
+
+  // 6) 子テーブル: shop_product_variants を先に DELETE (shop_inventory は CASCADE で自動削除)
+  if (variantIds.length > 0) {
+    const delVar = await admin
+      .from('shop_product_variants')
+      .delete()
+      .eq('product_id', productId)
+    if (delVar.error) {
+      console.error('[brand-admin/products] delete variants failed', delVar.error)
+      redirect(`${backList}?err=delete_variants_failed`)
+    }
+  }
+
+  // 7) shop_products 本体 DELETE (shop_product_images / shop_product_favorites は CASCADE)
+  //    WHERE 句に brand_id を追加して二重防御
+  const delProd = await admin
+    .from('shop_products')
+    .delete()
+    .eq('id', productId)
+    .eq('brand_id', ctx.currentBrand.brandId)
+  if (delProd.error) {
+    console.error('[brand-admin/products] delete product failed', delProd.error)
+    redirect(`${backList}?err=delete_product_failed`)
+  }
+
+  // 8) storage オブジェクト削除 (best-effort。DB は既に消えているので失敗しても続行)
+  if (storagePaths.length > 0) {
+    const storageRes = await admin.storage.from('shop-product-images').remove(storagePaths)
+    if (storageRes.error) {
+      console.warn('[brand-admin/products] storage remove failed (DB already deleted, orphan objects possible)', storageRes.error)
+    }
+  }
+
+  revalidatePath(backList)
+  redirect(`${backList}?saved=1&deleted=1`)
+}
+
+// =============================================================================
 // revertToDraftAction  (published / archived → draft 手動戻し)
 //   一覧「…」メニューの「下書きに戻す」から呼ばれる。owner/admin のみ許可
 //   (server 側 shop_brand_update_product RPC が manager 権限を要求)。

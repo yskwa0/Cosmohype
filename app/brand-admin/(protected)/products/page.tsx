@@ -2,7 +2,22 @@ import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import ProductListActions, { type ProductListItem } from '@/components/brand-admin/products/ProductListActions'
-import { archiveProductAction, revertToDraftAction } from './actions'
+import { archiveProductAction, revertToDraftAction, deleteProductAction } from './actions'
+
+// エラーコード → 表示ラベル (完全削除 flow で発生し得るコードを含む)
+function errLabel(code: string): string {
+  switch (code) {
+    case 'has_orders':            return '注文履歴があるため削除できません。アーカイブしてください。'
+    case 'has_cart_items':        return 'カートに入っているため削除できません。少し時間を置いて再度お試しください。'
+    case 'has_reservations':      return '在庫予約中のため削除できません。少し時間を置いて再度お試しください。'
+    case 'service_role_missing':  return 'サーバ設定エラー (service_role 未設定)。運営にお問い合わせください。'
+    case 'delete_variants_failed':return 'バリアントの削除に失敗しました。時間を置いて再度お試しください。'
+    case 'delete_product_failed': return '商品の削除に失敗しました。時間を置いて再度お試しください。'
+    case 'product_not_found':     return '対象の商品が見つかりませんでした。'
+    case 'forbidden':             return 'この操作を行う権限がありません。'
+    default:                      return `エラー: ${code}`
+  }
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -136,7 +151,7 @@ export default async function BrandAdminProductsPage({
       )}
       {errCode && (
         <div className="mb-4 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-          エラー: {errCode}
+          {errLabel(errCode)}
         </div>
       )}
 
@@ -192,6 +207,7 @@ export default async function BrandAdminProductsPage({
             canEdit={canEdit}
             revertToDraftAction={revertToDraftAction}
             archiveAction={archiveProductAction}
+            deleteAction={deleteProductAction}
           />
         )
       })()}
