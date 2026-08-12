@@ -339,14 +339,6 @@ async function IssueRelated({ issue }: { issue: IssueDetail }) {
       </div>
 
       <div className="mt-6">
-        <Card title="購入者からの説明">
-          <div className="text-[13px] whitespace-pre-wrap text-neutral-800">
-            {issue.description}
-          </div>
-        </Card>
-      </div>
-
-      <div className="mt-6">
         <Card title={`証拠写真 (${signedImageUrls.length})`}>
           {signedImageUrls.length === 0 ? (
             <div className="text-[12px] text-neutral-500">写真がありません</div>
