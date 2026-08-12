@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
@@ -61,10 +62,28 @@ export default async function BrandAdminOrdersListPage() {
     )
   }
 
-  const supabase = bypass ? createAdminClient() : await createClient()
+  return (
+    <div>
+      <div className="mb-6">
+        <div className="text-[10px] tracking-[0.3em] text-neutral-500">
+          {ctx.currentBrand.brandName}
+        </div>
+        <h1 className="mt-1 text-2xl font-semibold">注文管理</h1>
+        <div className="mt-2 text-[11px] text-neutral-500">
+          ブランドが含まれる注文 (最大 100 件、新しい順)
+        </div>
+      </div>
 
-  // 2 段階 fetch: groups → shop_orders + shop_order_items を別 query で結合。
-  // 埋め込み JOIN が admin client / anon で挙動差を出しにくく、原因切り分けも容易。
+      <Suspense fallback={<OrderListSkeleton />}>
+        <OrderListSection brandId={ctx.currentBrand.brandId} bypass={bypass} />
+      </Suspense>
+    </div>
+  )
+}
+
+// 一覧本体を async component 化し親 Suspense の後追いで stream。
+async function OrderListSection({ brandId, bypass }: { brandId: string; bypass: boolean }) {
+  const supabase = bypass ? createAdminClient() : await createClient()
   type LooseFrom = {
     from: (t: string) => {
       select: (s: string) => {
@@ -84,16 +103,15 @@ export default async function BrandAdminOrdersListPage() {
     .select(
       'id, order_id, brand_id, brand_name, subtotal_amount, shipping_amount, fulfillment_status, tracking_number, tracking_carrier, shipped_at, delivered_at, created_at'
     )
-    .eq('brand_id', ctx.currentBrand.brandId)
+    .eq('brand_id', brandId)
     .order('created_at', { ascending: false })
     .limit(100)
   if (groupsRes.error) {
     console.error('[brand-admin/orders] shop_order_groups fetch failed', groupsRes.error)
     return (
-      <ErrorBanner
-        title="注文一覧の取得に失敗しました"
-        detail={groupsRes.error.message}
-      />
+      <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+        注文一覧の取得に失敗しました: {groupsRes.error.message}
+      </div>
     )
   }
   const groups = (groupsRes.data ?? []) as GroupRowBase[]
@@ -114,12 +132,9 @@ export default async function BrandAdminOrdersListPage() {
           .in('order_group_id', groupIds)
       : Promise.resolve({ data: [], error: null }),
   ])
-  if (ordersRes.error) {
-    console.error('[brand-admin/orders] shop_orders fetch failed', ordersRes.error)
-  }
-  if (itemsRes.error) {
-    console.error('[brand-admin/orders] shop_order_items fetch failed', itemsRes.error)
-  }
+  if (ordersRes.error) console.error('[brand-admin/orders] shop_orders fetch failed', ordersRes.error)
+  if (itemsRes.error) console.error('[brand-admin/orders] shop_order_items fetch failed', itemsRes.error)
+
   const ordersById = new Map<string, GroupRow['shop_orders']>()
   for (const o of (ordersRes.data ?? []) as NonNullable<GroupRow['shop_orders']>[]) {
     ordersById.set(o.id, o)
@@ -135,69 +150,71 @@ export default async function BrandAdminOrdersListPage() {
     shop_orders: ordersById.get(g.order_id) ?? null,
     shop_order_items: itemsByGroup.get(g.id) ?? null,
   }))
-  const error = null
+
+  if (data.length === 0) {
+    return <div className="text-sm text-neutral-500">まだ注文はありません。</div>
+  }
 
   return (
-    <div>
-      <div className="mb-6">
-        <div className="text-[10px] tracking-[0.3em] text-neutral-500">
-          {ctx.currentBrand.brandName}
-        </div>
-        <h1 className="mt-1 text-2xl font-semibold">注文管理</h1>
-        <div className="mt-2 text-[11px] text-neutral-500">
-          ブランドが含まれる注文 (最大 100 件、新しい順)
-        </div>
-      </div>
+    <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
+      {data.map((g, i) => (
+        <Link
+          key={g.id}
+          href={`/brand-admin/orders/${g.id}`}
+          className={
+            'flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 ' +
+            (i > 0 ? 'border-t border-neutral-200' : '')
+          }
+        >
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <StatusPill status={g.fulfillment_status} />
+              {g.fulfillment_status === 'shipped' && (g.shop_orders?.receipt_status === 'received' || g.shop_orders?.receipt_status === 'auto_completed') && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                  {g.shop_orders.receipt_status === 'received' ? '受取完了' : '取引完了 (自動)'}
+                </span>
+              )}
+              {g.fulfillment_status === 'shipped' && g.shop_orders?.receipt_status === 'issue_reported' && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                  問題報告あり
+                </span>
+              )}
+              <span className="text-[11px] font-mono text-neutral-500">
+                {g.id.slice(0, 8).toUpperCase()}
+              </span>
+            </div>
+            <div className="mt-1 text-sm font-semibold text-neutral-900 truncate">
+              {productSummary(g.shop_order_items)}
+            </div>
+            <div className="mt-0.5 text-[11px] text-neutral-500">
+              {formatDate(g.created_at)} · {g.shop_orders?.shipping_name ?? '—'}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-sm font-semibold font-mono">
+              ¥{(g.subtotal_amount + g.shipping_amount).toLocaleString('ja-JP')}
+            </div>
+            <div className="text-[10px] text-neutral-500 mt-1">›</div>
+          </div>
+        </Link>
+      ))}
+    </div>
+  )
+}
 
-      {error ? (
-        <div className="text-sm text-red-600">注文一覧の取得に失敗しました。</div>
-      ) : !data || data.length === 0 ? (
-        <div className="text-sm text-neutral-500">まだ注文はありません。</div>
-      ) : (
-        <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
-          {data.map((g, i) => (
-            <Link
-              key={g.id}
-              href={`/brand-admin/orders/${g.id}`}
-              className={
-                'flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 ' +
-                (i > 0 ? 'border-t border-neutral-200' : '')
-              }
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <StatusPill status={g.fulfillment_status} />
-                  {g.fulfillment_status === 'shipped' && (g.shop_orders?.receipt_status === 'received' || g.shop_orders?.receipt_status === 'auto_completed') && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                      {g.shop_orders.receipt_status === 'received' ? '受取完了' : '取引完了 (自動)'}
-                    </span>
-                  )}
-                  {g.fulfillment_status === 'shipped' && g.shop_orders?.receipt_status === 'issue_reported' && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                      問題報告あり
-                    </span>
-                  )}
-                  <span className="text-[11px] font-mono text-neutral-500">
-                    {g.id.slice(0, 8).toUpperCase()}
-                  </span>
-                </div>
-                <div className="mt-1 text-sm font-semibold text-neutral-900 truncate">
-                  {productSummary(g.shop_order_items)}
-                </div>
-                <div className="mt-0.5 text-[11px] text-neutral-500">
-                  {formatDate(g.created_at)} · {g.shop_orders?.shipping_name ?? '—'}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold font-mono">
-                  ¥{(g.subtotal_amount + g.shipping_amount).toLocaleString('ja-JP')}
-                </div>
-                <div className="text-[10px] text-neutral-500 mt-1">›</div>
-              </div>
-            </Link>
-          ))}
+function OrderListSkeleton() {
+  return (
+    <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className={'flex items-center gap-4 px-5 py-4 ' + (i > 0 ? 'border-t border-neutral-200' : '')}>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="h-3 w-24 bg-neutral-100 rounded" />
+            <div className="h-4 w-3/5 bg-neutral-200 rounded" />
+            <div className="h-3 w-2/5 bg-neutral-100 rounded" />
+          </div>
+          <div className="h-4 w-16 bg-neutral-100 rounded" />
         </div>
-      )}
+      ))}
     </div>
   )
 }

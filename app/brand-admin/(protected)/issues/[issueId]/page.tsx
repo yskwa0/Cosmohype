@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
@@ -101,9 +102,6 @@ export default async function BrandAdminIssueDetailPage({
     )
   }
   const supabase = bypass ? createAdminClient() : await createClient()
-  // signed URL 発行は常に admin (private bucket)。通常ログイン経路でも brand member 検証は
-  // 上流の getBrandAdminContext + issue.brand_id 一致で担保されているので安全。
-  const adminForSigned = createAdminClient()
 
   type LooseFrom = {
     from: (t: string) => {
@@ -112,14 +110,6 @@ export default async function BrandAdminIssueDetailPage({
           eq: (c: string, v: string) => {
             maybeSingle: () => Promise<{ data: IssueDetail | null; error: { message: string } | null }>
           }
-          maybeSingle: () => Promise<{
-            data: OrderItemInfo | OrderInfo | null
-            error: { message: string } | null
-          }>
-          order: (c: string, o: { ascending: boolean }) => Promise<{
-            data: IssueImageRow[] | null
-            error: { message: string } | null
-          }>
         }
       }
     }
@@ -140,75 +130,6 @@ export default async function BrandAdminIssueDetailPage({
   }
   if (!issueRes.data) notFound()
   const issue = issueRes.data
-
-  const [orderRes, itemRes, imagesRes] = await Promise.all([
-    loose
-      .from('shop_orders')
-      .select(
-        'id, shipping_name, shipping_postal_code, shipping_prefecture, shipping_city, shipping_address_line1, shipping_address_line2, created_at'
-      )
-      .eq('id', issue.order_id)
-      .maybeSingle(),
-    loose
-      .from('shop_order_items')
-      .select('id, product_name, quantity, unit_price, size, color_name')
-      .eq('id', issue.order_item_id)
-      .maybeSingle(),
-    loose
-      .from('shop_order_issue_images')
-      .select('id, storage_path, sort_order')
-      .eq('issue_id', issue.id)
-      .order('sort_order', { ascending: true }),
-  ])
-  if (orderRes.error) console.error('[brand-admin/issues/[id]] order fetch failed', orderRes.error)
-  if (itemRes.error) console.error('[brand-admin/issues/[id]] item fetch failed', itemRes.error)
-  if (imagesRes.error) console.error('[brand-admin/issues/[id]] images fetch failed', imagesRes.error)
-
-  const order = (orderRes.data as OrderInfo | null) ?? null
-  const item = (itemRes.data as OrderItemInfo | null) ?? null
-  const images = (imagesRes.data as IssueImageRow[]) ?? []
-
-  // Signed URL 発行 (private bucket、5 分 TTL、admin 経由のみ)
-  const signedImageUrls: string[] = []
-  for (const img of images) {
-    const s = await (adminForSigned as unknown as {
-      storage: {
-        from: (b: string) => {
-          createSignedUrl: (path: string, ttl: number) => Promise<{
-            data: { signedUrl: string } | null
-            error: unknown
-          }>
-        }
-      }
-    }).storage
-      .from('shop-order-issue-images')
-      .createSignedUrl(img.storage_path, 300)
-    if (s.data?.signedUrl) signedImageUrls.push(s.data.signedUrl)
-  }
-
-  const decided = issue.status === 'approved' || issue.status === 'rejected'
-  const canReview = issue.status === 'submitted'
-  const canDecide = issue.status === 'under_review'
-  const canReceiveAndRefund = issue.status === 'return_in_progress' && issue.returned_at != null
-
-  // 返品先住所 (承認済 / 返送済 の case で表示)
-  let brandReturn: BrandReturnAddress | null = null
-  if (issue.status === 'approved' || issue.status === 'return_in_progress' || issue.status === 'resolved') {
-    const brandRes = await (adminForSigned as unknown as {
-      from: (t: string) => {
-        select: (s: string) => {
-          eq: (c: string, v: string) => {
-            maybeSingle: () => Promise<{ data: BrandReturnAddress | null; error: unknown }>
-          }
-        }
-      }
-    })
-      .from('shop_brands')
-      .select('return_recipient_name, return_postal_code, return_prefecture, return_city, return_address_line1, return_address_line2, return_phone')
-      .eq('id', issue.brand_id)
-      .maybeSingle()
-    brandReturn = brandRes.data ?? null
-  }
 
   return (
     <div>
@@ -258,6 +179,122 @@ export default async function BrandAdminIssueDetailPage({
         </div>
       )}
 
+      {/* issue.description のみで完結する部分は即描画 */}
+      <div className="mb-6">
+        <Card title="購入者からの説明">
+          <div className="text-[13px] whitespace-pre-wrap text-neutral-800">
+            {issue.description}
+          </div>
+        </Card>
+      </div>
+
+      {/* order / item / images / signed URLs / brand return は Suspense 内で並列 fetch */}
+      <Suspense fallback={<IssueRelatedSkeleton />}>
+        <IssueRelated issue={issue} />
+      </Suspense>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// issue 派生情報 (order + item + images + signed URLs + brand return) を並列 fetch し、
+// 対象商品カード / 購入者カード / 証拠写真 / 審査結果 / 操作導線を描画
+// -----------------------------------------------------------------------------
+async function IssueRelated({ issue }: { issue: IssueDetail }) {
+  const bypass = isBrandAdminDevBypassEnabled()
+  const supabase = bypass ? createAdminClient() : await createClient()
+  const adminForSigned = createAdminClient()
+  type LooseFrom = {
+    from: (t: string) => {
+      select: (s: string) => {
+        eq: (c: string, v: string) => {
+          maybeSingle: () => Promise<{
+            data: OrderItemInfo | OrderInfo | null
+            error: { message: string } | null
+          }>
+          order: (c: string, o: { ascending: boolean }) => Promise<{
+            data: IssueImageRow[] | null
+            error: { message: string } | null
+          }>
+        }
+      }
+    }
+  }
+  const loose = supabase as unknown as LooseFrom
+
+  const needBrandReturn = issue.status === 'approved' || issue.status === 'return_in_progress' || issue.status === 'resolved'
+  const brandReturnQuery: Promise<{ data: BrandReturnAddress | null; error: unknown }> = needBrandReturn
+    ? (adminForSigned as unknown as {
+        from: (t: string) => {
+          select: (s: string) => {
+            eq: (c: string, v: string) => {
+              maybeSingle: () => Promise<{ data: BrandReturnAddress | null; error: unknown }>
+            }
+          }
+        }
+      })
+        .from('shop_brands')
+        .select('return_recipient_name, return_postal_code, return_prefecture, return_city, return_address_line1, return_address_line2, return_phone')
+        .eq('id', issue.brand_id)
+        .maybeSingle()
+    : Promise.resolve({ data: null, error: null })
+
+  const [orderRes, itemRes, imagesRes, brandRes] = await Promise.all([
+    loose
+      .from('shop_orders')
+      .select(
+        'id, shipping_name, shipping_postal_code, shipping_prefecture, shipping_city, shipping_address_line1, shipping_address_line2, created_at'
+      )
+      .eq('id', issue.order_id)
+      .maybeSingle(),
+    loose
+      .from('shop_order_items')
+      .select('id, product_name, quantity, unit_price, size, color_name')
+      .eq('id', issue.order_item_id)
+      .maybeSingle(),
+    loose
+      .from('shop_order_issue_images')
+      .select('id, storage_path, sort_order')
+      .eq('issue_id', issue.id)
+      .order('sort_order', { ascending: true }),
+    brandReturnQuery,
+  ])
+  if (orderRes.error) console.error('[brand-admin/issues/[id]] order fetch failed', orderRes.error)
+  if (itemRes.error) console.error('[brand-admin/issues/[id]] item fetch failed', itemRes.error)
+  if (imagesRes.error) console.error('[brand-admin/issues/[id]] images fetch failed', imagesRes.error)
+
+  const order = (orderRes.data as OrderInfo | null) ?? null
+  const item = (itemRes.data as OrderItemInfo | null) ?? null
+  const images = (imagesRes.data as IssueImageRow[]) ?? []
+  const brandReturn = brandRes.data ?? null
+
+  const signedResults = await Promise.all(
+    images.map((img) =>
+      (adminForSigned as unknown as {
+        storage: {
+          from: (b: string) => {
+            createSignedUrl: (path: string, ttl: number) => Promise<{
+              data: { signedUrl: string } | null
+              error: unknown
+            }>
+          }
+        }
+      }).storage
+        .from('shop-order-issue-images')
+        .createSignedUrl(img.storage_path, 300)
+    )
+  )
+  const signedImageUrls: string[] = signedResults
+    .map((s) => s.data?.signedUrl)
+    .filter((u): u is string => typeof u === 'string')
+
+  const decided = issue.status === 'approved' || issue.status === 'rejected'
+  const canReview = issue.status === 'submitted'
+  const canDecide = issue.status === 'under_review'
+  const canReceiveAndRefund = issue.status === 'return_in_progress' && issue.returned_at != null
+
+  return (
+    <>
       <div className="grid gap-6 md:grid-cols-2">
         <Card title="対象商品">
           {item ? (
@@ -475,6 +512,33 @@ export default async function BrandAdminIssueDetailPage({
           )}
         </div>
       )}
+    </>
+  )
+}
+
+function IssueRelatedSkeleton() {
+  return (
+    <div className="space-y-6 animate-pulse">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-2">
+          <div className="h-3 w-16 bg-neutral-200 rounded" />
+          <div className="h-4 w-3/4 bg-neutral-100 rounded" />
+          <div className="h-3 w-1/2 bg-neutral-100 rounded" />
+        </div>
+        <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-2">
+          <div className="h-3 w-16 bg-neutral-200 rounded" />
+          <div className="h-4 w-2/3 bg-neutral-100 rounded" />
+          <div className="h-3 w-1/3 bg-neutral-100 rounded" />
+        </div>
+      </div>
+      <div className="rounded-xl border border-neutral-200 bg-white p-5">
+        <div className="h-3 w-20 bg-neutral-200 rounded mb-3" />
+        <div className="grid grid-cols-3 gap-3">
+          <div className="aspect-square bg-neutral-100 rounded" />
+          <div className="aspect-square bg-neutral-100 rounded" />
+          <div className="aspect-square bg-neutral-100 rounded" />
+        </div>
+      </div>
     </div>
   )
 }

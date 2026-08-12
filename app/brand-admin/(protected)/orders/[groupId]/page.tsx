@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
@@ -121,42 +122,11 @@ export default async function BrandAdminOrderDetailPage({
   }
   if (!gRes.data) notFound()
 
-  const orderRes = await loose
-    .from('shop_orders')
-    .select(
-      'id, status, payment_status, currency, shipping_name, shipping_postal_code, shipping_prefecture, shipping_city, shipping_address_line1, shipping_address_line2, shipping_phone, created_at, receipt_status, received_at, auto_completed_at, delivered_at'
-    )
-    .eq('id', gRes.data.order_id)
-    .maybeSingle()
-  if (orderRes.error) {
-    console.error('[brand-admin/orders/[groupId]] order fetch failed', orderRes.error)
-  }
-  const itemsRes = await (loose as unknown as {
-    from: (t: string) => {
-      select: (s: string) => {
-        eq: (c: string, v: string) => Promise<{
-          data: NonNullable<GroupDetail['shop_order_items']> | null
-          error: { message: string } | null
-        }>
-      }
-    }
-  })
-    .from('shop_order_items')
-    .select('id, product_name, quantity, unit_price, line_total, size, color_name')
-    .eq('order_group_id', gRes.data.id)
-  if (itemsRes.error) {
-    console.error('[brand-admin/orders/[groupId]] items fetch failed', itemsRes.error)
-  }
-  const g: GroupDetail = {
-    ...gRes.data,
-    shop_orders: orderRes.data ?? null,
-    shop_order_items: (itemsRes.data ?? null) as GroupDetail['shop_order_items'],
-  }
-
-  const parentStatus = g.shop_orders?.status ?? ''
-  const shippable = !['cancelled', 'cancel_requested', 'refund_required', 'failed'].includes(
-    parentStatus
-  )
+  // group 情報 (fulfillment_status / brand guard / 金額サマリ / 追跡情報) は上で await 済 →
+  //   header / breadcrumbs / 金額 / 発送情報カードはこの時点で即描画可能。
+  //   order (shipping 情報 / receipt_status / operations 判定) と items (商品カード) の 2 発は
+  //   互いに独立で group から派生 key を持つため <Suspense> 内で Promise.all 並列 fetch。
+  const g = gRes.data as Omit<GroupDetail, 'shop_orders' | 'shop_order_items'>
 
   return (
     <div>
@@ -185,6 +155,132 @@ export default async function BrandAdminOrderDetailPage({
         </div>
       )}
 
+      {/* 金額 / 発送情報カード (group のみで完結、即描画) */}
+      <div className="grid gap-6 md:grid-cols-2 mb-6">
+        <Card title="ブランド分 金額">
+          <div className="text-[11px] text-neutral-500 space-y-0.5">
+            <div className="flex justify-between">
+              <span>小計</span>
+              <span className="font-mono text-neutral-700">
+                ¥{g.subtotal_amount.toLocaleString('ja-JP')}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>送料</span>
+              <span className="font-mono text-neutral-700">
+                ¥{g.shipping_amount.toLocaleString('ja-JP')}
+              </span>
+            </div>
+            <div className="flex justify-between pt-1 border-t border-neutral-100 mt-1">
+              <span className="font-semibold text-neutral-900">合計</span>
+              <span className="font-mono font-semibold text-neutral-900">
+                ¥{(g.subtotal_amount + g.shipping_amount).toLocaleString('ja-JP')}
+              </span>
+            </div>
+          </div>
+        </Card>
+
+        <Card title="発送情報">
+          <div className="text-[11px] text-neutral-500 space-y-1">
+            <div>
+              現在: <span className="font-semibold text-neutral-900">{statusLabel(g.fulfillment_status)}</span>
+            </div>
+            {g.shipped_at && <div>発送日時: {formatDate(g.shipped_at)}</div>}
+            {g.delivered_at && <div>配達日時: {formatDate(g.delivered_at)}</div>}
+            {g.tracking_carrier && (
+              <div>配送業者: {carrierLabel(g.tracking_carrier)}</div>
+            )}
+            {g.tracking_number && (
+              <div>追跡番号: <span className="font-mono">{g.tracking_number}</span></div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* 商品items / 配送先 / 発送操作 は order + items fetch 完了後にストリーミング */}
+      <Suspense fallback={<OrderDetailRelatedSkeleton />}>
+        <OrderDetailRelated
+          loose={loose}
+          groupId={g.id}
+          orderId={g.order_id}
+          fulfillmentStatus={g.fulfillment_status}
+        />
+      </Suspense>
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// order + items を並列 fetch し、商品カード / 配送先 / 発送操作を描画
+// -----------------------------------------------------------------------------
+type LooseFrom = {
+  from: (t: string) => {
+    select: (s: string) => {
+      eq: (c: string, v: string) => {
+        eq: (c: string, v: string) => {
+          maybeSingle: () => Promise<{
+            data: Omit<GroupDetail, 'shop_orders' | 'shop_order_items'> | null
+            error: { message: string } | null
+          }>
+        }
+        maybeSingle: () => Promise<{
+          data: NonNullable<GroupDetail['shop_orders']> | null
+          error: { message: string } | null
+        }>
+      }
+      in?: never
+    }
+  }
+}
+
+async function OrderDetailRelated({
+  loose,
+  groupId,
+  orderId,
+  fulfillmentStatus,
+}: {
+  loose: LooseFrom
+  groupId: string
+  orderId: string
+  fulfillmentStatus: string
+}) {
+  const [orderRes, itemsRes] = await Promise.all([
+    loose
+      .from('shop_orders')
+      .select(
+        'id, status, payment_status, currency, shipping_name, shipping_postal_code, shipping_prefecture, shipping_city, shipping_address_line1, shipping_address_line2, shipping_phone, created_at, receipt_status, received_at, auto_completed_at, delivered_at'
+      )
+      .eq('id', orderId)
+      .maybeSingle(),
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (c: string, v: string) => Promise<{
+            data: NonNullable<GroupDetail['shop_order_items']> | null
+            error: { message: string } | null
+          }>
+        }
+      }
+    })
+      .from('shop_order_items')
+      .select('id, product_name, quantity, unit_price, line_total, size, color_name')
+      .eq('order_group_id', groupId),
+  ])
+  if (orderRes.error) console.error('[brand-admin/orders/[groupId]] order fetch failed', orderRes.error)
+  if (itemsRes.error) console.error('[brand-admin/orders/[groupId]] items fetch failed', itemsRes.error)
+  const order = orderRes.data ?? null
+  const items = (itemsRes.data ?? []) as NonNullable<GroupDetail['shop_order_items']>
+  const parentStatus = order?.status ?? ''
+  const shippable = !['cancelled', 'cancel_requested', 'refund_required', 'failed'].includes(parentStatus)
+  const g = {
+    id: groupId,
+    fulfillment_status: fulfillmentStatus,
+    shop_orders: order,
+    shop_order_items: items,
+  }
+
+  return (
+    <>
       {!shippable && (
         <div className="mb-6 text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
           この注文はキャンセル / 返金対応中のため発送操作は行えません
@@ -227,45 +323,6 @@ export default async function BrandAdminOrderDetailPage({
           )}
           <div className="mt-1 text-[11px] font-mono text-neutral-500">
             {g.shop_orders?.shipping_phone}
-          </div>
-        </Card>
-
-        <Card title="ブランド分 金額">
-          <div className="text-[11px] text-neutral-500 space-y-0.5">
-            <div className="flex justify-between">
-              <span>小計</span>
-              <span className="font-mono text-neutral-700">
-                ¥{g.subtotal_amount.toLocaleString('ja-JP')}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>送料</span>
-              <span className="font-mono text-neutral-700">
-                ¥{g.shipping_amount.toLocaleString('ja-JP')}
-              </span>
-            </div>
-            <div className="flex justify-between pt-1 border-t border-neutral-100 mt-1">
-              <span className="font-semibold text-neutral-900">合計</span>
-              <span className="font-mono font-semibold text-neutral-900">
-                ¥{(g.subtotal_amount + g.shipping_amount).toLocaleString('ja-JP')}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="発送情報">
-          <div className="text-[11px] text-neutral-500 space-y-1">
-            <div>
-              現在: <span className="font-semibold text-neutral-900">{statusLabel(g.fulfillment_status)}</span>
-            </div>
-            {g.shipped_at && <div>発送日時: {formatDate(g.shipped_at)}</div>}
-            {g.delivered_at && <div>配達日時: {formatDate(g.delivered_at)}</div>}
-            {g.tracking_carrier && (
-              <div>配送業者: {carrierLabel(g.tracking_carrier)}</div>
-            )}
-            {g.tracking_number && (
-              <div>追跡番号: <span className="font-mono">{g.tracking_number}</span></div>
-            )}
           </div>
         </Card>
       </div>
@@ -354,6 +411,24 @@ export default async function BrandAdminOrderDetailPage({
           )}
         </div>
       )}
+    </>
+  )
+}
+
+function OrderDetailRelatedSkeleton() {
+  return (
+    <div className="grid gap-6 md:grid-cols-2 animate-pulse">
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-2">
+        <div className="h-3 w-16 bg-neutral-200 rounded" />
+        <div className="h-4 w-3/4 bg-neutral-100 rounded" />
+        <div className="h-3 w-1/2 bg-neutral-100 rounded" />
+      </div>
+      <div className="rounded-xl border border-neutral-200 bg-white p-5 space-y-2">
+        <div className="h-3 w-16 bg-neutral-200 rounded" />
+        <div className="h-4 w-2/3 bg-neutral-100 rounded" />
+        <div className="h-3 w-1/2 bg-neutral-100 rounded" />
+        <div className="h-3 w-1/3 bg-neutral-100 rounded" />
+      </div>
     </div>
   )
 }

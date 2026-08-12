@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
@@ -52,66 +53,8 @@ export default async function BrandAdminIssuesListPage({
     )
   }
 
-  const supabase = bypass ? createAdminClient() : await createClient()
   const sp = await searchParams
   const activeFilter = FILTERS.find((f) => f.key === sp.f) ?? FILTERS[0]
-
-  type LooseFrom = {
-    from: (t: string) => {
-      select: (s: string) => {
-        eq: (c: string, v: string) => {
-          in: (c: string, v: string[]) => {
-            order: (c: string, o: { ascending: boolean }) => {
-              limit: (n: number) => Promise<{
-                data: IssueRow[] | null
-                error: { message: string } | null
-              }>
-            }
-          }
-        }
-        in: (c: string, v: string[]) => Promise<{ data: unknown[] | null; error: { message: string } | null }>
-      }
-    }
-  }
-  const loose = supabase as unknown as LooseFrom
-
-  const issuesRes = await loose
-    .from('shop_order_issues')
-    .select('id, order_id, order_item_id, user_id, issue_type, status, created_at, refund_status, refund_amount, refunded_at')
-    .eq('brand_id', ctx.currentBrand.brandId)
-    .in('status', [...activeFilter.statuses])
-    .order('created_at', { ascending: false })
-    .limit(200)
-  if (issuesRes.error) {
-    console.error('[brand-admin/issues] issues fetch failed', issuesRes.error)
-    return (
-      <div>
-        <h1 className="text-lg font-semibold mb-2">商品トラブル</h1>
-        <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-wrap break-words">
-          一覧の取得に失敗しました: {issuesRes.error.message}
-        </div>
-      </div>
-    )
-  }
-  const issues = issuesRes.data ?? []
-  const itemIds = Array.from(new Set(issues.map((i) => i.order_item_id)))
-  const orderIds = Array.from(new Set(issues.map((i) => i.order_id)))
-
-  const [itemsRes, ordersRes] = await Promise.all([
-    itemIds.length > 0
-      ? loose.from('shop_order_items').select('id, product_name').in('id', itemIds)
-      : Promise.resolve({ data: [], error: null }),
-    orderIds.length > 0
-      ? loose.from('shop_orders').select('id, shipping_name').in('id', orderIds)
-      : Promise.resolve({ data: [], error: null }),
-  ])
-  if (itemsRes.error) console.error('[brand-admin/issues] items fetch failed', itemsRes.error)
-  if (ordersRes.error) console.error('[brand-admin/issues] orders fetch failed', ordersRes.error)
-
-  const itemsById = new Map<string, OrderItemInfo>()
-  for (const i of (itemsRes.data ?? []) as OrderItemInfo[]) itemsById.set(i.id, i)
-  const ordersById = new Map<string, OrderInfo>()
-  for (const o of (ordersRes.data ?? []) as OrderInfo[]) ordersById.set(o.id, o)
 
   return (
     <div>
@@ -142,56 +85,148 @@ export default async function BrandAdminIssuesListPage({
         ))}
       </div>
 
-      {issues.length === 0 ? (
-        <div className="text-sm text-neutral-500">該当する報告はありません。</div>
-      ) : (
-        <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
-          {issues.map((r, i) => {
-            const item = itemsById.get(r.order_item_id)
-            const order = ordersById.get(r.order_id)
-            return (
-              <Link
-                key={r.id}
-                href={`/brand-admin/issues/${r.id}`}
-                className={
-                  'flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 ' +
-                  (i > 0 ? 'border-t border-neutral-200' : '')
-                }
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <IssueStatusPill status={r.status} />
-                    <RefundStatusPill refundStatus={r.refund_status} />
-                    <span className="text-[10px] font-mono text-neutral-500">
-                      {r.id.slice(0, 8).toUpperCase()}
+      <Suspense fallback={<IssueListSkeleton />}>
+        <IssueListSection
+          brandId={ctx.currentBrand.brandId}
+          bypass={bypass}
+          statuses={[...activeFilter.statuses]}
+        />
+      </Suspense>
+    </div>
+  )
+}
+
+async function IssueListSection({
+  brandId,
+  bypass,
+  statuses,
+}: {
+  brandId: string
+  bypass: boolean
+  statuses: string[]
+}) {
+  const supabase = bypass ? createAdminClient() : await createClient()
+  type LooseFrom = {
+    from: (t: string) => {
+      select: (s: string) => {
+        eq: (c: string, v: string) => {
+          in: (c: string, v: string[]) => {
+            order: (c: string, o: { ascending: boolean }) => {
+              limit: (n: number) => Promise<{
+                data: IssueRow[] | null
+                error: { message: string } | null
+              }>
+            }
+          }
+        }
+        in: (c: string, v: string[]) => Promise<{ data: unknown[] | null; error: { message: string } | null }>
+      }
+    }
+  }
+  const loose = supabase as unknown as LooseFrom
+
+  const issuesRes = await loose
+    .from('shop_order_issues')
+    .select('id, order_id, order_item_id, user_id, issue_type, status, created_at, refund_status, refund_amount, refunded_at')
+    .eq('brand_id', brandId)
+    .in('status', statuses)
+    .order('created_at', { ascending: false })
+    .limit(200)
+  if (issuesRes.error) {
+    console.error('[brand-admin/issues] issues fetch failed', issuesRes.error)
+    return (
+      <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+        一覧の取得に失敗しました: {issuesRes.error.message}
+      </div>
+    )
+  }
+  const issues = issuesRes.data ?? []
+  const itemIds = Array.from(new Set(issues.map((i) => i.order_item_id)))
+  const orderIds = Array.from(new Set(issues.map((i) => i.order_id)))
+
+  const [itemsRes, ordersRes] = await Promise.all([
+    itemIds.length > 0
+      ? loose.from('shop_order_items').select('id, product_name').in('id', itemIds)
+      : Promise.resolve({ data: [], error: null }),
+    orderIds.length > 0
+      ? loose.from('shop_orders').select('id, shipping_name').in('id', orderIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (itemsRes.error) console.error('[brand-admin/issues] items fetch failed', itemsRes.error)
+  if (ordersRes.error) console.error('[brand-admin/issues] orders fetch failed', ordersRes.error)
+
+  const itemsById = new Map<string, OrderItemInfo>()
+  for (const i of (itemsRes.data ?? []) as OrderItemInfo[]) itemsById.set(i.id, i)
+  const ordersById = new Map<string, OrderInfo>()
+  for (const o of (ordersRes.data ?? []) as OrderInfo[]) ordersById.set(o.id, o)
+
+  if (issues.length === 0) {
+    return <div className="text-sm text-neutral-500">該当する報告はありません。</div>
+  }
+
+  return (
+    <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
+      {issues.map((r, i) => {
+        const item = itemsById.get(r.order_item_id)
+        const order = ordersById.get(r.order_id)
+        return (
+          <Link
+            key={r.id}
+            href={`/brand-admin/issues/${r.id}`}
+            className={
+              'flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 ' +
+              (i > 0 ? 'border-t border-neutral-200' : '')
+            }
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <IssueStatusPill status={r.status} />
+                <RefundStatusPill refundStatus={r.refund_status} />
+                <span className="text-[10px] font-mono text-neutral-500">
+                  {r.id.slice(0, 8).toUpperCase()}
+                </span>
+              </div>
+              <div className="mt-1 text-sm font-semibold text-neutral-900 truncate">
+                {item?.product_name ?? '(商品名取得失敗)'}
+              </div>
+              <div className="mt-0.5 text-[11px] text-neutral-500">
+                {formatDate(r.created_at)} · {issueTypeLabel(r.issue_type)} · {order?.shipping_name ?? '—'}
+              </div>
+              <div className="mt-0.5 text-[10px] font-mono text-neutral-400">
+                注文 {r.order_id.slice(0, 8).toUpperCase()}
+              </div>
+              {r.refund_status === 'succeeded' && (
+                <div className="mt-1 text-[11px] text-emerald-800 font-semibold">
+                  返金額 ¥{(r.refund_amount ?? 0).toLocaleString('ja-JP')}
+                  {r.refunded_at && (
+                    <span className="ml-2 font-normal text-emerald-700">
+                      · {formatDate(r.refunded_at)}
                     </span>
-                  </div>
-                  <div className="mt-1 text-sm font-semibold text-neutral-900 truncate">
-                    {item?.product_name ?? '(商品名取得失敗)'}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-neutral-500">
-                    {formatDate(r.created_at)} · {issueTypeLabel(r.issue_type)} · {order?.shipping_name ?? '—'}
-                  </div>
-                  <div className="mt-0.5 text-[10px] font-mono text-neutral-400">
-                    注文 {r.order_id.slice(0, 8).toUpperCase()}
-                  </div>
-                  {r.refund_status === 'succeeded' && (
-                    <div className="mt-1 text-[11px] text-emerald-800 font-semibold">
-                      返金額 ¥{(r.refund_amount ?? 0).toLocaleString('ja-JP')}
-                      {r.refunded_at && (
-                        <span className="ml-2 font-normal text-emerald-700">
-                          · {formatDate(r.refunded_at)}
-                        </span>
-                      )}
-                    </div>
                   )}
                 </div>
-                <div className="text-[10px] text-neutral-500">›</div>
-              </Link>
-            )
-          })}
+              )}
+            </div>
+            <div className="text-[10px] text-neutral-500">›</div>
+          </Link>
+        )
+      })}
+    </div>
+  )
+}
+
+function IssueListSkeleton() {
+  return (
+    <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className={'flex items-center gap-4 px-5 py-4 ' + (i > 0 ? 'border-t border-neutral-200' : '')}>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="h-3 w-24 bg-neutral-100 rounded" />
+            <div className="h-4 w-3/5 bg-neutral-200 rounded" />
+            <div className="h-3 w-2/5 bg-neutral-100 rounded" />
+          </div>
+          <div className="h-3 w-3 bg-neutral-100 rounded" />
         </div>
-      )}
+      ))}
     </div>
   )
 }
@@ -286,3 +321,4 @@ function formatDate(iso: string): string {
   const mm = String(d.getMinutes()).padStart(2, '0')
   return `${y}/${m}/${day} ${hh}:${mm}`
 }
+
