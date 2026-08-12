@@ -189,6 +189,10 @@ export async function createProductAction(formData: FormData): Promise<void> {
   const categoryId = String(formData.get('category_id') ?? '').trim()
   const description = trimOr(formData.get('description'), 2000)
   const isNew = String(formData.get('is_new') ?? '') === 'true'
+  // 「次へ」button 押下時のみ STEP2 へ進む。autosave (intent 未指定) は STEP1 に留まる。
+  //   これにより「基本情報を入力し終わっていないのに勝手に STEP2 へ進む」問題を防ぐ。
+  const advanceStep = String(formData.get('intent') ?? '') === 'advance'
+  const targetStep = advanceStep ? 2 : 1
 
   if (!name) redirect(`${back}?err=name_required`)
   if (!/^[0-9a-fA-F-]{36}$/.test(categoryId)) redirect(`${back}?err=category_not_found`)
@@ -224,7 +228,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
     const sel = await supabase.from('shop_products').select('id').eq('brand_id', brandId).eq('name', name).order('created_at', { ascending: false }).limit(1)
     const rows = (sel.data as Array<{ id: string }> | null) ?? []
     revalidatePath('/brand-admin/products')
-    if (rows[0]) redirect(`/brand-admin/products/${rows[0].id}?saved=1&created=1&step=2`)
+    if (rows[0]) redirect(`/brand-admin/products/${rows[0].id}?saved=1&created=1&step=${targetStep}`)
     redirect('/brand-admin/products?saved=1')
   } else {
     const res = await supabase.rpc('shop_brand_create_product', {
@@ -245,7 +249,7 @@ export async function createProductAction(formData: FormData): Promise<void> {
     }
     const newId = (res.data as string | null) ?? null
     revalidatePath('/brand-admin/products')
-    if (newId) redirect(`/brand-admin/products/${newId}?saved=1&created=1&step=2`)
+    if (newId) redirect(`/brand-admin/products/${newId}?saved=1&created=1&step=${targetStep}`)
     redirect('/brand-admin/products?saved=1')
   }
 }
@@ -1062,4 +1066,45 @@ export async function deleteImageAction(formData: FormData): Promise<void> {
   }
   revalidatePath(`/brand-admin/products/${productId}`)
   redirect(`${back}&saved=1`)
+}
+
+// =============================================================================
+// updateImageCropAction (Migration 137)
+//   4:5 crop 値 (zoom / offset_x / offset_y) を shop_product_images に upsert。
+//   通常経路は shop_brand_update_image_crop RPC (owner/admin 検証、SECURITY DEFINER)。
+//   Dev Bypass 経路は admin client で直接 UPDATE。
+//   RSC 全体再描画は避け throw しない (Client 側で optimistic update する)。
+// =============================================================================
+export async function updateImageCropAction(formData: FormData): Promise<void> {
+  const { bypass, supabase } = await getContextAndClient()
+  const imageId = assertUUID(formData.get('image_id'))
+  const zoom    = Number(formData.get('crop_zoom'))
+  const offX    = Number(formData.get('crop_offset_x'))
+  const offY    = Number(formData.get('crop_offset_y'))
+  if (!Number.isFinite(zoom) || zoom < 1.0 || zoom > 5.0) throw new Error('invalid_zoom')
+  if (!Number.isFinite(offX) || offX < -1.0 || offX > 1.0) throw new Error('invalid_offset_x')
+  if (!Number.isFinite(offY) || offY < -1.0 || offY > 1.0) throw new Error('invalid_offset_y')
+
+  if (bypass) {
+    // Dev Bypass: admin client で直接 UPDATE (Migration 137 未適用時は列不在で失敗する)
+    const upd = await supabase
+      .from('shop_product_images')
+      .update({ crop_zoom: zoom, crop_offset_x: offX, crop_offset_y: offY })
+      .eq('id', imageId)
+    if (upd.error) {
+      console.error('[brand-admin/products] dev bypass crop update failed', upd.error)
+      throw new Error(upd.error.message)
+    }
+  } else {
+    const res = await supabase.rpc('shop_brand_update_image_crop', {
+      p_image_id: imageId,
+      p_zoom: zoom,
+      p_offset_x: offX,
+      p_offset_y: offY,
+    })
+    if (res.error) {
+      console.error('[brand-admin/products] rpc crop update failed', res.error)
+      throw new Error(res.error.message)
+    }
+  }
 }

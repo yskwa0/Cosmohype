@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
@@ -16,6 +17,7 @@ import {
   uploadImageAction,
   deleteImageAction,
   setPrimaryImageAction,
+  updateImageCropAction,
   publishProductAction,
   archiveProductAction,
   revertSoldOutAction,
@@ -51,6 +53,10 @@ interface ImageRow {
   storage_path: string
   sort_order: number
   is_primary: boolean
+  // Migration 137 で追加、DB 未適用時は列不在 → SELECT で欠落 → undefined 扱い
+  crop_zoom?: number | null
+  crop_offset_x?: number | null
+  crop_offset_y?: number | null
 }
 interface VariantRow {
   id: string
@@ -169,26 +175,11 @@ export default async function BrandAdminProductEditPage({
     redirect('/brand-admin/products?err=forbidden')
   }
 
-  const [catRes, imgRes, varRes] = await Promise.all([
-    loose.from('shop_categories').select('id, slug, display_name, sort_order').eq('is_active', 'true').order('sort_order', { ascending: true }),
-    loose.from('shop_product_images').select('id, storage_path, sort_order, is_primary').eq('product_id', productId).order('sort_order', { ascending: true }),
-    loose.from('shop_product_variants').select('id, sku, size, color_name, color_hex, price, status, shop_inventory(quantity_available, quantity_reserved)').eq('product_id', productId).order('sku', { ascending: true }),
-  ])
-  const categories = ((catRes.data ?? []) as CategoryRow[])
-  const images = ((imgRes.data ?? []) as ImageRow[])
-  const variants = ((varRes.data ?? []) as VariantRow[])
-
-  const currentCategorySlug = categories.find((c) => c.id === product.category_id)?.slug ?? 'other'
-
+  // product は上で await 済 (brand guard + header に必要)。
+  //   categories / images / variants は step 毎の重い fetch — Suspense で streaming。
+  //   header / breadcrumbs / banners / StepIndicator / StepNav は即描画。
   const supaUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const publicBase = supaUrl ? `${supaUrl}/storage/v1/object/public/shop-product-images/` : ''
-
-  // form 用 mapping: DB (Shopify モデル) → 通常価格 / セール価格
-  // compare_at_price あり → セール中: normalPrice = compare_at_price, salePrice = base_price
-  // compare_at_price なし → セールなし: normalPrice = base_price, salePrice = ""
-  const onSale = product.compare_at_price !== null && product.compare_at_price > product.base_price
-  const initialNormal = onSale ? String(product.compare_at_price) : String(product.base_price)
-  const initialSale = onSale ? String(product.base_price) : ''
 
   return (
     <div className="space-y-8">
@@ -239,11 +230,87 @@ export default async function BrandAdminProductEditPage({
         </div>
       )}
 
-      {/* ── STEP indicator ── */}
+      {/* ── STEP indicator ── (即描画) */}
       <StepIndicator current={stepNum} productId={product.id} />
 
-      {/* ── STEP 1: 基本情報 ── */}
-      {stepNum === 1 && (
+      {/* ── STEP 本体 ── categories / images / variants は Suspense 内で並列 fetch */}
+      <Suspense fallback={<StepSectionSkeleton />}>
+        <ProductStepSection
+          stepNum={stepNum}
+          product={product}
+          productId={product.id}
+          canEdit={canEdit}
+          publicBase={publicBase}
+          bypass={bypass}
+        />
+      </Suspense>
+
+      {/* ── STEP nav (戻る / 次へ) ── (即描画) */}
+      <StepNav current={stepNum} productId={product.id} />
+
+      {!canEdit && (
+        <div className="text-[11px] text-neutral-500 border border-neutral-200 rounded px-3 py-2 bg-neutral-50">
+          あなたのロール ({ctx.currentBrand.role}) では閲覧のみ可能です。編集は owner / admin のみです。
+        </div>
+      )}
+    </div>
+  )
+}
+
+// -----------------------------------------------------------------------------
+// STEP 本体 (Suspense boundary 内で fetch)。step ごとに必要データを並列取得し当該 UI を返す。
+// -----------------------------------------------------------------------------
+async function ProductStepSection({
+  stepNum,
+  product,
+  productId,
+  canEdit,
+  publicBase,
+  bypass,
+}: {
+  stepNum: 1 | 2 | 3 | 4
+  product: ProductRow
+  productId: string
+  canEdit: boolean
+  publicBase: string
+  bypass: boolean
+}) {
+  const supabase = bypass ? createAdminClient() : await createClient()
+  type LooseFrom = {
+    from: (t: string) => {
+      select: (s: string) => {
+        eq: (c: string, v: string) => {
+          order: (c: string, o: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message: string } | null }>
+        } & Promise<{ data: unknown[] | null; error: { message: string } | null }>
+      }
+    }
+  }
+  const loose = supabase as unknown as LooseFrom
+  // Migration 137 適用済なら crop_* 列も取得。未適用なら列不在で SELECT 失敗するので minimal に fallback。
+  const imgSelectExtended = 'id, storage_path, sort_order, is_primary, crop_zoom, crop_offset_x, crop_offset_y'
+  const imgSelectMinimal  = 'id, storage_path, sort_order, is_primary'
+  const [catRes, imgResExt, varRes] = await Promise.all([
+    loose.from('shop_categories').select('id, slug, display_name, sort_order').eq('is_active', 'true').order('sort_order', { ascending: true }),
+    loose.from('shop_product_images').select(imgSelectExtended).eq('product_id', productId).order('sort_order', { ascending: true }),
+    loose.from('shop_product_variants').select('id, sku, size, color_name, color_hex, price, status, shop_inventory(quantity_available, quantity_reserved)').eq('product_id', productId).order('sku', { ascending: true }),
+  ])
+  const migration137Applied = imgResExt.error === null
+  let imgRes = imgResExt
+  if (!migration137Applied) {
+    imgRes = await loose.from('shop_product_images').select(imgSelectMinimal).eq('product_id', productId).order('sort_order', { ascending: true })
+  }
+  const categories = ((catRes.data ?? []) as CategoryRow[])
+  const images = ((imgRes.data ?? []) as ImageRow[])
+  const variants = ((varRes.data ?? []) as VariantRow[])
+  const currentCategorySlug = categories.find((c) => c.id === product.category_id)?.slug ?? 'other'
+
+  // form 用 mapping (Shopify モデル → 通常価格 / セール価格)
+  const onSale = product.compare_at_price !== null && product.compare_at_price > product.base_price
+  const initialNormal = onSale ? String(product.compare_at_price) : String(product.base_price)
+  const initialSale = onSale ? String(product.base_price) : ''
+
+  if (stepNum === 1) {
+    return (
       <section className="border border-neutral-200 rounded-xl bg-white p-6">
         <h2 className="text-sm font-semibold mb-4">STEP 1 / 4 · 基本情報</h2>
         <ProductBasicsForm
@@ -263,10 +330,11 @@ export default async function BrandAdminProductEditPage({
           }}
         />
       </section>
-      )}
+    )
+  }
 
-      {/* ── STEP 2: 商品画像 ── */}
-      {stepNum === 2 && (
+  if (stepNum === 2) {
+    return (
       <section id="images" className="border border-neutral-200 rounded-xl bg-white p-6">
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-sm font-semibold">STEP 2 / 4 · 商品画像</h2>
@@ -282,15 +350,17 @@ export default async function BrandAdminProductEditPage({
           canEdit={canEdit}
           deleteAction={deleteImageAction}
           setPrimaryAction={setPrimaryImageAction}
+          updateCropAction={migration137Applied ? updateImageCropAction : undefined}
         />
         {canEdit && images.length < MAX_IMAGES_PER_PRODUCT && (
           <ImageUploadForm productId={product.id} action={uploadImageAction} />
         )}
       </section>
-      )}
+    )
+  }
 
-      {/* ── STEP 3: バリエーション・在庫 ── */}
-      {stepNum === 3 && (
+  if (stepNum === 3) {
+    return (
       <section id="variants" className="border border-neutral-200 rounded-xl bg-white p-6">
         <h2 className="text-sm font-semibold mb-4">STEP 3 / 4 · バリエーション・在庫</h2>
         {variants.length === 0 ? (
@@ -331,141 +401,137 @@ export default async function BrandAdminProductEditPage({
           />
         )}
       </section>
-      )}
+    )
+  }
 
-      {/* ── STEP 4: 公開 / アーカイブ (最終) ── */}
-      {stepNum === 4 && (() => {
-        // 「在庫あり」= active variant のうち販売可能数 > 0 が 1 件以上
-        const activeAvail = variants
-          .filter((v) => v.status === 'active' && v.shop_inventory !== null)
-          .reduce((sum, v) => sum + Math.max(0, (v.shop_inventory?.quantity_available ?? 0) - (v.shop_inventory?.quantity_reserved ?? 0)), 0)
-        const hasImage = images.length > 0
-        const hasActiveVariant = variants.some(
-          (v) => v.status === 'active' && v.shop_inventory !== null
-        )
-        const hasPrice = product.base_price > 0
-        const ready = hasImage && hasActiveVariant && hasPrice
-        const missing: string[] = []
-        if (!hasPrice) missing.push('通常価格 (1 円以上)')
-        if (!hasImage) missing.push('商品画像 1 枚以上')
-        if (!hasActiveVariant) missing.push('「販売中」バリエーション 1 件以上 (サイズ・カラー・在庫)')
-        const publishReason = ready
-          ? undefined
-          : `公開には次が必要です: ${missing.join(' / ')}`
+  // stepNum === 4 : 公開 / アーカイブ判定
+  const activeAvail = variants
+    .filter((v) => v.status === 'active' && v.shop_inventory !== null)
+    .reduce((sum, v) => sum + Math.max(0, (v.shop_inventory?.quantity_available ?? 0) - (v.shop_inventory?.quantity_reserved ?? 0)), 0)
+  const hasImage = images.length > 0
+  const hasActiveVariant = variants.some(
+    (v) => v.status === 'active' && v.shop_inventory !== null
+  )
+  const hasPrice = product.base_price > 0
+  const ready = hasImage && hasActiveVariant && hasPrice
+  const missing: string[] = []
+  if (!hasPrice) missing.push('通常価格 (1 円以上)')
+  if (!hasImage) missing.push('商品画像 1 枚以上')
+  if (!hasActiveVariant) missing.push('「販売中」バリエーション 1 件以上 (サイズ・カラー・在庫)')
+  const publishReason = ready
+    ? undefined
+    : `公開には次が必要です: ${missing.join(' / ')}`
 
-        return (
+  return (
+    <>
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <h2 className="text-sm font-semibold mb-1">STEP 4 / 4 · 公開</h2>
+        {product.status === 'published' ? (
+          <div className="space-y-3">
+            <div className="text-[13px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 inline-flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              この商品は公開中です
+            </div>
+            {activeAvail === 0 && hasActiveVariant && (
+              <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                現在すべての販売中バリエーションが在庫切れのため、HYPE 側では「在庫切れ」として表示されます。在庫を追加すると自動で購入可能になります。
+              </div>
+            )}
+            <div className="text-[11px] text-neutral-500">
+              変更内容は自動的に公開中の商品へ反映されます。
+            </div>
+          </div>
+        ) : product.status === 'draft' ? (
           <>
-            {/* published / draft の主導線 */}
-            <section className="border border-neutral-200 rounded-xl bg-white p-6">
-              <h2 className="text-sm font-semibold mb-1">STEP 4 / 4 · 公開</h2>
-              {product.status === 'published' ? (
-                <div className="space-y-3">
-                  <div className="text-[13px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 inline-flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    この商品は公開中です
-                  </div>
-                  {activeAvail === 0 && hasActiveVariant && (
-                    <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                      現在すべての販売中バリエーションが在庫切れのため、HYPE 側では「在庫切れ」として表示されます。在庫を追加すると自動で購入可能になります。
-                    </div>
-                  )}
-                  <div className="text-[11px] text-neutral-500">
-                    変更内容は自動的に公開中の商品へ反映されます。
-                  </div>
-                </div>
-              ) : product.status === 'draft' ? (
-                <>
-                  <p className="text-[12px] text-neutral-600 mb-4">
-                    入力内容を確認して商品を公開します。
-                  </p>
-                  {canEdit ? (
-                    <PublishProductForm
-                      productId={product.id}
-                      action={publishProductAction}
-                      disabled={!ready}
-                      disabledReason={publishReason}
-                    />
-                  ) : (
-                    <div className="text-[12px] text-neutral-500">
-                      公開は owner / admin のみ操作できます。
-                    </div>
-                  )}
-                </>
-              ) : product.status === 'sold_out' ? (
-                <>
-                  <div className="text-[12px] text-neutral-700 bg-neutral-100 border border-neutral-200 rounded px-3 py-2 mb-3">
-                    この商品は旧仕様の「在庫切れ」状態です。今後は在庫から自動判定するため、「公開中に戻す」を押すと通常の公開状態になります。
-                  </div>
-                  {canEdit && (
-                    <ConfirmSubmitButton
-                      action={revertSoldOutAction}
-                      hiddenFields={{ product_id: product.id }}
-                      confirmMessage="この商品を「公開中」に戻しますか？\n\n今後は在庫の有無に応じて自動で「在庫切れ」表示されます。"
-                      buttonLabel="公開中に戻す"
-                      pendingLabel="切替中…"
-                      buttonClassName="px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:bg-neutral-400 disabled:cursor-not-allowed"
-                    />
-                  )}
-                </>
-              ) : product.status === 'archived' ? (
-                <div className="space-y-3">
-                  <div className="text-[13px] text-neutral-700 bg-neutral-100 border border-neutral-200 rounded px-3 py-2 inline-flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-neutral-500" />
-                    状態：アーカイブ済み
-                  </div>
-                  <p className="text-[12px] text-neutral-600">
-                    現在この商品は HYPE に表示されていません。再公開すると HYPE の商品一覧に再び表示されます。
-                  </p>
-                  {canEdit ? (
-                    <PublishProductForm
-                      productId={product.id}
-                      action={publishProductAction}
-                      disabled={!ready}
-                      disabledReason={publishReason && `再公開には次が必要です: ${publishReason.replace(/^公開には次が必要です: /, '')}`}
-                      buttonLabel="商品を再公開する"
-                      pendingLabel="再公開処理中…"
-                      confirmMessage={'この商品を再公開しますか？\n\n再公開すると HYPE の商品一覧に再び表示されます。'}
-                    />
-                  ) : (
-                    <div className="text-[12px] text-neutral-500">
-                      再公開は owner / admin のみ操作できます。
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="text-[12px] text-neutral-500">状態: {product.status}</div>
-              )}
-            </section>
-
-            {/* アーカイブ (別セクション、危険操作) */}
-            {canEdit && product.status !== 'archived' && (
-              <section className="border border-neutral-200 rounded-xl bg-white p-6">
-                <h2 className="text-sm font-semibold mb-1">アーカイブ</h2>
-                <p className="text-[12px] text-neutral-600 mb-4">
-                  アーカイブすると HYPE の商品一覧から非表示になります (既存注文には影響しません)。
-                </p>
-                <ConfirmSubmitButton
-                  action={archiveProductAction}
-                  hiddenFields={{ product_id: product.id }}
-                  confirmMessage="この商品をアーカイブしますか？\n\nアーカイブすると HYPE の商品一覧から非表示になります (既存注文には影響しません)。"
-                  buttonLabel="商品をアーカイブする"
-                  pendingLabel="アーカイブ中…"
-                  buttonClassName="px-4 py-2 rounded-md text-sm font-semibold bg-white text-red-700 border border-red-400 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </section>
+            <p className="text-[12px] text-neutral-600 mb-4">
+              入力内容を確認して商品を公開します。
+            </p>
+            {canEdit ? (
+              <PublishProductForm
+                productId={product.id}
+                action={publishProductAction}
+                disabled={!ready}
+                disabledReason={publishReason}
+              />
+            ) : (
+              <div className="text-[12px] text-neutral-500">
+                公開は owner / admin のみ操作できます。
+              </div>
             )}
           </>
-        )
-      })()}
+        ) : product.status === 'sold_out' ? (
+          <>
+            <div className="text-[12px] text-neutral-700 bg-neutral-100 border border-neutral-200 rounded px-3 py-2 mb-3">
+              この商品は旧仕様の「在庫切れ」状態です。今後は在庫から自動判定するため、「公開中に戻す」を押すと通常の公開状態になります。
+            </div>
+            {canEdit && (
+              <ConfirmSubmitButton
+                action={revertSoldOutAction}
+                hiddenFields={{ product_id: product.id }}
+                confirmMessage="この商品を「公開中」に戻しますか？\n\n今後は在庫の有無に応じて自動で「在庫切れ」表示されます。"
+                buttonLabel="公開中に戻す"
+                pendingLabel="切替中…"
+                buttonClassName="px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:bg-neutral-400 disabled:cursor-not-allowed"
+              />
+            )}
+          </>
+        ) : product.status === 'archived' ? (
+          <div className="space-y-3">
+            <div className="text-[13px] text-neutral-700 bg-neutral-100 border border-neutral-200 rounded px-3 py-2 inline-flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-neutral-500" />
+              状態：アーカイブ済み
+            </div>
+            <p className="text-[12px] text-neutral-600">
+              現在この商品は HYPE に表示されていません。再公開すると HYPE の商品一覧に再び表示されます。
+            </p>
+            {canEdit ? (
+              <PublishProductForm
+                productId={product.id}
+                action={publishProductAction}
+                disabled={!ready}
+                disabledReason={publishReason && `再公開には次が必要です: ${publishReason.replace(/^公開には次が必要です: /, '')}`}
+                buttonLabel="商品を再公開する"
+                pendingLabel="再公開処理中…"
+                confirmMessage={'この商品を再公開しますか？\n\n再公開すると HYPE の商品一覧に再び表示されます。'}
+              />
+            ) : (
+              <div className="text-[12px] text-neutral-500">
+                再公開は owner / admin のみ操作できます。
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-[12px] text-neutral-500">状態: {product.status}</div>
+        )}
+      </section>
 
-      {/* ── STEP nav (戻る / 次へ) ── */}
-      <StepNav current={stepNum} productId={product.id} />
-
-      {!canEdit && (
-        <div className="text-[11px] text-neutral-500 border border-neutral-200 rounded px-3 py-2 bg-neutral-50">
-          あなたのロール ({ctx.currentBrand.role}) では閲覧のみ可能です。編集は owner / admin のみです。
-        </div>
+      {canEdit && product.status !== 'archived' && (
+        <section className="border border-neutral-200 rounded-xl bg-white p-6 mt-8">
+          <h2 className="text-sm font-semibold mb-1">アーカイブ</h2>
+          <p className="text-[12px] text-neutral-600 mb-4">
+            アーカイブすると HYPE の商品一覧から非表示になります (既存注文には影響しません)。
+          </p>
+          <ConfirmSubmitButton
+            action={archiveProductAction}
+            hiddenFields={{ product_id: product.id }}
+            confirmMessage="この商品をアーカイブしますか？\n\nアーカイブすると HYPE の商品一覧から非表示になります (既存注文には影響しません)。"
+            buttonLabel="商品をアーカイブする"
+            pendingLabel="アーカイブ中…"
+            buttonClassName="px-4 py-2 rounded-md text-sm font-semibold bg-white text-red-700 border border-red-400 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+        </section>
       )}
+    </>
+  )
+}
+
+function StepSectionSkeleton() {
+  return (
+    <div className="border border-neutral-200 rounded-xl bg-white p-6 animate-pulse space-y-3">
+      <div className="h-4 w-40 bg-neutral-200 rounded" />
+      <div className="h-3 w-3/4 bg-neutral-100 rounded" />
+      <div className="h-10 bg-neutral-100 rounded" />
+      <div className="h-10 bg-neutral-100 rounded" />
     </div>
   )
 }
