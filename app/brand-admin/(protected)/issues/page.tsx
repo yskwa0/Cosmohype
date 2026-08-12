@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { formatJSTDateTime } from '@/lib/brandAdminDate'
 
 export const dynamic = 'force-dynamic'
 
@@ -190,7 +191,7 @@ async function IssueListSection({
                 {item?.product_name ?? '(商品名取得失敗)'}
               </div>
               <div className="mt-0.5 text-[11px] text-neutral-500">
-                {formatDate(r.created_at)} · {issueTypeLabel(r.issue_type)} · {order?.shipping_name ?? '—'}
+                {formatJSTDateTime(r.created_at)} · {issueTypeLabel(r.issue_type)} · {order?.shipping_name ?? '—'}
               </div>
               <div className="mt-0.5 text-[10px] font-mono text-neutral-400">
                 注文 {r.order_id.slice(0, 8).toUpperCase()}
@@ -200,7 +201,7 @@ async function IssueListSection({
                   返金額 ¥{(r.refund_amount ?? 0).toLocaleString('ja-JP')}
                   {r.refunded_at && (
                     <span className="ml-2 font-normal text-emerald-700">
-                      · {formatDate(r.refunded_at)}
+                      · {formatJSTDateTime(r.refunded_at)}
                     </span>
                   )}
                 </div>
@@ -310,15 +311,5 @@ export function rejectionReasonLabel(r: string | null | undefined): string {
     case 'other':                  return 'その他'
     default:                       return ''
   }
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}/${m}/${day} ${hh}:${mm}`
 }
 

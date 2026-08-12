@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { formatJSTDateTime } from '@/lib/brandAdminDate'
 import {
   IssueStatusPill,
   RefundStatusPill,
@@ -155,7 +156,7 @@ export default async function BrandAdminIssueDetailPage({
             </div>
             {issue.refunded_at && (
               <div className="text-[11px] text-emerald-800">
-                返金日時: {formatDate(issue.refunded_at)}
+                返金日時: {formatJSTDateTime(issue.refunded_at)}
               </div>
             )}
             {issue.stripe_refund_id && (
@@ -169,7 +170,7 @@ export default async function BrandAdminIssueDetailPage({
           {issueTypeLabel(issue.issue_type)}
         </h1>
         <div className="mt-1 text-[11px] text-neutral-500">
-          報告日時: {formatDate(issue.created_at)}
+          報告日時: {formatJSTDateTime(issue.created_at)}
         </div>
       </div>
 
@@ -378,7 +379,7 @@ async function IssueRelated({ issue }: { issue: IssueDetail }) {
           <Card title="審査結果">
             <div className="text-[12px] text-neutral-700 space-y-1">
               <div>状態: <span className="font-semibold">{issueStatusLabel(issue.status)}</span></div>
-              {issue.reviewed_at && <div>審査日時: {formatDate(issue.reviewed_at)}</div>}
+              {issue.reviewed_at && <div>審査日時: {formatJSTDateTime(issue.reviewed_at)}</div>}
               {issue.status === 'rejected' && issue.rejection_reason && (
                 <div>却下理由: {rejectionReasonLabel(issue.rejection_reason)}</div>
               )}
@@ -456,9 +457,9 @@ async function IssueRelated({ issue }: { issue: IssueDetail }) {
               <div className="text-[12px] text-neutral-700">
                 <div>配送業者: {carrierLabel(issue.return_carrier)}</div>
                 <div>追跡番号: <span className="font-mono">{issue.return_tracking_number ?? '—'}</span></div>
-                <div>返送日時: {formatDate(issue.returned_at)}</div>
+                <div>返送日時: {formatJSTDateTime(issue.returned_at)}</div>
                 {issue.return_received_at && (
-                  <div>ブランド受領日時: {formatDate(issue.return_received_at)}</div>
+                  <div>ブランド受領日時: {formatJSTDateTime(issue.return_received_at)}</div>
                 )}
               </div>
             </div>
@@ -500,7 +501,7 @@ async function IssueRelated({ issue }: { issue: IssueDetail }) {
               </div>
               {issue.refunded_at && (
                 <div className="text-[11px] text-emerald-700 mt-0.5">
-                  返金日時: {formatDate(issue.refunded_at)}
+                  返金日時: {formatJSTDateTime(issue.refunded_at)}
                 </div>
               )}
               {issue.stripe_refund_id && (
@@ -569,16 +570,6 @@ function FailBanner({ detail }: { detail: string }) {
       詳細の取得に失敗しました: {detail}
     </div>
   )
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}/${m}/${day} ${hh}:${mm}`
 }
 
 function errorMessage(code: string): string {

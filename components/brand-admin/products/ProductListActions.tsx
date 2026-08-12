@@ -4,6 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
+import { formatJSTDateTime } from '@/lib/brandAdminDate'
 
 /**
  * Brand Admin 商品一覧の Client 版レンダラ。
@@ -161,7 +162,7 @@ export default function ProductListActions({
                 </div>
                 <div className="mt-1 text-sm font-semibold text-neutral-900 truncate">{p.name}</div>
                 <div className="mt-0.5 text-[11px] text-neutral-500">
-                  {formatDate(p.updated_at)} · variants {p.variant_count} · 販売可能 {p.active_avail}
+                  {formatJSTDateTime(p.updated_at)} · variants {p.variant_count} · 販売可能 {p.active_avail}
                 </div>
               </div>
               <div className="text-right shrink-0">
@@ -424,13 +425,4 @@ function statusColor(s: string): string {
     case 'archived':  return 'bg-neutral-100 text-neutral-500'
     default:          return 'bg-neutral-100 text-neutral-700'
   }
-}
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}/${m}/${day} ${hh}:${mm}`
 }

@@ -13,6 +13,7 @@ import {
 } from '../actions'
 import ShipForm from '@/components/brand-admin/ShipForm'
 import ConfirmSubmitButton from '@/components/brand-admin/ConfirmSubmitButton'
+import { formatJSTDateTime } from '@/lib/brandAdminDate'
 
 export const dynamic = 'force-dynamic'
 
@@ -122,6 +123,39 @@ export default async function BrandAdminOrderDetailPage({
   }
   if (!gRes.data) notFound()
 
+  // 親注文が「実際に購入確定した」もの (status='placed' かつ payment_status='succeeded')
+  // でない場合、URL 直アクセスも含めて Brand Admin では表示しない (notFound)。
+  // draft / processing / requires_payment_method / cancelled 等の途中/失敗注文は
+  // 監査目的で DB には残るが、通常の注文管理 UI からは操作/閲覧不可とする。
+  type OrderGuardRow = { id: string; status: string; payment_status: string }
+  const orderGuardRes = await (supabase as unknown as {
+    from: (t: string) => {
+      select: (s: string) => {
+        eq: (c: string, v: string) => {
+          maybeSingle: () => Promise<{
+            data: OrderGuardRow | null
+            error: { message: string } | null
+          }>
+        }
+      }
+    }
+  })
+    .from('shop_orders')
+    .select('id, status, payment_status')
+    .eq('id', gRes.data.order_id)
+    .maybeSingle()
+  if (orderGuardRes.error) {
+    console.error(
+      '[brand-admin/orders/[groupId]] order guard fetch failed',
+      orderGuardRes.error
+    )
+    notFound()
+  }
+  const guard = orderGuardRes.data
+  if (!guard || guard.status !== 'placed' || guard.payment_status !== 'succeeded') {
+    notFound()
+  }
+
   // group 情報 (fulfillment_status / brand guard / 金額サマリ / 追跡情報) は上で await 済 →
   //   header / breadcrumbs / 金額 / 発送情報カードはこの時点で即描画可能。
   //   order (shipping 情報 / receipt_status / operations 判定) と items (商品カード) の 2 発は
@@ -145,7 +179,7 @@ export default async function BrandAdminOrderDetailPage({
         </div>
         <h1 className="mt-2 text-xl font-semibold">注文詳細</h1>
         <div className="mt-1 text-[11px] text-neutral-500">
-          注文日時: {formatDate(g.created_at)}
+          注文日時: {formatJSTDateTime(g.created_at)}
         </div>
       </div>
 
@@ -185,8 +219,8 @@ export default async function BrandAdminOrderDetailPage({
             <div>
               現在: <span className="font-semibold text-neutral-900">{statusLabel(g.fulfillment_status)}</span>
             </div>
-            {g.shipped_at && <div>発送日時: {formatDate(g.shipped_at)}</div>}
-            {g.delivered_at && <div>配達日時: {formatDate(g.delivered_at)}</div>}
+            {g.shipped_at && <div>発送日時: {formatJSTDateTime(g.shipped_at)}</div>}
+            {g.delivered_at && <div>配達日時: {formatJSTDateTime(g.delivered_at)}</div>}
             {g.tracking_carrier && (
               <div>配送業者: {carrierLabel(g.tracking_carrier)}</div>
             )}
@@ -348,10 +382,10 @@ async function OrderDetailRelated({
           {g.fulfillment_status === 'shipped' && (() => {
             const rs = g.shop_orders?.receipt_status ?? null
             const receivedAt = g.shop_orders?.received_at
-              ? formatDate(g.shop_orders.received_at)
+              ? formatJSTDateTime(g.shop_orders.received_at)
               : null
             const autoCompletedAt = g.shop_orders?.auto_completed_at
-              ? formatDate(g.shop_orders.auto_completed_at)
+              ? formatJSTDateTime(g.shop_orders.auto_completed_at)
               : null
             if (rs === 'received') {
               return (
@@ -442,16 +476,6 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
       {children}
     </div>
   )
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}/${m}/${day} ${hh}:${mm}`
 }
 
 function carrierLabel(v: string): string {

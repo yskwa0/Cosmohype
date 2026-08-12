@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { formatJSTDateTime } from '@/lib/brandAdminDate'
 
 export const dynamic = 'force-dynamic'
 
@@ -145,11 +146,22 @@ async function OrderListSection({ brandId, bypass }: { brandId: string; bypass: 
     arr.push({ product_name: it.product_name, quantity: it.quantity })
     itemsByGroup.set(it.order_group_id, arr)
   }
-  const data: GroupRow[] = groups.map((g) => ({
-    ...g,
-    shop_orders: ordersById.get(g.order_id) ?? null,
-    shop_order_items: itemsByGroup.get(g.id) ?? null,
-  }))
+  // 親注文が「実際に購入確定した」ものだけ表示 (draft / processing / cancelled は除外)。
+  //   条件: shop_orders.status = 'placed' かつ payment_status = 'succeeded'
+  //   checkout 時に shop_order_groups は先に作成されるため、決済失敗/放棄 draft の
+  //   グループ行が一覧に混入していた。ここで post-filter で除外する
+  //   (DB 側 group 行は監査/復旧用途で保持、削除はしない)。
+  const data: GroupRow[] = groups
+    .map((g) => ({
+      ...g,
+      shop_orders: ordersById.get(g.order_id) ?? null,
+      shop_order_items: itemsByGroup.get(g.id) ?? null,
+    }))
+    .filter(
+      (g) =>
+        g.shop_orders?.status === 'placed' &&
+        g.shop_orders?.payment_status === 'succeeded'
+    )
 
   if (data.length === 0) {
     return <div className="text-sm text-neutral-500">まだ注文はありません。</div>
@@ -187,7 +199,7 @@ async function OrderListSection({ brandId, bypass }: { brandId: string; bypass: 
               {productSummary(g.shop_order_items)}
             </div>
             <div className="mt-0.5 text-[11px] text-neutral-500">
-              {formatDate(g.created_at)} · {g.shop_orders?.shipping_name ?? '—'}
+              {formatJSTDateTime(g.created_at)} · {g.shop_orders?.shipping_name ?? '—'}
             </div>
           </div>
           <div className="text-right">
@@ -225,16 +237,6 @@ function productSummary(items: GroupRow['shop_order_items']): string {
   const first = arr[0]
   if (arr.length === 1) return `${first.product_name} × ${first.quantity}`
   return `${first.product_name} 他 ${arr.length - 1} 点`
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}/${m}/${day} ${hh}:${mm}`
 }
 
 export function StatusPill({ status }: { status: string }) {
