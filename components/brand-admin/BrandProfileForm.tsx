@@ -1,8 +1,8 @@
 'use client'
 
-import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import BrandImageCropEditor, { type BrandCropValue } from './BrandImageCropEditor'
 
 export interface BrandProfileInitial {
   brandName: string
@@ -11,8 +11,8 @@ export interface BrandProfileInitial {
   logoPath: string | null  // 現行 storage path (RPC 送出用)
   coverURL: string | null
   coverPath: string | null
-  websiteURL: string
-  instagramURL: string
+  logoCrop: BrandCropValue
+  coverCrop: BrandCropValue
 }
 
 interface Props {
@@ -40,19 +40,21 @@ function SaveButton({ enabled }: { enabled: boolean }) {
 }
 
 /**
- * ブランドプロフィール編集フォーム (Migration 145)。
+ * ブランドプロフィール編集フォーム (Migration 147)。
  *
- * ・ブランド名は現時点で編集不可 (RPC が p_name 引数を持たない、migration 146 で拡張予定)
- * ・logo / cover は選択直後にローカル preview (URL.createObjectURL) を即時表示、
- *   保存後に server 側の public URL に置換
- * ・URL 系 (website / instagram) は空欄可、値がある場合のみ http(s):// を最低限 validate
- * ・保存中は useFormStatus() で SaveButton を disable + "保存中…" 表記
+ * 変更点 (Migration 147):
+ *   ・Website / Instagram URL 入力欄を完全撤去 (HYPE 内購入導線保護)
+ *   ・logo / cover に crop editor (drag + zoom slider) を統合、Migration 137 商品画像
+ *     crop と同一 formula (`scale(zoom) translate(offset*100%)`)
+ *
+ * 保持:
+ *   ・name / description の editable (Migration 146)
+ *   ・logo / cover の upload preview (local BLOB)
+ *   ・SaveButton `useFormStatus()` の pending 表示
  */
 export default function BrandProfileForm({ initial, action, disabled, disabledReason }: Props) {
   const [brandName,   setBrandName]   = useState(initial.brandName)
   const [description, setDescription] = useState(initial.description)
-  const [websiteURL,  setWebsiteURL]  = useState(initial.websiteURL)
-  const [instagramURL, setInstagramURL] = useState(initial.instagramURL)
 
   const [logoPreviewURL,  setLogoPreviewURL]  = useState<string | null>(null)
   const [coverPreviewURL, setCoverPreviewURL] = useState<string | null>(null)
@@ -76,24 +78,27 @@ export default function BrandProfileForm({ initial, action, disabled, disabledRe
     setCoverPreviewURL(file ? URL.createObjectURL(file) : null)
   }
 
-  // URL 妥当性 (client 側の即時 feedback、server でも再検証)
-  function isURLValid(v: string): boolean {
-    if (v.trim().length === 0) return true
-    try {
-      const u = new URL(v.trim())
-      return u.protocol === 'http:' || u.protocol === 'https:'
-    } catch { return false }
-  }
-  const websiteValid   = isURLValid(websiteURL)
-  const instagramValid = isURLValid(instagramURL)
   // Migration 146: brand name 必須 + 100 文字上限 (server 側 RPC でも再検証)
   const brandNameTrimmed = brandName.trim()
   const brandNameValid = brandNameTrimmed.length > 0 && brandNameTrimmed.length <= 100
-  const canSubmit = !disabled && brandNameValid && websiteValid && instagramValid
+  const canSubmit = !disabled && brandNameValid
+
+  // Crop editor に流す画像 URL: local preview (新規選択直後) > 既存 public URL > null
+  const logoEditorURL  = logoPreviewURL  ?? initial.logoURL
+  const coverEditorURL = coverPreviewURL ?? initial.coverURL
+
+  // 画像を新しく選択した場合、crop は初期値 (中央) にリセットするのが自然。
+  // 既存画像を編集中は initial の crop 値を維持。
+  const logoEditorInitial: BrandCropValue = logoPreviewURL
+    ? { zoom: 1.0, offsetX: 0.0, offsetY: 0.0 }
+    : initial.logoCrop
+  const coverEditorInitial: BrandCropValue = coverPreviewURL
+    ? { zoom: 1.0, offsetX: 0.0, offsetY: 0.0 }
+    : initial.coverCrop
 
   return (
     <form action={action} className="space-y-6 max-w-2xl">
-      {/* Brand name: Migration 146 で editable 化 */}
+      {/* Brand name */}
       <Row label="ブランド名" required>
         <input
           type="text"
@@ -117,22 +122,20 @@ export default function BrandProfileForm({ initial, action, disabled, disabledRe
 
       {/* Logo */}
       <Row label="ロゴ画像" required={false}>
-        <input
-          type="hidden"
-          name="existing_logo_path"
-          value={initial.logoPath ?? ''}
-        />
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-full overflow-hidden border border-neutral-200 bg-neutral-50 flex items-center justify-center">
-            {logoPreviewURL ? (
-              <ImgFit src={logoPreviewURL} alt="ロゴ preview" />
-            ) : initial.logoURL ? (
-              <ImgFit src={initial.logoURL} alt="現在のロゴ" />
-            ) : (
-              <div className="text-[10px] text-neutral-400">未設定</div>
-            )}
+        <input type="hidden" name="existing_logo_path" value={initial.logoPath ?? ''} />
+        <div className="space-y-3">
+          {/* 円形 crop editor (drag + zoom slider) */}
+          <div className="max-w-[220px]">
+            <BrandImageCropEditor
+              imageURL={logoEditorURL}
+              aspectRatio={1.0}
+              shape="circle"
+              namePrefix="logo"
+              initial={logoEditorInitial}
+              disabled={disabled}
+            />
           </div>
-          <div className="flex-1">
+          <div>
             <input
               ref={logoInputRef}
               type="file"
@@ -143,7 +146,8 @@ export default function BrandProfileForm({ initial, action, disabled, disabledRe
               className="text-xs"
             />
             <div className="mt-1 text-[10px] text-neutral-500">
-              円形 avatar として表示されます (推奨 512x512、8MB まで)
+              円形 avatar として表示されます (推奨 512x512、8MB まで)。
+              アップロード後、プレビューをドラッグ / Zoom スライダーで表示位置を調整できます。
             </div>
           </div>
         </div>
@@ -151,32 +155,31 @@ export default function BrandProfileForm({ initial, action, disabled, disabledRe
 
       {/* Cover */}
       <Row label="カバー画像" required={false}>
-        <input
-          type="hidden"
-          name="existing_cover_path"
-          value={initial.coverPath ?? ''}
-        />
-        <div className="space-y-2">
-          <div className="w-full aspect-[16/9] rounded-lg overflow-hidden border border-neutral-200 bg-neutral-50 flex items-center justify-center">
-            {coverPreviewURL ? (
-              <ImgFit src={coverPreviewURL} alt="カバー preview" />
-            ) : initial.coverURL ? (
-              <ImgFit src={initial.coverURL} alt="現在のカバー" />
-            ) : (
-              <div className="text-xs text-neutral-400">未設定</div>
-            )}
-          </div>
-          <input
-            ref={coverInputRef}
-            type="file"
-            name="cover_file"
-            accept="image/*"
+        <input type="hidden" name="existing_cover_path" value={initial.coverPath ?? ''} />
+        <div className="space-y-3">
+          {/* 16:9 crop editor (drag + zoom slider) */}
+          <BrandImageCropEditor
+            imageURL={coverEditorURL}
+            aspectRatio={16.0 / 9.0}
+            shape="rectangle"
+            namePrefix="cover"
+            initial={coverEditorInitial}
             disabled={disabled}
-            onChange={(e) => onCoverChosen(e.target.files?.[0] ?? null)}
-            className="text-xs"
           />
-          <div className="text-[10px] text-neutral-500">
-            16:9 横長 (推奨 1600x900、8MB まで)。 iOS ブランドページ上部に表示されます。
+          <div>
+            <input
+              ref={coverInputRef}
+              type="file"
+              name="cover_file"
+              accept="image/*"
+              disabled={disabled}
+              onChange={(e) => onCoverChosen(e.target.files?.[0] ?? null)}
+              className="text-xs"
+            />
+            <div className="mt-1 text-[10px] text-neutral-500">
+              16:9 横長 (推奨 1600x900、8MB まで)。 iOS ブランドページ上部に表示されます。
+              アップロード後、プレビューをドラッグ / Zoom スライダーで表示位置を調整できます。
+            </div>
           </div>
         </div>
       </Row>
@@ -198,45 +201,7 @@ export default function BrandProfileForm({ initial, action, disabled, disabledRe
         </div>
       </Row>
 
-      {/* Website URL */}
-      <Row label="Website URL" required={false}>
-        <input
-          type="url"
-          name="website_url"
-          value={websiteURL}
-          onChange={(e) => setWebsiteURL(e.target.value)}
-          disabled={disabled}
-          maxLength={500}
-          className={fieldClass}
-          placeholder="https://example.com"
-          inputMode="url"
-        />
-        {!websiteValid && websiteURL.length > 0 && (
-          <div className="mt-1 text-[11px] text-red-600">
-            http:// または https:// で始まる URL を入力してください。
-          </div>
-        )}
-      </Row>
-
-      {/* Instagram URL */}
-      <Row label="Instagram URL" required={false}>
-        <input
-          type="url"
-          name="instagram_url"
-          value={instagramURL}
-          onChange={(e) => setInstagramURL(e.target.value)}
-          disabled={disabled}
-          maxLength={500}
-          className={fieldClass}
-          placeholder="https://www.instagram.com/your_brand/"
-          inputMode="url"
-        />
-        {!instagramValid && instagramURL.length > 0 && (
-          <div className="mt-1 text-[11px] text-red-600">
-            http:// または https:// で始まる URL を入力してください。
-          </div>
-        )}
-      </Row>
+      {/* Website / Instagram は Migration 147 で完全撤去 (HYPE 内購入導線保護) */}
 
       <div className="pt-2 flex items-center gap-3">
         <SaveButton enabled={canSubmit} />
@@ -274,10 +239,4 @@ function Row({
       {children}
     </div>
   )
-}
-
-/** next/image は Storage 未 whitelist の場合エラーになるため <img> を使用 (preview / public URL 両対応) */
-function ImgFit({ src, alt }: { src: string; alt: string }) {
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={src} alt={alt} className="w-full h-full object-cover" />
 }

@@ -41,8 +41,7 @@ function errorLabel(code: string): string {
     case 'shipping_flat_required': return '全国一律送料 (数字、0 以上) を入力してください。'
     case 'shipping_threshold_positive': return '送料無料閾値は 1 円以上を入力してください (空欄可)。'
     case 'shipping_update_failed': return '送料ルールの保存に失敗しました。'
-    case 'invalid_website_url':    return 'Website URL の形式が正しくありません (http:// または https://)。'
-    case 'invalid_instagram_url':  return 'Instagram URL の形式が正しくありません (http:// または https://)。'
+    // Migration 147: Website / Instagram 入力は撤去 (関連 error code はもう発生しない)
     case 'file_too_large':         return 'ファイルサイズが上限 (8MB) を超えています。'
     case 'not_image':              return '画像ファイルを選択してください。'
     case 'upload_failed':          return '画像のアップロードに失敗しました。時間をおいて再度お試しください。'
@@ -57,8 +56,13 @@ interface ProfileRow {
   description: string | null
   logo_path: string | null
   cover_path: string | null
-  website_url: string | null
-  instagram_url: string | null
+  // Migration 147: crop metadata (nullable、NULL = 中央 aspectFill = zoom 1 / offset 0)
+  logo_crop_zoom: number | null
+  logo_crop_offset_x: number | null
+  logo_crop_offset_y: number | null
+  cover_crop_zoom: number | null
+  cover_crop_offset_x: number | null
+  cover_crop_offset_y: number | null
 }
 
 export default async function BrandAdminSettingsPage({
@@ -141,7 +145,7 @@ export default async function BrandAdminSettingsPage({
       }
     })
       .from('shop_brands')
-      .select('name, description, logo_path, cover_path, website_url, instagram_url')
+      .select('name, description, logo_path, cover_path, logo_crop_zoom, logo_crop_offset_x, logo_crop_offset_y, cover_crop_zoom, cover_crop_offset_x, cover_crop_offset_y')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
   ])
@@ -185,8 +189,9 @@ export default async function BrandAdminSettingsPage({
     phone:         res.data?.return_phone          ?? '',
   }
 
-  // ブランドプロフィール initial (Migration 145)。 name は fallback で ctx.currentBrand.brandName。
+  // ブランドプロフィール initial (Migration 147)。 name は fallback で ctx.currentBrand.brandName。
   // logo/cover は path が存在すれば shop-brand-assets bucket の public URL に組立。
+  // crop metadata (Migration 147) は NULL の場合 zoom=1 / offset=0 = 中央 aspectFill にフォールバック。
   const profileRow = profileProbe.data ?? null
   const profileInitial: BrandProfileInitial = {
     brandName:   profileRow?.name ?? ctx.currentBrand.brandName,
@@ -199,8 +204,16 @@ export default async function BrandAdminSettingsPage({
     coverURL: (profileRow?.cover_path && brandAssetPublicBase)
                 ? `${brandAssetPublicBase}${profileRow.cover_path}`
                 : null,
-    websiteURL:   profileRow?.website_url  ?? '',
-    instagramURL: profileRow?.instagram_url ?? '',
+    logoCrop: {
+      zoom:    profileRow?.logo_crop_zoom     ?? 1.0,
+      offsetX: profileRow?.logo_crop_offset_x ?? 0.0,
+      offsetY: profileRow?.logo_crop_offset_y ?? 0.0,
+    },
+    coverCrop: {
+      zoom:    profileRow?.cover_crop_zoom     ?? 1.0,
+      offsetX: profileRow?.cover_crop_offset_x ?? 0.0,
+      offsetY: profileRow?.cover_crop_offset_y ?? 0.0,
+    },
   }
   const profileReadError = profileProbe.error?.message ?? null
 

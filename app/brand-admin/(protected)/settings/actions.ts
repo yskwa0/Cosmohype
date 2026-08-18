@@ -260,21 +260,22 @@ export async function updateShippingRulesAction(formData: FormData): Promise<voi
 }
 
 // =============================================================================
-// updateBrandProfileAction  (Migration 145: ブランドプロフィール編集)
+// updateBrandProfileAction  (Migration 147: ブランドプロフィール編集)
 //
-// フォーム入力: description / website_url / instagram_url + 任意の logo_file / cover_file
-// (name はスコープ外、`shop_brand_update_profile` RPC が p_name 引数を持たない。
-//  ブランド名変更には別途 migration 146 で RPC 拡張が必要。 今回は read-only 表示)
+// フォーム入力:
+//   ・name / description (Migration 146 継承)
+//   ・logo_file / cover_file (任意、`shop-brand-assets` bucket に固定 path で upsert=true)
+//   ・logo_crop_zoom / logo_crop_offset_x / logo_crop_offset_y (Migration 147、client editor)
+//   ・cover_crop_zoom / cover_crop_offset_x / cover_crop_offset_y (Migration 147、client editor)
 //
-// 画像は `shop-brand-assets` bucket に `<brand_id>/logo.<ext>` / `<brand_id>/cover.<ext>` の
-// 固定 path で upsert=true。 既存 shop_brands.logo_path / cover_path を上書きする際、
-// 前回の path と一致すれば storage 上の実 file も置換される。 拡張子が変わる場合は
-// 旧 file が残る (別 file として) が、DB path は新 file に更新されるため表示影響なし。
+// **Migration 147 変更点**: Website / Instagram URL は完全撤去 (HYPE 内購入導線保護)。
+// `shop_brands.website_url` / `instagram_url` 列は残存するが、本 action からは書込しない。
+// RPC も 11 引数版 (name + description + logo/cover path + crop 6) に整理済で、website/
+// instagram を含まないため server 側でも書換不可能。
 //
 // Dev Bypass 経路: URBAN NOTE 固定 brand_id + admin client で直接 storage upload +
-// shop_brands direct update (auth 越えなし)。
-// 通常経路: getBrandAdminContext() 経由で自 brand_id 解決 + shop_brand_update_profile RPC
-// (owner/admin gate は RPC 内で担保、staff 拒否)。
+// shop_brands direct update (website/instagram は含めない = 既存値を破壊しない)。
+// 通常経路: getBrandAdminContext() 経由で自 brand_id 解決 + shop_brand_update_profile RPC。
 // =============================================================================
 export async function updateBrandProfileAction(formData: FormData): Promise<void> {
   const returnUrl = '/brand-admin/settings'
@@ -285,24 +286,23 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
     redirect(`${returnUrl}?err=name_required`)
   }
   const description = trimOrEmpty(formData.get('description'), 2000)
-  const websiteRaw   = trimOrEmpty(formData.get('website_url'), 500)
-  const instagramRaw = trimOrEmpty(formData.get('instagram_url'), 500)
   const existingLogoPath  = trimOrEmpty(formData.get('existing_logo_path'), 500)
   const existingCoverPath = trimOrEmpty(formData.get('existing_cover_path'), 500)
 
-  // URL 妥当性 (空欄可、値がある場合のみ http(s):// 前提)
-  function normalizeURL(v: string): { ok: true; value: string | null } | { ok: false } {
-    if (v.length === 0) return { ok: true, value: null }
-    try {
-      const u = new URL(v)
-      if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false }
-      return { ok: true, value: u.toString() }
-    } catch { return { ok: false } }
+  // Migration 147: crop 値の parse + clamp (server 側で防御、RPC でも重ねて clamp)
+  function readClamped(name: string, def: number, lo: number, hi: number): number {
+    const raw = String(formData.get(name) ?? '').trim()
+    if (raw.length === 0) return def
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return def
+    return Math.min(hi, Math.max(lo, n))
   }
-  const websiteN = normalizeURL(websiteRaw)
-  if (!websiteN.ok) redirect(`${returnUrl}?err=invalid_website_url`)
-  const instagramN = normalizeURL(instagramRaw)
-  if (!instagramN.ok) redirect(`${returnUrl}?err=invalid_instagram_url`)
+  const logoZoom     = readClamped('logo_crop_zoom',      1.0, 1.0,  3.0)
+  const logoOffX     = readClamped('logo_crop_offset_x',  0.0, -1.0, 1.0)
+  const logoOffY     = readClamped('logo_crop_offset_y',  0.0, -1.0, 1.0)
+  const coverZoom    = readClamped('cover_crop_zoom',     1.0, 1.0,  3.0)
+  const coverOffX    = readClamped('cover_crop_offset_x', 0.0, -1.0, 1.0)
+  const coverOffY    = readClamped('cover_crop_offset_y', 0.0, -1.0, 1.0)
 
   const bypass = isBrandAdminDevBypassEnabled()
   if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -360,13 +360,18 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
         }
       }
     }
+    // Migration 147: website_url / instagram_url は本 patch に含めない (既存 DB 値を破壊しない)。
     const upd = await admin.from('shop_brands').update({
-      name:          brandName,   // Migration 146
-      description:   description.length > 0 ? description : null,
-      logo_path:     logoPath,
-      cover_path:    coverPath,
-      website_url:   websiteN.value,
-      instagram_url: instagramN.value,
+      name:                 brandName,
+      description:          description.length > 0 ? description : null,
+      logo_path:            logoPath,
+      cover_path:           coverPath,
+      logo_crop_zoom:       logoZoom,
+      logo_crop_offset_x:   logoOffX,
+      logo_crop_offset_y:   logoOffY,
+      cover_crop_zoom:      coverZoom,
+      cover_crop_offset_x:  coverOffX,
+      cover_crop_offset_y:  coverOffY,
       updated_at: new Date().toISOString(),
     }).eq('id', brandId)
     if (upd.error) {
@@ -374,18 +379,24 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
       redirect(`${returnUrl}?err=update_failed`)
     }
   } else {
+    // Migration 147: RPC は 11 引数版 (name + description + logo/cover path + crop 6)。
+    // website / instagram は本 RPC の関心外、送出しない = server 側でも書換不可。
     const { error } = await (
       supabase as unknown as {
         rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
       }
     ).rpc('shop_brand_update_profile', {
-      p_brand_id:      brandId,
-      p_name:          brandName,   // Migration 146 で追加された引数
-      p_description:   description.length > 0 ? description : null,
-      p_logo_path:     logoPath,
-      p_cover_path:    coverPath,
-      p_website_url:   websiteN.value,
-      p_instagram_url: instagramN.value,
+      p_brand_id:             brandId,
+      p_name:                 brandName,
+      p_description:          description.length > 0 ? description : null,
+      p_logo_path:            logoPath,
+      p_cover_path:           coverPath,
+      p_logo_crop_zoom:       logoZoom,
+      p_logo_crop_offset_x:   logoOffX,
+      p_logo_crop_offset_y:   logoOffY,
+      p_cover_crop_zoom:      coverZoom,
+      p_cover_crop_offset_x:  coverOffX,
+      p_cover_crop_offset_y:  coverOffY,
     })
     if (error) {
       const msg = error.message.toLowerCase()
