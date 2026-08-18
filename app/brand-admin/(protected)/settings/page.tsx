@@ -4,7 +4,8 @@ import { type ReturnAddressInitial } from '@/components/brand-admin/ReturnAddres
 import ReturnAddressSection from '@/components/brand-admin/ReturnAddressSection'
 import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRulesForm'
 import ShippingRulesSection from '@/components/brand-admin/ShippingRulesSection'
-import { updateReturnAddressAction, updateShippingRulesAction } from './actions'
+import BrandProfileForm, { type BrandProfileInitial } from '@/components/brand-admin/BrandProfileForm'
+import { updateReturnAddressAction, updateShippingRulesAction, updateBrandProfileAction } from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +41,24 @@ function errorLabel(code: string): string {
     case 'shipping_flat_required': return '全国一律送料 (数字、0 以上) を入力してください。'
     case 'shipping_threshold_positive': return '送料無料閾値は 1 円以上を入力してください (空欄可)。'
     case 'shipping_update_failed': return '送料ルールの保存に失敗しました。'
+    case 'invalid_website_url':    return 'Website URL の形式が正しくありません (http:// または https://)。'
+    case 'invalid_instagram_url':  return 'Instagram URL の形式が正しくありません (http:// または https://)。'
+    case 'file_too_large':         return 'ファイルサイズが上限 (8MB) を超えています。'
+    case 'not_image':              return '画像ファイルを選択してください。'
+    case 'upload_failed':          return '画像のアップロードに失敗しました。時間をおいて再度お試しください。'
+    case 'name_required':          return 'ブランド名を入力してください。'
+    case 'name_too_long':          return 'ブランド名は 100 文字以内で入力してください。'
     default:                       return `保存に失敗しました (${code})`
   }
+}
+
+interface ProfileRow {
+  name: string | null
+  description: string | null
+  logo_path: string | null
+  cover_path: string | null
+  website_url: string | null
+  instagram_url: string | null
 }
 
 export default async function BrandAdminSettingsPage({
@@ -52,6 +69,7 @@ export default async function BrandAdminSettingsPage({
   const sp = (await searchParams) ?? {}
   const savedOk = sp.saved === '1'
   const savedShipping = sp.saved === 'shipping'
+  const savedProfile = sp.saved === 'profile'
   const errCode = sp.err ?? null
 
   const ctx = await getBrandAdminContext()
@@ -77,13 +95,56 @@ export default async function BrandAdminSettingsPage({
     }
   }
 
-  const res = await loose
-    .from('shop_brands')
-    .select(
-      'return_recipient_name, return_postal_code, return_prefecture, return_city, return_address_line1, return_address_line2, return_phone'
-    )
-    .eq('id', ctx.currentBrand.brandId)
-    .maybeSingle()
+  // ブランドプロフィール取得 (Migration 145)。 shop_brands 内 name / description / logo_path /
+  // cover_path / website_url / instagram_url を 1 shot で読出、public URL は base URL + bucket
+  // (`shop-brand-assets`) + path で組立。
+  const supaUrlBase = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+  const brandAssetPublicBase = supaUrlBase
+    ? `${supaUrlBase}/storage/v1/object/public/shop-brand-assets/`
+    : ''
+
+  // 高速化: 返品先住所 + 送料ルール + brand profile を Promise.all で並列化
+  const [res, shipProbe, profileProbe] = await Promise.all([
+    loose
+      .from('shop_brands')
+      .select(
+        'return_recipient_name, return_postal_code, return_prefecture, return_city, return_address_line1, return_address_line2, return_phone'
+      )
+      .eq('id', ctx.currentBrand.brandId)
+      .maybeSingle(),
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (col: string, val: string) => {
+            eq: (col: string, val: string) => {
+              eq: (col: string, val: boolean) => {
+                maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
+              }
+            }
+          }
+        }
+      }
+    })
+      .from('shop_brand_shipping_rules')
+      .select('flat_rate, free_shipping_threshold, rate_hokkaido, rate_tohoku, rate_kanto, rate_chubu, rate_kinki, rate_chugoku, rate_shikoku, rate_kyushu, rate_okinawa')
+      .eq('brand_id', ctx.currentBrand.brandId)
+      .eq('country_code', 'JP')
+      .eq('is_active', true)
+      .maybeSingle(),
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: ProfileRow | null; error: { message: string } | null }>
+          }
+        }
+      }
+    })
+      .from('shop_brands')
+      .select('name, description, logo_path, cover_path, website_url, instagram_url')
+      .eq('id', ctx.currentBrand.brandId)
+      .maybeSingle(),
+  ])
 
   if (res.error) {
     return (
@@ -93,29 +154,6 @@ export default async function BrandAdminSettingsPage({
       />
     )
   }
-
-  // Migration 136 適用チェック: 新地域列 `rate_hokkaido` を狙って SELECT。
-  //   ・地域列が無い環境 → "column ... does not exist" エラー → migration136NotApplied=true
-  //   ・地域列がある環境 → 正常 (0 行 or 1 行)
-  const shipProbe = await (loose as unknown as {
-    from: (t: string) => {
-      select: (s: string) => {
-        eq: (col: string, val: string) => {
-          eq: (col: string, val: string) => {
-            eq: (col: string, val: boolean) => {
-              maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
-            }
-          }
-        }
-      }
-    }
-  })
-    .from('shop_brand_shipping_rules')
-    .select('flat_rate, free_shipping_threshold, rate_hokkaido, rate_tohoku, rate_kanto, rate_chubu, rate_kinki, rate_chugoku, rate_shikoku, rate_kyushu, rate_okinawa')
-    .eq('brand_id', ctx.currentBrand.brandId)
-    .eq('country_code', 'JP')
-    .eq('is_active', true)
-    .maybeSingle()
 
   const migration136NotApplied =
     shipProbe.error !== null &&
@@ -147,6 +185,25 @@ export default async function BrandAdminSettingsPage({
     phone:         res.data?.return_phone          ?? '',
   }
 
+  // ブランドプロフィール initial (Migration 145)。 name は fallback で ctx.currentBrand.brandName。
+  // logo/cover は path が存在すれば shop-brand-assets bucket の public URL に組立。
+  const profileRow = profileProbe.data ?? null
+  const profileInitial: BrandProfileInitial = {
+    brandName:   profileRow?.name ?? ctx.currentBrand.brandName,
+    description: profileRow?.description ?? '',
+    logoPath:    profileRow?.logo_path ?? null,
+    coverPath:   profileRow?.cover_path ?? null,
+    logoURL:  (profileRow?.logo_path && brandAssetPublicBase)
+                ? `${brandAssetPublicBase}${profileRow.logo_path}`
+                : null,
+    coverURL: (profileRow?.cover_path && brandAssetPublicBase)
+                ? `${brandAssetPublicBase}${profileRow.cover_path}`
+                : null,
+    websiteURL:   profileRow?.website_url  ?? '',
+    instagramURL: profileRow?.instagram_url ?? '',
+  }
+  const profileReadError = profileProbe.error?.message ?? null
+
   // staff は編集不可 (owner / admin のみ)。Dev Bypass は admin なので編集可。
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
   const disabledReason = canEdit
@@ -175,11 +232,37 @@ export default async function BrandAdminSettingsPage({
           送料ルールを保存しました。
         </div>
       )}
-      {errCode && !savedOk && !savedShipping && (
+      {savedProfile && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          ブランドプロフィールを保存しました。
+        </div>
+      )}
+      {errCode && !savedOk && !savedShipping && !savedProfile && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorLabel(errCode)}
         </div>
       )}
+
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold">ブランドプロフィール</h2>
+          <div className="mt-1 text-[11px] text-neutral-500">
+            iOS HYPE の「ブランドショップページ」に表示されるプロフィール情報です。
+            ロゴ・カバー画像・紹介文・SNS リンクを編集できます。
+          </div>
+          {profileReadError && (
+            <div className="mt-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+              プロフィール取得に失敗しました。新規入力として扱います。詳細: {profileReadError}
+            </div>
+          )}
+        </div>
+        <BrandProfileForm
+          initial={profileInitial}
+          action={updateBrandProfileAction}
+          disabled={!canEdit}
+          disabledReason={disabledReason}
+        />
+      </section>
 
       <section className="border border-neutral-200 rounded-xl bg-white p-6">
         <div className="mb-4">

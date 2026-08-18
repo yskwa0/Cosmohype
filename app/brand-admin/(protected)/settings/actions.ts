@@ -258,3 +258,147 @@ export async function updateShippingRulesAction(formData: FormData): Promise<voi
   revalidatePath(returnUrl)
   redirect(`${returnUrl}?saved=shipping`)
 }
+
+// =============================================================================
+// updateBrandProfileAction  (Migration 145: ブランドプロフィール編集)
+//
+// フォーム入力: description / website_url / instagram_url + 任意の logo_file / cover_file
+// (name はスコープ外、`shop_brand_update_profile` RPC が p_name 引数を持たない。
+//  ブランド名変更には別途 migration 146 で RPC 拡張が必要。 今回は read-only 表示)
+//
+// 画像は `shop-brand-assets` bucket に `<brand_id>/logo.<ext>` / `<brand_id>/cover.<ext>` の
+// 固定 path で upsert=true。 既存 shop_brands.logo_path / cover_path を上書きする際、
+// 前回の path と一致すれば storage 上の実 file も置換される。 拡張子が変わる場合は
+// 旧 file が残る (別 file として) が、DB path は新 file に更新されるため表示影響なし。
+//
+// Dev Bypass 経路: URBAN NOTE 固定 brand_id + admin client で直接 storage upload +
+// shop_brands direct update (auth 越えなし)。
+// 通常経路: getBrandAdminContext() 経由で自 brand_id 解決 + shop_brand_update_profile RPC
+// (owner/admin gate は RPC 内で担保、staff 拒否)。
+// =============================================================================
+export async function updateBrandProfileAction(formData: FormData): Promise<void> {
+  const returnUrl = '/brand-admin/settings'
+
+  // Migration 146: ブランド名 (name) 必須 + 100 文字上限 (server 側 RPC でも再検証)
+  const brandName = trimOrEmpty(formData.get('name'), 100)
+  if (brandName.length === 0) {
+    redirect(`${returnUrl}?err=name_required`)
+  }
+  const description = trimOrEmpty(formData.get('description'), 2000)
+  const websiteRaw   = trimOrEmpty(formData.get('website_url'), 500)
+  const instagramRaw = trimOrEmpty(formData.get('instagram_url'), 500)
+  const existingLogoPath  = trimOrEmpty(formData.get('existing_logo_path'), 500)
+  const existingCoverPath = trimOrEmpty(formData.get('existing_cover_path'), 500)
+
+  // URL 妥当性 (空欄可、値がある場合のみ http(s):// 前提)
+  function normalizeURL(v: string): { ok: true; value: string | null } | { ok: false } {
+    if (v.length === 0) return { ok: true, value: null }
+    try {
+      const u = new URL(v)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false }
+      return { ok: true, value: u.toString() }
+    } catch { return { ok: false } }
+  }
+  const websiteN = normalizeURL(websiteRaw)
+  if (!websiteN.ok) redirect(`${returnUrl}?err=invalid_website_url`)
+  const instagramN = normalizeURL(instagramRaw)
+  if (!instagramN.ok) redirect(`${returnUrl}?err=invalid_instagram_url`)
+
+  const bypass = isBrandAdminDevBypassEnabled()
+  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    redirect(`${returnUrl}?err=service_role_missing`)
+  }
+
+  const brandId: string = bypass
+    ? DEV_BYPASS_BRAND_ID
+    : assertUUID((await getBrandAdminContext()).currentBrand.brandId)
+
+  const supabase = bypass ? createAdminClient() : await createClient()
+
+  // 画像 upload ヘルパ (既存 uploadImageAction と同じ upsert / contentType 検証パターン)
+  async function uploadIfPresent(field: string, kind: 'logo' | 'cover', existingPath: string): Promise<string | null> {
+    const file = formData.get(field)
+    if (!(file instanceof File) || file.size === 0) {
+      // 未アップロード: 既存 path をそのまま維持 (空欄なら null で明示 clear)
+      return existingPath.length > 0 ? existingPath : null
+    }
+    const f = file as File
+    if (f.size > 8 * 1024 * 1024) redirect(`${returnUrl}?err=file_too_large`)
+    const contentType = f.type || 'application/octet-stream'
+    if (!contentType.startsWith('image/')) redirect(`${returnUrl}?err=not_image`)
+
+    const nameParts = f.name.split('.')
+    const ext = nameParts.length > 1
+      ? nameParts[nameParts.length - 1].toLowerCase().replace(/[^a-z0-9]/g, '')
+      : 'bin'
+    const path = `${brandId}/${kind}.${ext}`
+    const loose = supabase as unknown as {
+      storage: { from: (b: string) => {
+        upload: (p: string, f: File, o: { contentType: string; upsert: boolean }) =>
+          Promise<{ error: { message: string } | null }>
+      } }
+    }
+    const up = await loose.storage.from('shop-brand-assets').upload(path, f, {
+      contentType,
+      upsert: true,   // 同 brand_id/<kind>.<ext> は同一 path で上書き
+    })
+    if (up.error) {
+      console.error(`[brand-admin/settings] ${kind} upload failed`, up.error)
+      redirect(`${returnUrl}?err=upload_failed`)
+    }
+    return path
+  }
+
+  const logoPath  = await uploadIfPresent('logo_file',  'logo',  existingLogoPath)
+  const coverPath = await uploadIfPresent('cover_file', 'cover', existingCoverPath)
+
+  if (bypass) {
+    const admin = supabase as unknown as {
+      from: (t: string) => {
+        update: (patch: Record<string, unknown>) => {
+          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
+        }
+      }
+    }
+    const upd = await admin.from('shop_brands').update({
+      name:          brandName,   // Migration 146
+      description:   description.length > 0 ? description : null,
+      logo_path:     logoPath,
+      cover_path:    coverPath,
+      website_url:   websiteN.value,
+      instagram_url: instagramN.value,
+      updated_at: new Date().toISOString(),
+    }).eq('id', brandId)
+    if (upd.error) {
+      console.error('[brand-admin/settings] dev bypass profile update failed', upd.error)
+      redirect(`${returnUrl}?err=update_failed`)
+    }
+  } else {
+    const { error } = await (
+      supabase as unknown as {
+        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+      }
+    ).rpc('shop_brand_update_profile', {
+      p_brand_id:      brandId,
+      p_name:          brandName,   // Migration 146 で追加された引数
+      p_description:   description.length > 0 ? description : null,
+      p_logo_path:     logoPath,
+      p_cover_path:    coverPath,
+      p_website_url:   websiteN.value,
+      p_instagram_url: instagramN.value,
+    })
+    if (error) {
+      const msg = error.message.toLowerCase()
+      let code: string = 'update_failed'
+      if (msg.includes('forbidden'))         code = 'forbidden'
+      else if (msg.includes('not_authenticated')) code = 'not_authenticated'
+      else if (msg.includes('name_required'))     code = 'name_required'
+      else if (msg.includes('name_too_long'))     code = 'name_too_long'
+      console.error('[brand-admin/settings] rpc profile update failed', error)
+      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
+    }
+  }
+
+  revalidatePath(returnUrl)
+  redirect(`${returnUrl}?saved=profile`)
+}
