@@ -125,7 +125,7 @@ export default async function BrandAdminProductEditPage({
   searchParams,
 }: {
   params: Promise<{ productId: string }>
-  searchParams?: Promise<{ saved?: string; err?: string; created?: string; published?: string; archived?: string; reverted?: string; deleted?: string; step?: string }>
+  searchParams?: Promise<{ saved?: string; err?: string; created?: string; published?: string; archived?: string; reverted?: string; deleted?: string; step?: string; just_uploaded?: string }>
 }) {
   const { productId } = await params
   if (!/^[0-9a-fA-F-]{36}$/.test(productId)) {
@@ -139,6 +139,10 @@ export default async function BrandAdminProductEditPage({
   const justReverted = sp.reverted === '1'
   const justDeleted = sp.deleted === '1'
   const errCode = sp.err ?? null
+  // 商品画像 upload 直後の image_id (Grid で crop editor を auto-open するため)
+  const justUploadedImageId = (typeof sp.just_uploaded === 'string' && /^[0-9a-fA-F-]{36}$/.test(sp.just_uploaded))
+    ? sp.just_uploaded
+    : null
   // step 型 UI (1=基本情報, 2=商品画像, 3=バリエーション・在庫, 4=公開)
   const stepNum: 1 | 2 | 3 | 4 = sp.step === '2' ? 2 : sp.step === '3' ? 3 : sp.step === '4' ? 4 : 1
 
@@ -242,6 +246,7 @@ export default async function BrandAdminProductEditPage({
           canEdit={canEdit}
           publicBase={publicBase}
           bypass={bypass}
+          justUploadedImageId={justUploadedImageId}
         />
       </Suspense>
 
@@ -267,6 +272,7 @@ async function ProductStepSection({
   canEdit,
   publicBase,
   bypass,
+  justUploadedImageId,
 }: {
   stepNum: 1 | 2 | 3 | 4
   product: ProductRow
@@ -274,6 +280,7 @@ async function ProductStepSection({
   canEdit: boolean
   publicBase: string
   bypass: boolean
+  justUploadedImageId: string | null
 }) {
   const supabase = bypass ? createAdminClient() : await createClient()
   type LooseFrom = {
@@ -351,6 +358,7 @@ async function ProductStepSection({
           deleteAction={deleteImageAction}
           setPrimaryAction={setPrimaryImageAction}
           updateCropAction={migration137Applied ? updateImageCropAction : undefined}
+          justUploadedImageId={justUploadedImageId}
         />
         {canEdit && images.length < MAX_IMAGES_PER_PRODUCT && (
           <ImageUploadForm productId={product.id} action={uploadImageAction} />

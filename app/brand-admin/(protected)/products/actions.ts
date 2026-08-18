@@ -967,6 +967,8 @@ export async function uploadImageAction(formData: FormData): Promise<void> {
   }
 
   const isPrimary = existing.length === 0
+  // 追加行の image_id を取得して redirect param に載せる (Grid 側で crop editor を auto-open)
+  let newImageId: string | null = null
   if (bypass) {
     const ins = await supabase.from('shop_product_images').insert({
       product_id: productId,
@@ -979,6 +981,14 @@ export async function uploadImageAction(formData: FormData): Promise<void> {
       console.error('[brand-admin/products] dev bypass image row insert failed', ins.error)
       redirect(`${back}&err=update_failed`)
     }
+    // 直近 insert 行を storage_path で lookup (LooseFrom.insert が returning を型定義していないため)
+    const sel = await supabase
+      .from('shop_product_images')
+      .select('id')
+      .eq('storage_path', path)
+      .limit(1)
+    const rows = ((sel.data as Array<{ id: string }> | null) ?? [])
+    newImageId = rows[0]?.id ?? null
   } else {
     const res = await supabase.rpc('shop_brand_add_product_image', {
       p_product_id: productId,
@@ -991,10 +1001,16 @@ export async function uploadImageAction(formData: FormData): Promise<void> {
       console.error('[brand-admin/products] rpc add image failed', res.error)
       redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
     }
+    // RPC は新規 image UUID を返す (Migration 130)
+    const raw = res.data
+    if (typeof raw === 'string' && /^[0-9a-fA-F-]{36}$/.test(raw)) {
+      newImageId = raw
+    }
   }
   // revalidate は step クエリなしの base path で
   revalidatePath(`/brand-admin/products/${productId}`)
-  redirect(`${back}&saved=1`)
+  const uploadedParam = newImageId ? `&just_uploaded=${encodeURIComponent(newImageId)}` : ''
+  redirect(`${back}&saved=1${uploadedParam}`)
 }
 
 // =============================================================================

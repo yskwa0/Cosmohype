@@ -1,29 +1,21 @@
 'use client'
 
-import Image from 'next/image'
-import { useOptimistic, useState, useTransition } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
 import ShopImageCropEditor, { type ShopImageCrop } from './ShopImageCropEditor'
 
 /**
  * Brand Admin 商品画像グリッド (STEP 2)。
  *
- * 「削除」を Optimistic UI 化するため既存 Server Component 内 grid を
- * この Client Component に切り出す。
- *
- * 削除 flow:
- *   1. 押下直後に対象画像を useOptimistic で即時非表示
- *   2. useTransition 内で既存 deleteAction (Server Action) を実行
- *      (Server Action 側は redirect(...) で NEXT_REDIRECT を throw するが正常経路)
- *   3. 成功時: revalidatePath により親が新 images (削除後) で再描画
- *              → useOptimistic の base state 自体が更新され、hidden のまま
- *   4. 失敗時: 親は同じ images (未削除) で再描画
- *              → transition 終了で useOptimistic の overlay が消え、画像が復活
- *   5. Pending 中は該当 image のみ opacity 落とし + 削除・primary ボタンを disable
- *      (二重削除 + primary 誤操作を防止)。他画像の操作は止めない。
- *
- * primary image / storage_path / sort_order / Server Action の仕様は一切変更しない。
- * setPrimaryImageAction は既存の plain <form action={...}> をそのまま使用
- * (submit → page navigation → 全体再描画で反映される既存挙動を維持)。
+ * ・削除は Optimistic UI (useOptimistic + useTransition)。
+ * ・アップロード直後の画像は URL param (`just_uploaded=<image_id>`) を検知して
+ *   ShopImageCropEditor を自動オープン。 (Brand Admin STEP2 の「商品画像を選択 →
+ *   すぐ位置調整」フローを 1 step で完結させるため)
+ * ・タイル表示は preview / iOS BrandShopView と同じ非破壊 crop formula を使用:
+ *     baseScale = max(cw/nw, ch/nh)
+ *     effectiveScale = baseScale * zoom
+ *     visual dx = zoom * offsetX * cw, dy = zoom * offsetY * ch
+ *   `object-cover` は使わない (pre-crop してしまい scale が新たなソース pixel を
+ *   露出できなくなるため)。
  */
 
 export interface ProductImageItem {
@@ -45,6 +37,8 @@ interface Props {
   setPrimaryAction: (formData: FormData) => Promise<void>
   /** Migration 137 適用後のみ渡す。undefined なら crop 編集 UI は非表示 */
   updateCropAction?: (formData: FormData) => Promise<void>
+  /** upload 直後の image_id (URL param 経由)。 該当 tile があれば crop editor を auto-open */
+  justUploadedImageId?: string | null
 }
 
 export default function ProductImageGrid({
@@ -55,6 +49,7 @@ export default function ProductImageGrid({
   deleteAction,
   setPrimaryAction,
   updateCropAction,
+  justUploadedImageId,
 }: Props) {
   const [optimisticImages, hideOptimistically] = useOptimistic<ProductImageItem[], string>(
     images,
@@ -66,6 +61,20 @@ export default function ProductImageGrid({
 
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
   const [, startTransition] = useTransition()
+
+  // upload 直後の image に対して crop editor を auto-open
+  //   ・justUploadedImageId が images に存在する場合のみ open (削除済み・別 product 混入対策)
+  //   ・updateCropAction が未定義 (Migration 137 未適用) の場合は open しない
+  //   ・ユーザーが Cancel してもすぐ再オープンしないように処理済みフラグをローカル保持
+  const autoOpenedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!justUploadedImageId) return
+    if (!updateCropAction) return
+    if (autoOpenedRef.current === justUploadedImageId) return
+    if (!images.some((i) => i.id === justUploadedImageId)) return
+    autoOpenedRef.current = justUploadedImageId
+    setEditingImageId(justUploadedImageId)
+  }, [justUploadedImageId, images, updateCropAction])
 
   const handleDelete = (imageId: string) => {
     if (pendingIds.has(imageId)) return
@@ -82,8 +91,7 @@ export default function ProductImageGrid({
       try {
         await deleteAction(fd)
       } catch {
-        // Server Action の redirect() は NEXT_REDIRECT を throw する。
-        // 成功/失敗どちらも redirect で戻ってくるため catch は共通で握りつぶし、
+        // Server Action の redirect() は NEXT_REDIRECT を throw する。 catch は共通で握りつぶし、
         // 実データ整合は親の再描画 + useOptimistic の自動 revert に委ねる。
       } finally {
         setPendingIds((prev) => {
@@ -103,7 +111,6 @@ export default function ProductImageGrid({
     )
   }
 
-  // 現在の crop 値を解決 (optimistic override → DB 値 → default)
   const cropFor = (img: ProductImageItem): ShopImageCrop => {
     const o = cropOverrides[img.id]
     if (o) return o
@@ -124,7 +131,6 @@ export default function ProductImageGrid({
         {optimisticImages.map((img) => {
           const isPending = pendingIds.has(img.id)
           const crop = cropFor(img)
-          const tileTransform = `scale(${crop.zoom}) translate(${crop.offsetX * 100}%, ${crop.offsetY * 100}%)`
           return (
             <div
               key={img.id}
@@ -133,25 +139,16 @@ export default function ProductImageGrid({
                 (isPending ? ' opacity-60' : '')
               }
             >
-              {/* iOS と同じ 4:5 縦型プレビュー (aspect-square から aspect-[4/5] に変更) */}
-              <div className="relative w-full overflow-hidden" style={{ aspectRatio: '4 / 5' }}>
+              {/* iOS と同じ 4:5 縦型プレビュー + 非破壊 crop 表示 */}
+              <div className="relative w-full overflow-hidden bg-neutral-100" style={{ aspectRatio: '4 / 5' }}>
                 {publicBase && (
-                  <div
-                    className="absolute inset-0"
-                    style={{ transform: tileTransform, transformOrigin: 'center' }}
-                  >
-                    <Image
-                      src={`${publicBase}${img.storage_path}`}
-                      alt=""
-                      fill
-                      sizes="200px"
-                      className="object-cover"
-                      unoptimized
-                    />
-                  </div>
+                  <ShopImageCropTile
+                    src={`${publicBase}${img.storage_path}`}
+                    crop={crop}
+                  />
                 )}
                 {img.is_primary && (
-                  <span className="absolute top-1 left-1 text-[9px] font-semibold bg-neutral-900 text-white px-1.5 py-0.5 rounded">
+                  <span className="absolute top-1 left-1 text-[9px] font-semibold bg-neutral-900 text-white px-1.5 py-0.5 rounded z-10">
                     メイン画像
                   </span>
                 )}
@@ -210,5 +207,81 @@ export default function ProductImageGrid({
         />
       )}
     </>
+  )
+}
+
+/**
+ * 非破壊 crop tile 表示 (grid セル用)。
+ * ShopImageCropEditor / iOS BrandShopView と 100% 同じ formula:
+ *   baseScale = max(cw/nw, ch/nh), effectiveScale = baseScale * zoom
+ *   dx = zoom * offsetX * cw, dy = zoom * offsetY * ch
+ * `object-cover` は使わず、img を intrinsic 幅で絶対配置 + outer overflow で clip。
+ */
+function ShopImageCropTile({ src, crop }: { src: string; crop: ShopImageCrop }) {
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const [box, setBox] = useState<{ w: number; h: number }>({ w: 0, h: 0 })
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const measure = () => setBox({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const onLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      setNatural({ w: img.naturalWidth, h: img.naturalHeight })
+    }
+  }, [])
+
+  const { drawnW, drawnH, offXpx, offYpx } = useMemo(() => {
+    const cw = box.w, ch = box.h
+    if (cw <= 0 || ch <= 0 || !natural) {
+      return { drawnW: cw, drawnH: ch, offXpx: 0, offYpx: 0 }
+    }
+    const baseScale = Math.max(cw / natural.w, ch / natural.h)
+    const effectiveScale = baseScale * crop.zoom
+    const dw = natural.w * effectiveScale
+    const dh = natural.h * effectiveScale
+    return {
+      drawnW: dw,
+      drawnH: dh,
+      offXpx: crop.zoom * crop.offsetX * cw,
+      offYpx: crop.zoom * crop.offsetY * ch,
+    }
+  }, [box.w, box.h, natural, crop.zoom, crop.offsetX, crop.offsetY])
+
+  const imgStyle: React.CSSProperties = natural
+    ? {
+        position: 'absolute',
+        top: `${(box.h - drawnH) / 2 + offYpx}px`,
+        left: `${(box.w - drawnW) / 2 + offXpx}px`,
+        width: `${drawnW}px`,
+        height: `${drawnH}px`,
+        maxWidth: 'none',
+        maxHeight: 'none',
+        userSelect: 'none',
+        pointerEvents: 'none',
+      }
+    : {
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        userSelect: 'none',
+        pointerEvents: 'none',
+      }
+
+  return (
+    <div ref={boxRef} className="absolute inset-0">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" onLoad={onLoad} style={imgStyle} draggable={false} />
+    </div>
   )
 }
