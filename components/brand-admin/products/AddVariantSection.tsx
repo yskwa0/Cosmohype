@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import VariantEditor from './VariantEditor'
+import { pressableClass } from '@/lib/brandAdminUi'
 
 interface Props {
   productId: string
@@ -30,7 +31,8 @@ export default function AddVariantSection({ productId, categorySlug, upsertActio
         }}
         className={
           'w-full text-left text-[12px] font-semibold text-neutral-700 ' +
-          'border border-dashed border-neutral-300 rounded-lg px-4 py-3 hover:bg-neutral-50'
+          'border border-dashed border-neutral-300 rounded-lg px-4 py-3 hover:bg-neutral-50 ' +
+          pressableClass
         }
       >
         ＋ バリエーションを追加

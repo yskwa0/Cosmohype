@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   issueId: string
@@ -19,18 +20,21 @@ const REJECTION_REASONS = [
 
 // primary (黒背景 + 白文字)。hover でわずかに薄く、disabled でグレー化しても白文字を維持。
 const PRIMARY_CLASS =
-  'px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white ' +
-  'hover:bg-neutral-800 disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed'
+  'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white ' +
+  'hover:bg-neutral-800 disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed ' +
+  pressableClass
 
 // secondary (白背景 + 黒枠 + 黒文字)。primary と同じ height/padding/font-weight で並べる。
 const SECONDARY_CLASS =
-  'px-4 py-2 rounded-md text-sm font-semibold bg-white text-neutral-900 border border-neutral-900 ' +
-  'hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed'
+  'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-white text-neutral-900 border border-neutral-900 ' +
+  'hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed ' +
+  pressableClass
 
 function ApproveSubmit() {
   const { pending } = useFormStatus()
   return (
     <button type="submit" disabled={pending} className={PRIMARY_CLASS}>
+      {pending && <Spinner />}
       {pending ? '送信中…' : '承認を確定する'}
     </button>
   )
@@ -39,6 +43,7 @@ function RejectSubmit({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus()
   return (
     <button type="submit" disabled={disabled || pending} className={SECONDARY_CLASS}>
+      {pending && <Spinner />}
       {pending ? '送信中…' : '却下を確定する'}
     </button>
   )

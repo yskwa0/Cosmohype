@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
 import ShopImageCropEditor, { type ShopImageCrop } from './ShopImageCropEditor'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 /**
  * Brand Admin 商品画像グリッド (STEP 2)。
@@ -162,7 +163,10 @@ export default function ProductImageGrid({
                       <button
                         type="submit"
                         disabled={isPending}
-                        className="w-full text-[11px] py-1 rounded border border-neutral-900 text-neutral-900 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className={
+                          'w-full text-[11px] py-1 rounded border border-neutral-900 text-neutral-900 hover:bg-neutral-50 ' +
+                          'disabled:opacity-40 disabled:cursor-not-allowed ' + pressableClass
+                        }
                       >
                         メイン画像に設定
                       </button>
@@ -173,7 +177,10 @@ export default function ProductImageGrid({
                       type="button"
                       disabled={isPending}
                       onClick={() => setEditingImageId(img.id)}
-                      className="w-full text-[11px] py-1 rounded border border-neutral-300 text-neutral-800 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={
+                        'w-full text-[11px] py-1 rounded border border-neutral-300 text-neutral-800 hover:bg-neutral-50 ' +
+                        'disabled:opacity-40 disabled:cursor-not-allowed ' + pressableClass
+                      }
                     >
                       表示位置を調整
                     </button>
@@ -182,8 +189,13 @@ export default function ProductImageGrid({
                     type="button"
                     disabled={isPending}
                     onClick={() => handleDelete(img.id)}
-                    className="w-full text-[11px] py-1 rounded border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className={
+                      'w-full inline-flex items-center justify-center gap-1.5 text-[11px] py-1 rounded ' +
+                      'border border-red-300 text-red-700 hover:bg-red-50 ' +
+                      'disabled:opacity-40 disabled:cursor-not-allowed ' + pressableClass
+                    }
                   >
+                    {isPending && <Spinner />}
                     {isPending ? '削除中…' : '削除'}
                   </button>
                 </div>

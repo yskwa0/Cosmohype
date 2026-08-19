@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 export interface ReturnAddressInitial {
   recipientName: string
@@ -29,11 +30,13 @@ function SaveButton({ enabled }: { enabled: boolean }) {
       type="submit"
       disabled={!enabled || pending}
       className={
-        'px-4 py-2 rounded-md text-sm font-semibold ' +
+        'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold ' +
         'bg-neutral-900 text-white hover:bg-neutral-800 ' +
-        'disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed'
+        'disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed ' +
+        pressableClass
       }
     >
+      {pending && <Spinner />}
       {pending ? '保存中…' : '保存する'}
     </button>
   )
@@ -163,7 +166,10 @@ export default function ReturnAddressForm({ initial, action, disabled, disabledR
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-md text-sm font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+            className={
+              'px-4 py-2 rounded-md text-sm font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 ' +
+              pressableClass
+            }
           >
             キャンセル
           </button>

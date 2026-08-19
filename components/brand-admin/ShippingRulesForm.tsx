@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 /**
  * Brand Admin 送料ルール入力フォーム。
@@ -61,12 +62,14 @@ function SaveButton({ enabled, label }: { enabled: boolean; label: string }) {
       type="submit"
       disabled={!enabled || pending}
       className={
-        'px-4 py-2 rounded-md text-sm font-semibold ' +
+        'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold ' +
         (enabled && !pending
           ? 'bg-neutral-900 text-white hover:bg-neutral-800'
-          : 'bg-neutral-300 text-neutral-500 cursor-not-allowed')
+          : 'bg-neutral-300 text-neutral-500 cursor-not-allowed') + ' ' +
+        pressableClass
       }
     >
+      {pending && <Spinner />}
       {pending ? '保存中…' : label}
     </button>
   )
@@ -353,7 +356,10 @@ export default function ShippingRulesForm({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-md text-sm font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+            className={
+              'px-4 py-2 rounded-md text-sm font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 ' +
+              pressableClass
+            }
           >
             キャンセル
           </button>

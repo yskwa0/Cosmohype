@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   label: string
@@ -16,12 +17,14 @@ function InnerButton({ label, primary }: { label: string; primary?: boolean }) {
       type="submit"
       disabled={pending}
       className={
-        'px-4 py-2 rounded text-sm font-semibold ' +
+        'inline-flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-semibold ' +
         (primary
           ? 'bg-neutral-900 text-white disabled:opacity-40'
-          : 'border border-neutral-300 text-neutral-800 disabled:opacity-40')
+          : 'border border-neutral-300 text-neutral-800 disabled:opacity-40') +
+        ' ' + pressableClass
       }
     >
+      {pending && <Spinner />}
       {pending ? '処理中…' : label}
     </button>
   )
@@ -55,7 +58,8 @@ export default function ConfirmSubmitButton({ label, confirmMessage, primary }: 
             'px-4 py-2 rounded text-sm font-semibold ' +
             (primary
               ? 'bg-neutral-900 text-white'
-              : 'border border-neutral-300 text-neutral-800')
+              : 'border border-neutral-300 text-neutral-800') +
+            ' ' + pressableClass
           }
         >
           {label}

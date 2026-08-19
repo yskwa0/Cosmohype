@@ -4,6 +4,7 @@ import { useState } from 'react'
 import ShippingRulesForm, {
   type ShippingRulesInitial,
 } from './ShippingRulesForm'
+import { pressableClass } from '@/lib/brandAdminUi'
 
 /**
  * 配送・送料設定セクション (Brand Admin ブランド設定)。
@@ -121,7 +122,8 @@ function ViewCard({
             'px-4 py-2 rounded-md text-sm font-semibold border ' +
             (canEdit
               ? 'border-neutral-300 text-neutral-800 hover:bg-neutral-50'
-              : 'border-neutral-200 text-neutral-400 cursor-not-allowed')
+              : 'border-neutral-200 text-neutral-400 cursor-not-allowed') + ' ' +
+            pressableClass
           }
         >
           送料を変更

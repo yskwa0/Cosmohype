@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { formatJSTDateTime } from '@/lib/brandAdminDate'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
+import { PressableRowLink } from '@/components/brand-admin/PressableRowLink'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,13 +78,15 @@ export default async function BrandAdminIssuesListPage({
             key={f.key}
             href={f.key === 'all' ? '/brand-admin/issues' : `/brand-admin/issues?f=${f.key}`}
             className={
-              'text-[11px] px-3 py-1.5 rounded-full ' +
+              'inline-flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full ' +
               (activeFilter.key === f.key
                 ? 'bg-neutral-900 text-white'
-                : 'border border-neutral-300 text-neutral-700 hover:bg-neutral-100')
+                : 'border border-neutral-300 text-neutral-700 hover:bg-neutral-100') + ' ' +
+              pressableClass
             }
           >
             {f.label}
+            <NavPendingSpinner size={10} />
           </Link>
         ))}
       </div>
@@ -171,7 +176,7 @@ async function IssueListSection({
         const item = itemsById.get(r.order_item_id)
         const order = ordersById.get(r.order_id)
         return (
-          <Link
+          <PressableRowLink
             key={r.id}
             href={`/brand-admin/issues/${r.id}`}
             className={
@@ -207,8 +212,11 @@ async function IssueListSection({
                 </div>
               )}
             </div>
-            <div className="text-[10px] text-neutral-500">›</div>
-          </Link>
+            <div className="text-[10px] text-neutral-500 inline-flex items-center gap-1.5">
+              <NavPendingSpinner size={10} />
+              <span>›</span>
+            </div>
+          </PressableRowLink>
         )
       })}
     </div>

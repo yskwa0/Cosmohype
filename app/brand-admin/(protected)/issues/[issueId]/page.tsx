@@ -20,6 +20,8 @@ import {
 import ReceiveAndRefundForm from '@/components/brand-admin/ReceiveAndRefundForm'
 import IssueDecisionForm from '@/components/brand-admin/IssueDecisionForm'
 import ConfirmSubmitButton from '@/components/brand-admin/ConfirmSubmitButton'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
 
 export const dynamic = 'force-dynamic'
 
@@ -137,9 +139,10 @@ export default async function BrandAdminIssueDetailPage({
       <div className="mb-6">
         <Link
           href="/brand-admin/issues"
-          className="text-[11px] text-neutral-500 hover:text-neutral-800"
+          className={'inline-flex items-center gap-1.5 text-[11px] text-neutral-500 hover:text-neutral-800 ' + pressableClass}
         >
           ← 商品トラブル 一覧
+          <NavPendingSpinner size={10} />
         </Link>
         <div className="mt-3 flex items-center gap-3 flex-wrap">
           <IssueStatusPill status={issue.status} />

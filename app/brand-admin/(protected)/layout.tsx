@@ -3,6 +3,8 @@ import { getBrandAdminContext } from '@/lib/brandAdmin'
 import { brandAdminSignOutAction, switchBrandAction } from '../actions'
 import BrandAdminSidebar from '@/components/brand-admin/BrandAdminSidebar'
 import BrandSwitcher from '@/components/brand-admin/BrandSwitcher'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,9 +29,12 @@ export default async function BrandAdminProtectedLayout({
         {/* Sidebar (PC / md 以上) */}
         <aside className="hidden md:flex flex-col w-60 border-r border-neutral-200 bg-white">
           <div className="px-5 py-6 border-b border-neutral-200">
-            <Link href="/brand-admin" className="block">
+            <Link href="/brand-admin" className={'block relative ' + pressableClass}>
               <div className="text-[10px] tracking-[0.3em] text-neutral-500">HYPE</div>
-              <div className="text-sm font-semibold mt-1">Brand Admin</div>
+              <div className="text-sm font-semibold mt-1 inline-flex items-center gap-1.5">
+                Brand Admin
+                <NavPendingSpinner size={11} />
+              </div>
             </Link>
           </div>
           <BrandAdminSidebar />
@@ -60,7 +65,11 @@ export default async function BrandAdminProtectedLayout({
               <form action={brandAdminSignOutAction} className="mt-3">
                 <button
                   type="submit"
-                  className="w-full text-[11px] text-neutral-600 hover:text-red-600 border border-neutral-300 rounded py-1.5"
+                  className={
+                    'w-full text-[11px] text-neutral-600 hover:text-red-600 ' +
+                    'border border-neutral-300 rounded py-1.5 ' +
+                    pressableClass
+                  }
                 >
                   ログアウト
                 </button>
@@ -73,9 +82,12 @@ export default async function BrandAdminProtectedLayout({
         <main className="flex-1 min-w-0">
           {/* Mobile top bar */}
           <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-neutral-200 bg-white">
-            <Link href="/brand-admin" className="flex flex-col">
+            <Link href="/brand-admin" className={'flex flex-col ' + pressableClass}>
               <span className="text-[9px] tracking-[0.3em] text-neutral-500">HYPE</span>
-              <span className="text-xs font-semibold">Brand Admin</span>
+              <span className="text-xs font-semibold inline-flex items-center gap-1.5">
+                Brand Admin
+                <NavPendingSpinner size={10} />
+              </span>
             </Link>
             {ctx.isDevBypass ? (
               <span className="text-[10px] font-bold tracking-widest text-orange-700 border border-orange-300 bg-orange-50 rounded px-2 py-1">
@@ -83,7 +95,10 @@ export default async function BrandAdminProtectedLayout({
               </span>
             ) : (
               <form action={brandAdminSignOutAction}>
-                <button type="submit" className="text-[11px] text-neutral-600 border border-neutral-300 rounded px-2 py-1">
+                <button
+                  type="submit"
+                  className={'text-[11px] text-neutral-600 border border-neutral-300 rounded px-2 py-1 ' + pressableClass}
+                >
                   ログアウト
                 </button>
               </form>

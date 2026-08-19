@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { pressableClass } from '@/lib/brandAdminUi'
 
 /**
  * Brand ロゴ / カバー共通 crop editor (Migration 147)。
@@ -289,7 +290,7 @@ export default function BrandImageCropEditor({
           <button
             type="button"
             onClick={reset}
-            className="px-2 py-1 rounded border border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+            className={'px-2 py-1 rounded border border-neutral-300 text-neutral-600 hover:bg-neutral-50 ' + pressableClass}
           >
             中央に戻す
           </button>

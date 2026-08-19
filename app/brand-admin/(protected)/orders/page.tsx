@@ -3,6 +3,9 @@ import Link from 'next/link'
 import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { formatJSTDateTime } from '@/lib/brandAdminDate'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
+import { PressableRowLink } from '@/components/brand-admin/PressableRowLink'
 
 export const dynamic = 'force-dynamic'
 
@@ -170,7 +173,7 @@ async function OrderListSection({ brandId, bypass }: { brandId: string; bypass: 
   return (
     <div className="border border-neutral-200 rounded-xl bg-white overflow-hidden">
       {data.map((g, i) => (
-        <Link
+        <PressableRowLink
           key={g.id}
           href={`/brand-admin/orders/${g.id}`}
           className={
@@ -206,9 +209,12 @@ async function OrderListSection({ brandId, bypass }: { brandId: string; bypass: 
             <div className="text-sm font-semibold font-mono">
               ¥{(g.subtotal_amount + g.shipping_amount).toLocaleString('ja-JP')}
             </div>
-            <div className="text-[10px] text-neutral-500 mt-1">›</div>
+            <div className="text-[10px] text-neutral-500 mt-1 inline-flex items-center gap-1.5">
+              <NavPendingSpinner size={10} />
+              <span>›</span>
+            </div>
           </div>
-        </Link>
+        </PressableRowLink>
       ))}
     </div>
   )

@@ -22,6 +22,8 @@ import {
   archiveProductAction,
   revertSoldOutAction,
 } from '../actions'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
 
 export const dynamic = 'force-dynamic'
 
@@ -188,8 +190,12 @@ export default async function BrandAdminProductEditPage({
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/brand-admin/products" className="text-[11px] text-neutral-500 hover:underline">
+        <Link
+          href="/brand-admin/products"
+          className={'inline-flex items-center gap-1.5 text-[11px] text-neutral-500 hover:underline ' + pressableClass}
+        >
           ← 商品一覧へ
+          <NavPendingSpinner size={10} />
         </Link>
         <div className="mt-2 text-[10px] tracking-[0.3em] text-neutral-500">{ctx.currentBrand.brandName}</div>
         <h1 className="mt-1 text-2xl font-semibold">{product.name}</h1>
@@ -562,15 +568,17 @@ function StepIndicator({ current, productId }: { current: 1 | 2 | 3 | 4; product
             key={n}
             href={`/brand-admin/products/${productId}?step=${n}`}
             className={
-              'px-2.5 py-1 rounded-full border font-semibold ' +
+              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border font-semibold ' +
               (active
                 ? 'bg-neutral-900 text-white border-neutral-900'
                 : isPast
                 ? 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50'
-                : 'bg-white text-neutral-400 border-neutral-200 hover:bg-neutral-50')
+                : 'bg-white text-neutral-400 border-neutral-200 hover:bg-neutral-50') + ' ' +
+              pressableClass
             }
           >
             STEP {n} · {STEP_LABELS[n]}
+            <NavPendingSpinner size={9} />
           </Link>
         )
       })}
@@ -586,9 +594,13 @@ function StepNav({ current, productId }: { current: 1 | 2 | 3 | 4; productId: st
       {prev ? (
         <Link
           href={`/brand-admin/products/${productId}?step=${prev}`}
-          className="px-4 py-2 rounded-md text-sm font-semibold bg-white text-neutral-900 border border-neutral-900 hover:bg-neutral-50"
+          className={
+            'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-white text-neutral-900 border border-neutral-900 hover:bg-neutral-50 ' +
+            pressableClass
+          }
         >
           ← 戻る (STEP {prev} · {STEP_LABELS[prev]})
+          <NavPendingSpinner />
         </Link>
       ) : (
         <span />
@@ -596,9 +608,13 @@ function StepNav({ current, productId }: { current: 1 | 2 | 3 | 4; productId: st
       {next ? (
         <Link
           href={`/brand-admin/products/${productId}?step=${next}`}
-          className="px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800"
+          className={
+            'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800 ' +
+            pressableClass
+          }
         >
           次へ: STEP {next} · {STEP_LABELS[next]} →
+          <NavPendingSpinner />
         </Link>
       ) : (
         <span />

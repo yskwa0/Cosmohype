@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { pressableClass, pressableIconClass, Spinner } from '@/lib/brandAdminUi'
 
 /**
  * Brand Admin 商品画像 crop editor (Migration 137 対応、非破壊)。
@@ -233,7 +234,7 @@ export default function ShopImageCropEditor({
           <button
             type="button"
             onClick={onCancel}
-            className="text-[11px] text-neutral-500 hover:text-neutral-800"
+            className={'text-[11px] text-neutral-500 hover:text-neutral-800 w-6 h-6 flex items-center justify-center rounded ' + pressableIconClass}
             aria-label="閉じる"
           >
             ✕
@@ -287,7 +288,10 @@ export default function ShopImageCropEditor({
             type="button"
             onClick={reset}
             disabled={isPending}
-            className="px-3 py-1.5 rounded-md text-[12px] font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            className={
+              'px-3 py-1.5 rounded-md text-[12px] font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 ' +
+              pressableClass
+            }
           >
             中央に戻す
           </button>
@@ -304,15 +308,23 @@ export default function ShopImageCropEditor({
             type="button"
             onClick={submit}
             disabled={isPending}
-            className="flex-1 px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50"
+            className={
+              'flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-semibold ' +
+              'bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-50 ' +
+              pressableClass
+            }
           >
+            {isPending && <Spinner />}
             {isPending ? '保存中…' : '保存する'}
           </button>
           <button
             type="button"
             onClick={onCancel}
             disabled={isPending}
-            className="px-3 py-2 rounded-md text-[12px] font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+            className={
+              'px-3 py-2 rounded-md text-[12px] font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 ' +
+              pressableClass
+            }
           >
             キャンセル
           </button>

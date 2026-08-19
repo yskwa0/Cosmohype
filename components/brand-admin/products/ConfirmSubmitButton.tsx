@@ -1,6 +1,7 @@
 'use client'
 
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   /** server action (`'use server'` 定義済のもの) を渡す。event handler ではない */
@@ -49,7 +50,15 @@ export default function ConfirmSubmitButton({
 function Submit({ label, pendingLabel, className }: { label: string; pendingLabel: string; className: string }) {
   const { pending } = useFormStatus()
   return (
-    <button type="submit" disabled={pending} className={className}>
+    <button
+      type="submit"
+      disabled={pending}
+      className={
+        className + ' ' + pressableClass +
+        ' inline-flex items-center justify-center gap-2'
+      }
+    >
+      {pending && <Spinner />}
       {pending ? pendingLabel : label}
     </button>
   )

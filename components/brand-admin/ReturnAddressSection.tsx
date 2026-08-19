@@ -4,6 +4,7 @@ import { useState } from 'react'
 import ReturnAddressForm, {
   type ReturnAddressInitial,
 } from './ReturnAddressForm'
+import { pressableClass } from '@/lib/brandAdminUi'
 
 /**
  * 返送先住所セクション (Brand Admin ブランド設定)。
@@ -83,7 +84,8 @@ function ViewCard({
             'px-4 py-2 rounded-md text-sm font-semibold border ' +
             (canEdit
               ? 'border-neutral-300 text-neutral-800 hover:bg-neutral-50'
-              : 'border-neutral-200 text-neutral-400 cursor-not-allowed')
+              : 'border-neutral-200 text-neutral-400 cursor-not-allowed') + ' ' +
+            pressableClass
           }
         >
           返送先住所を変更

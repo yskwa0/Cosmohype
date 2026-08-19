@@ -4,6 +4,8 @@ import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandA
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { createProductAction } from '../actions'
 import ProductBasicsForm from '@/components/brand-admin/products/ProductBasicsForm'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
 
 export const dynamic = 'force-dynamic'
 
@@ -62,8 +64,12 @@ export default async function BrandAdminProductNewPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/brand-admin/products" className="text-[11px] text-neutral-500 hover:underline">
+        <Link
+          href="/brand-admin/products"
+          className={'inline-flex items-center gap-1.5 text-[11px] text-neutral-500 hover:underline ' + pressableClass}
+        >
           ← 商品一覧へ
+          <NavPendingSpinner size={10} />
         </Link>
         <div className="mt-2 text-[10px] tracking-[0.3em] text-neutral-500">{ctx.currentBrand.brandName}</div>
         <h1 className="mt-1 text-2xl font-semibold">商品を追加</h1>

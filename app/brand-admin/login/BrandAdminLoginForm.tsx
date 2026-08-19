@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   initialError?: string | null
@@ -88,8 +89,13 @@ export default function BrandAdminLoginForm({ initialError = null }: Props) {
           <button
             type="submit"
             disabled={isSubmitting || !email || !password}
-            className="w-full h-11 mt-2 bg-white text-neutral-900 rounded-md text-sm font-semibold disabled:opacity-40"
+            className={
+              'w-full h-11 mt-2 inline-flex items-center justify-center gap-2 ' +
+              'bg-white text-neutral-900 rounded-md text-sm font-semibold disabled:opacity-40 ' +
+              pressableClass
+            }
           >
+            {isSubmitting && <Spinner />}
             {isSubmitting ? 'サインイン中…' : 'サインイン'}
           </button>
         </form>

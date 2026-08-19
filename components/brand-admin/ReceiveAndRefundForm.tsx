@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   issueId: string
@@ -15,8 +16,12 @@ function SubmitButton({ enabled }: { enabled: boolean }) {
     <button
       type="submit"
       disabled={!enabled || pending}
-      className="px-4 py-2 rounded text-sm font-semibold bg-red-600 text-white disabled:opacity-40"
+      className={
+        'inline-flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-semibold bg-red-600 text-white disabled:opacity-40 ' +
+        pressableClass
+      }
     >
+      {pending && <Spinner />}
       {pending ? '処理中…' : '受領して返金へ進む'}
     </button>
   )

@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
+import { useFormStatus } from 'react-dom'
 import { useRouter } from 'next/navigation'
+import { pressableClass, pressableIconClass, Spinner } from '@/lib/brandAdminUi'
 
 // -----------------------------------------------------------------------------
 // カラー preset
@@ -184,9 +186,14 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
           doSubmit()
         }
         opts?.onDone?.()
-        // 新規 variant の追加が成功したら section を閉じる (次回開いた時は空フォーム)
+        // 新規 variant の追加が成功したら section を閉じる (次回開いた時は空フォーム)。
+        //   即時 onCancel すると、RSC 再取得が完了する前に「入力フォームが消える」→
+        //   「＋ボタンだけ表示」→「新 variant カードが遅れて現れる」の 3 段ちらつきが出る。
+        //   ~450ms 遅延させることで RSC round-trip の完了 (=新 variant カード出現) と
+        //   フォーム畳みをほぼ同時に見せ、体感上のちらつきを解消する。
+        //   その間フォームは saveState='saved' 表示のまま残る。
         if (ok && isNew && onCancel) {
-          onCancel()
+          setTimeout(() => onCancel(), 450)
         }
       }
     })
@@ -225,14 +232,7 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
               >
                 <input type="hidden" name="product_id" value={productId} />
                 <input type="hidden" name="variant_id" value={existing.id} />
-                <button
-                  type="submit"
-                  title="このバリエーションを削除"
-                  aria-label="このバリエーションを削除"
-                  className="w-6 h-6 flex items-center justify-center rounded-md text-neutral-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200"
-                >
-                  ×
-                </button>
+                <DeleteVariantSubmit />
               </form>
             )}
           </div>
@@ -246,7 +246,11 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
             onClick={onCancel}
             title="入力を破棄して閉じる"
             aria-label="入力を破棄して閉じる"
-            className="w-6 h-6 flex items-center justify-center rounded-md text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 border border-transparent hover:border-neutral-300"
+            className={
+              'w-6 h-6 flex items-center justify-center rounded-md text-neutral-500 ' +
+              'hover:text-neutral-900 hover:bg-neutral-100 border border-transparent hover:border-neutral-300 ' +
+              pressableIconClass
+            }
           >
             ×
           </button>
@@ -272,7 +276,8 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
                     'px-3 py-1.5 rounded-md text-[11px] font-semibold border ' +
                     (selected
                       ? 'bg-neutral-900 text-white border-neutral-900'
-                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50')
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50') + ' ' +
+                    pressableClass
                   }
                 >{s}</button>
               )
@@ -285,7 +290,8 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
                 'px-3 py-1.5 rounded-md text-[11px] font-semibold border ' +
                 (sizeMode === 'custom'
                   ? 'bg-neutral-900 text-white border-neutral-900'
-                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50')
+                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50') + ' ' +
+                pressableClass
               }
             >その他</button>
           </div>
@@ -320,7 +326,8 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
                     'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-semibold border ' +
                     (selected
                       ? 'bg-neutral-900 text-white border-neutral-900'
-                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50')
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50') + ' ' +
+                    pressableClass
                   }
                 >
                   <span
@@ -340,7 +347,8 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
                 'px-2.5 py-1.5 rounded-md text-[11px] font-semibold border ' +
                 (colorMode === 'custom'
                   ? 'bg-neutral-900 text-white border-neutral-900'
-                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50')
+                  : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50') + ' ' +
+                pressableClass
               }
             >その他</button>
           </div>
@@ -394,7 +402,8 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
                     'px-3 py-1.5 rounded-md text-[11px] font-semibold border ' +
                     (selected
                       ? 'bg-neutral-900 text-white border-neutral-900'
-                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50')
+                      : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50') + ' ' +
+                    pressableClass
                   }
                 >{s === 'active' ? '販売中' : '販売停止'}</button>
               )
@@ -450,6 +459,29 @@ export default function VariantEditor({ productId, categorySlug, existing, disab
   )
 }
 
+/**
+ * 削除 × 用の submit button。 useFormStatus で pending 中は disabled + inline spinner に
+ * 置換 (二重削除禁止 + 「今削除中」を可視化)。
+ */
+function DeleteVariantSubmit() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      title="このバリエーションを削除"
+      aria-label="このバリエーションを削除"
+      className={
+        'w-6 h-6 flex items-center justify-center rounded-md text-neutral-500 ' +
+        'hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 ' +
+        pressableIconClass
+      }
+    >
+      {pending ? <Spinner size={10} /> : '×'}
+    </button>
+  )
+}
+
 function ConfirmVariantButton({ enabled, isPending, onClick }: { enabled: boolean; isPending: boolean; onClick: () => void }) {
   return (
     <button
@@ -457,10 +489,12 @@ function ConfirmVariantButton({ enabled, isPending, onClick }: { enabled: boolea
       disabled={!enabled || isPending}
       onClick={onClick}
       className={
-        'px-4 py-2 rounded-md text-[12px] font-semibold bg-neutral-900 text-white ' +
-        'hover:bg-neutral-800 disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed'
+        'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-[12px] font-semibold bg-neutral-900 text-white ' +
+        'hover:bg-neutral-800 disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed ' +
+        pressableClass
       }
     >
+      {isPending && <Spinner />}
       {isPending ? '保存中…' : 'バリエーションを確定'}
     </button>
   )

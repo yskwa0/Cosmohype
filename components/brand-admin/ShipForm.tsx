@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useFormStatus } from 'react-dom'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   groupId: string
@@ -21,8 +22,12 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
     <button
       type="submit"
       disabled={disabled || pending}
-      className="px-4 py-2 rounded text-sm font-semibold bg-neutral-900 text-white disabled:opacity-40"
+      className={
+        'inline-flex items-center justify-center gap-2 px-4 py-2 rounded text-sm font-semibold bg-neutral-900 text-white disabled:opacity-40 ' +
+        pressableClass
+      }
     >
+      {pending && <Spinner />}
       {pending ? '送信中…' : '発送済みにする'}
     </button>
   )

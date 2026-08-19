@@ -5,6 +5,9 @@ import Link from 'next/link'
 import { useCallback, useEffect, useOptimistic, useRef, useState, useTransition } from 'react'
 import { createPortal } from 'react-dom'
 import { formatJSTDateTime } from '@/lib/brandAdminDate'
+import { pressableClass, pressableIconClass, Spinner } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
+import { PressableRowLink } from '@/components/brand-admin/PressableRowLink'
 
 /**
  * Brand Admin 商品一覧の Client 版レンダラ。
@@ -128,7 +131,7 @@ export default function ProductListActions({
               (isPending ? 'opacity-60 ' : '')
             }
           >
-            <Link
+            <PressableRowLink
               href={`/brand-admin/products/${p.id}`}
               className="flex-1 flex items-center gap-4 px-5 py-4 hover:bg-neutral-50 min-w-0"
             >
@@ -167,9 +170,12 @@ export default function ProductListActions({
               </div>
               <div className="text-right shrink-0">
                 <div className="text-sm font-semibold font-mono">¥{new Intl.NumberFormat('ja-JP').format(p.base_price)}</div>
-                <div className="text-[10px] text-neutral-500 mt-1">›</div>
+                <div className="text-[10px] text-neutral-500 mt-1 inline-flex items-center gap-1.5">
+                  <NavPendingSpinner size={10} />
+                  <span>›</span>
+                </div>
               </div>
-            </Link>
+            </PressableRowLink>
             {canEdit && (
               <RowMenu
                 productId={p.id}
@@ -332,7 +338,10 @@ function RowMenu({
           aria-haspopup="menu"
           aria-expanded={isOpen}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onOpenChange(!isOpen) }}
-          className="px-2 py-1 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+          className={
+            'px-2 py-1 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 rounded ' +
+            'disabled:opacity-40 disabled:cursor-not-allowed ' + pressableIconClass
+          }
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden>
             <circle cx="4" cy="10" r="1.6" />
@@ -358,7 +367,8 @@ function RowMenu({
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); it.onClick() }}
               className={
                 'w-full text-left px-3 py-1.5 text-[12px] hover:bg-neutral-50 ' +
-                (it.danger ? 'text-red-700' : 'text-neutral-800')
+                (it.danger ? 'text-red-700' : 'text-neutral-800') + ' ' +
+                pressableClass
               }
             >
               {it.label}
@@ -382,7 +392,10 @@ function RowMenu({
               <button
                 type="button"
                 onClick={() => setConfirm(null)}
-                className="px-3 py-1.5 rounded-md text-[12px] font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50"
+                className={
+                  'px-3 py-1.5 rounded-md text-[12px] font-semibold border border-neutral-300 text-neutral-700 hover:bg-neutral-50 ' +
+                  pressableClass
+                }
               >
                 キャンセル
               </button>
@@ -391,10 +404,12 @@ function RowMenu({
                 disabled={disabled}
                 onClick={confirm.run}
                 className={
-                  'px-3 py-1.5 rounded-md text-[12px] font-semibold disabled:opacity-40 disabled:cursor-not-allowed ' +
-                  confirm.ctaClass
+                  'inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-md text-[12px] font-semibold ' +
+                  'disabled:opacity-40 disabled:cursor-not-allowed ' +
+                  confirm.ctaClass + ' ' + pressableClass
                 }
               >
+                {disabled && <Spinner />}
                 {disabled ? '実行中…' : confirm.ctaLabel}
               </button>
             </div>
