@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 /**
  * 商品基本情報 form (autosave 版)。
@@ -285,11 +286,13 @@ export default function ProductBasicsForm({
               disabled={!canProceed || isPending}
               onClick={() => submit()}
               className={
-                'px-5 py-2.5 rounded-md text-sm font-semibold ' +
+                'inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-md text-sm font-semibold ' +
                 'bg-neutral-900 text-white hover:bg-neutral-800 ' +
-                'disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed'
+                'disabled:bg-neutral-400 disabled:text-neutral-100 disabled:cursor-not-allowed ' +
+                pressableClass
               }
             >
+              {isPending && <Spinner />}
               {isPending ? '下書き作成中…' : '次へ (画像・在庫設定)'}
             </button>
           </div>

@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import { useFormStatus } from 'react-dom'
+import { Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   productId: string
@@ -48,12 +49,13 @@ function UploaderInput({ disabled, onChosen }: { disabled: boolean; onChosen: ()
         className={
           'text-[12px] file:mr-2 file:px-3 file:py-1.5 file:rounded file:border ' +
           'file:border-neutral-300 file:bg-white file:text-neutral-800 file:cursor-pointer ' +
+          'file:transition-transform file:duration-100 file:active:scale-[0.97] file:active:opacity-90 ' +
           'disabled:opacity-50 disabled:cursor-not-allowed'
         }
       />
       {pending ? (
-        <span className="text-[11px] text-neutral-600 inline-flex items-center gap-1">
-          <span className="inline-block w-2 h-2 rounded-full bg-neutral-400 animate-pulse" />
+        <span className="text-[11px] text-neutral-600 inline-flex items-center gap-1.5">
+          <Spinner size={10} />
           アップロード中…
         </span>
       ) : (

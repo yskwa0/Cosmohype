@@ -3,6 +3,8 @@ import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandA
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import ProductListActions, { type ProductListItem } from '@/components/brand-admin/products/ProductListActions'
 import { archiveProductAction, revertToDraftAction, deleteProductAction } from './actions'
+import { pressableClass } from '@/lib/brandAdminUi'
+import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
 
 // エラーコード → 表示ラベル (完全削除 flow で発生し得るコードを含む)
 function errLabel(code: string): string {
@@ -137,9 +139,13 @@ export default async function BrandAdminProductsPage({
         {canEdit && (
           <Link
             href="/brand-admin/products/new"
-            className="px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800"
+            className={
+              'inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold bg-neutral-900 text-white hover:bg-neutral-800 ' +
+              pressableClass
+            }
           >
             商品を追加
+            <NavPendingSpinner />
           </Link>
         )}
       </div>
@@ -161,13 +167,15 @@ export default async function BrandAdminProductsPage({
             key={s}
             href={s === 'all' ? '/brand-admin/products' : `/brand-admin/products?status=${s}`}
             className={
-              'px-3 py-1.5 rounded-md border ' +
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border ' +
               (filter === s
                 ? 'bg-neutral-900 text-white border-neutral-900'
-                : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50')
+                : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-50') + ' ' +
+              pressableClass
             }
           >
             {s === 'all' ? 'すべて' : statusLabel(s)}
+            <NavPendingSpinner size={10} />
           </Link>
         ))}
       </div>
