@@ -316,6 +316,24 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
   const supabase = bypass ? createAdminClient() : await createClient()
 
   // 画像 upload ヘルパ (既存 uploadImageAction と同じ upsert / contentType 検証パターン)
+  //
+  // **2026-08-19 hotfix**: shop-brand-assets bucket は Migration 145 の実装計画
+  // (コメント「別 turn で bucket policy 追加」) が Production へ反映されないまま
+  // 稼働しており、通常経路 (bypass=false) の user client での upload は
+  // `storage.objects` の per-brand INSERT policy が無いため 403
+  // (StorageApiError: "new row violates row-level security policy") で必ず失敗する。
+  //
+  // 対策として本 upload だけ admin client (SERVICE_ROLE_KEY) 経由に切替える。
+  // これは security definer RPC と同じ形の "server 側で権限検証済 → 検証済 path
+  // だけを storage に書く" パターン:
+  //   1. 認可は本 action の先頭で getBrandAdminContext() が owner/admin を検証
+  //      (staff / 非 member / 未認証は forbidden で先に redirect 済)
+  //   2. brandId は server 側で解決した validated UUID
+  //   3. path は `${brandId}/${kind}.${ext}` に固定、他 brand の folder には
+  //      物理的に書き込めない
+  // よって RLS を bypass しても brand-scoped の分離は担保される。
+  // 恒久対策として shop-product-images と同形の RLS policy を storage.objects に
+  // 追加する新規 migration が別途あれば、本関数は普通の user client に戻せる。
   async function uploadIfPresent(field: string, kind: 'logo' | 'cover', existingPath: string): Promise<string | null> {
     const file = formData.get(field)
     if (!(file instanceof File) || file.size === 0) {
@@ -332,13 +350,18 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
       ? nameParts[nameParts.length - 1].toLowerCase().replace(/[^a-z0-9]/g, '')
       : 'bin'
     const path = `${brandId}/${kind}.${ext}`
-    const loose = supabase as unknown as {
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error(`[brand-admin/settings] ${kind} upload skipped: SUPABASE_SERVICE_ROLE_KEY missing`)
+      redirect(`${returnUrl}?err=service_role_missing`)
+    }
+    const admin = createAdminClient() as unknown as {
       storage: { from: (b: string) => {
         upload: (p: string, f: File, o: { contentType: string; upsert: boolean }) =>
           Promise<{ error: { message: string } | null }>
       } }
     }
-    const up = await loose.storage.from('shop-brand-assets').upload(path, f, {
+    const up = await admin.storage.from('shop-brand-assets').upload(path, f, {
       contentType,
       upsert: true,   // 同 brand_id/<kind>.<ext> は同一 path で上書き
     })
