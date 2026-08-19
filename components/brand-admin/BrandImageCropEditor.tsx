@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { pressableClass } from '@/lib/brandAdminUi'
+import { lockBodyScroll } from '@/lib/bodyScrollLock'
 
 /**
  * Brand ロゴ / カバー共通 crop editor (Migration 147)。
@@ -87,6 +88,18 @@ export default function BrandImageCropEditor({
     startX: number; startY: number; baseOffX: number; baseOffY: number
   } | null>(null)
 
+  // drag 中は body scroll を止めるための cleanup 関数。 pointerdown で set、
+  // pointerup / cancel / leave / touchcancel / unmount で呼ぶ (二重呼びは無害)。
+  const scrollUnlockRef = useRef<null | (() => void)>(null)
+  useEffect(() => {
+    return () => {
+      // unmount 時に lock が残っていたら必ず解除 (画面遷移中に指離しイベントが
+      // 飛ばなかったケース保険)。
+      scrollUnlockRef.current?.()
+      scrollUnlockRef.current = null
+    }
+  }, [])
+
   // container の実寸を ResizeObserver で追う (max offset の計算に使用)
   useLayoutEffect(() => {
     const el = containerRef.current
@@ -161,6 +174,12 @@ export default function BrandImageCropEditor({
       baseOffY: offY,
     }
     containerRef.current.setPointerCapture(e.pointerId)
+    // ページ全体のスクロールを一時ロック (iPhone Safari で画像を動かす時に
+    // ページまで一緒に上下スクロールしてしまう問題対策)。 lock は idempotent、
+    // 直前値を保存 → pointerup 系で完全復元する。
+    if (!scrollUnlockRef.current) {
+      scrollUnlockRef.current = lockBodyScroll()
+    }
   }, [disabled, imageURL, offX, offY])
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -181,6 +200,9 @@ export default function BrandImageCropEditor({
     if (containerRef.current?.hasPointerCapture(e.pointerId)) {
       containerRef.current.releasePointerCapture(e.pointerId)
     }
+    // scroll lock を必ず解除 (pointerup / cancel / leave / touchcancel すべてで呼ぶ)
+    scrollUnlockRef.current?.()
+    scrollUnlockRef.current = null
   }, [])
 
   const reset = () => {
@@ -193,9 +215,15 @@ export default function BrandImageCropEditor({
   const isCircle = shape === 'circle'
 
   // Preview: width は container が決める (100%)、height は aspectRatio から計算
+  //
+  // touchAction: 'none' により iPhone Safari のネイティブ scroll gesture を
+  // preview 内では最初から起こさせない (drag の pointer 入力を独占的に受ける)。
+  // これに body scroll lock (pointerdown 時に発火) を組合せて、
+  // 「画像を掴んで動かしている間だけ」ページスクロールを止める。
   const previewStyle: React.CSSProperties = {
     aspectRatio: `${aspectRatio}`,
     borderRadius: isCircle ? '9999px' : '12px',
+    touchAction: 'none',
   }
 
   // Rendered offset (px) = zoom * clamped offset * container 幅
@@ -248,6 +276,8 @@ export default function BrandImageCropEditor({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={onPointerUp}
+        onTouchCancel={() => { scrollUnlockRef.current?.(); scrollUnlockRef.current = null }}
         style={previewStyle}
         className={
           'relative w-full overflow-hidden bg-neutral-100 border border-neutral-200 ' +

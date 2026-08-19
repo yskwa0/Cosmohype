@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { pressableClass, pressableIconClass, Spinner } from '@/lib/brandAdminUi'
+import { lockBodyScroll } from '@/lib/bodyScrollLock'
 
 /**
  * Brand Admin 商品画像 crop editor (Migration 137 対応、非破壊)。
@@ -71,6 +72,16 @@ export default function ShopImageCropEditor({
     startX: number; startY: number; baseOffX: number; baseOffY: number
   } | null>(null)
 
+  // drag 中は body scroll を止めるための cleanup 関数。 pointerdown で set、
+  // pointerup / cancel / leave / touchcancel / unmount で呼ぶ (二重呼びは無害)。
+  const scrollUnlockRef = useRef<null | (() => void)>(null)
+  useEffect(() => {
+    return () => {
+      scrollUnlockRef.current?.()
+      scrollUnlockRef.current = null
+    }
+  }, [])
+
   // Esc でキャンセル
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
@@ -134,6 +145,12 @@ export default function ShopImageCropEditor({
       baseOffY: offY,
     }
     previewRef.current.setPointerCapture(e.pointerId)
+    // ページ全体のスクロールを一時ロック (iPhone Safari 対策)。
+    // preview 内は touch-action:none で pan を抑制済みだが、モーダル背景の隙間や
+    // ドラッグ開始直後の iOS 慣性で drag 中にページが動く事象を防ぐ二重防御。
+    if (!scrollUnlockRef.current) {
+      scrollUnlockRef.current = lockBodyScroll()
+    }
   }, [offX, offY])
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -153,6 +170,9 @@ export default function ShopImageCropEditor({
     if (previewRef.current?.hasPointerCapture(e.pointerId)) {
       previewRef.current.releasePointerCapture(e.pointerId)
     }
+    // scroll lock を必ず解除 (pointerup / cancel / leave / touchcancel すべてで呼ぶ)
+    scrollUnlockRef.current?.()
+    scrollUnlockRef.current = null
   }, [])
 
   const reset = () => { setZoom(1.0); setOffX(0.0); setOffY(0.0) }
@@ -246,15 +266,20 @@ export default function ShopImageCropEditor({
           調整、Zoom スライダーでズームできます。元画像は保存時も切り抜かれません。
         </p>
 
-        {/* 4:5 preview (HYPE 一覧タイルと同 formula) */}
+        {/* 4:5 preview (HYPE 一覧タイルと同 formula)
+            touchAction: 'none' で preview 内の iOS ネイティブ scroll gesture を抑止。
+            body scroll lock (pointerdown で発火 / pointerup 系で解除) と併用して、
+            画像を掴んで動かしている間だけページスクロールを止める。 */}
         <div
           ref={previewRef}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
+          onPointerLeave={onPointerUp}
+          onTouchCancel={() => { scrollUnlockRef.current?.(); scrollUnlockRef.current = null }}
           className="relative w-full mx-auto max-w-[240px] overflow-hidden rounded-lg bg-neutral-100 cursor-grab active:cursor-grabbing select-none"
-          style={{ aspectRatio: '4 / 5' }}
+          style={{ aspectRatio: '4 / 5', touchAction: 'none' }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
