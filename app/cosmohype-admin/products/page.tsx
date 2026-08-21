@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCosmohypeAdminContext } from '@/lib/cosmohypeAdmin'
-import { forceUnpublishProductAction } from './actions'
-import ConfirmSubmitButton from './_ConfirmSubmitButton'
+import { forceUnpublishProductAction, reopenProductAction } from './actions'
+import ConfirmForceUnpublishButton, { ConfirmReopenButton } from './_ConfirmSubmitButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,17 +10,19 @@ interface ProductRow {
   name: string
   status: string
   brand_id: string
-  shop_brands: { name: string; slug: string } | null
+  admin_suspended_at: string | null
+  shop_brands: { name: string; slug: string; status: string } | null
 }
 
 function errorLabel(code: string): string {
   switch (code) {
-    case 'forbidden':          return '運営者権限が必要です。'
-    case 'not_authenticated':  return '認証情報が失われました。再ログインしてください。'
-    case 'product_not_found':  return '対象商品が見つかりませんでした。'
-    case 'reason_too_long':    return '理由は 1000 文字以内で入力してください。'
-    case 'update_failed':      return '販売停止に失敗しました。時間をおいて再度お試しください。'
-    default:                   return `販売停止に失敗しました (${code})`
+    case 'forbidden':                    return '運営者権限が必要です。'
+    case 'not_authenticated':            return '認証情報が失われました。再ログインしてください。'
+    case 'product_not_found':            return '対象商品が見つかりませんでした。'
+    case 'product_not_admin_suspended':  return 'この商品は運営停止中ではありません。'
+    case 'reason_too_long':              return '理由は 1000 文字以内で入力してください。'
+    case 'update_failed':                return '操作に失敗しました。時間をおいて再度お試しください。'
+    default:                             return `操作に失敗しました (${code})`
   }
 }
 
@@ -29,7 +31,7 @@ function statusLabel(status: string): string {
     case 'draft':     return '下書き'
     case 'published': return '公開中'
     case 'sold_out':  return '在庫切れ (legacy)'
-    case 'archived':  return 'アーカイブ / 停止済'
+    case 'archived':  return 'アーカイブ'
     default:          return status
   }
 }
@@ -37,7 +39,7 @@ function statusLabel(status: string): string {
 function statusBadgeClass(status: string): string {
   switch (status) {
     case 'published': return 'bg-emerald-50 text-emerald-800 border-emerald-200'
-    case 'archived':  return 'bg-red-50 text-red-800 border-red-200'
+    case 'archived':  return 'bg-neutral-100 text-neutral-700 border-neutral-300'
     case 'sold_out':  return 'bg-neutral-100 text-neutral-700 border-neutral-300'
     case 'draft':     return 'bg-neutral-100 text-neutral-600 border-neutral-300'
     default:          return 'bg-neutral-50 text-neutral-500 border-neutral-200'
@@ -49,21 +51,20 @@ export default async function CosmohypeAdminProductsPage({
 }: {
   searchParams?: Promise<{ q?: string; saved?: string; err?: string }>
 }) {
-  // layout でも auth gate 済だが Server Action と対称で page 側でも再検証。
   await getCosmohypeAdminContext()
 
   const sp = (await searchParams) ?? {}
   const q = (sp.q ?? '').trim()
   const savedUnpublished = sp.saved === 'unpublished'
+  const savedReopened = sp.saved === 'reopened'
   const errCode = sp.err ?? null
 
-  // 検索: uuid 完全一致 or 商品名 ilike。 未入力なら最新 50 件 (全 status)。
   const isUuid = /^[0-9a-fA-F-]{36}$/.test(q)
   const supabase = await createClient()
   // deno-lint-ignore no-explicit-any
   const loose = supabase as unknown as any
 
-  const selectStr = 'id, name, status, brand_id, shop_brands(name, slug)'
+  const selectStr = 'id, name, status, brand_id, admin_suspended_at, shop_brands(name, slug, status)'
 
   let result: { data: ProductRow[] | null; error: { message: string } | null }
   if (isUuid) {
@@ -83,14 +84,20 @@ export default async function CosmohypeAdminProductsPage({
       <div>
         <h1 className="text-xl font-semibold text-neutral-900">商品管理</h1>
         <p className="mt-1 text-[12px] text-neutral-600">
-          Cosmohype 運営者専用。 問題のある商品を販売停止します (status=&apos;archived&apos; へ遷移)。
-          停止された商品は HYPE 一覧・検索・Checkout から即時除外されますが、過去注文の詳細は引き続き閲覧できます。
+          Cosmohype 運営者専用。 販売停止すると status=&apos;archived&apos; へ遷移すると同時に
+          運営ロック (admin_suspended_at) が設定され、ブランド側からの再公開は DB trigger で拒否されます。
+          解除は本画面の「停止解除」からのみ可能。
         </p>
       </div>
 
       {savedUnpublished && (
         <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
-          商品を販売停止しました。 監査ログ (shop_admin_actions) に記録されました。
+          商品を販売停止しました。 運営ロックが設定され、ブランド側からの再公開はできません。
+        </div>
+      )}
+      {savedReopened && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          運営停止を解除しました。 商品は archived のまま、以後ブランド側で通常フロー (下書きへ戻す → 公開) で復元可能です。
         </div>
       )}
       {errCode && (
@@ -140,38 +147,61 @@ export default async function CosmohypeAdminProductsPage({
                 </td>
               </tr>
             )}
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-neutral-100 align-top">
-                <td className="px-4 py-3 text-neutral-900">{r.name}</td>
-                <td className="px-4 py-3 text-neutral-700">{r.shop_brands?.name ?? '-'}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border ${statusBadgeClass(r.status)}`}
-                  >
-                    {statusLabel(r.status)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-[11px] text-neutral-500 font-mono">{r.id}</td>
-                <td className="px-4 py-3 text-right">
-                  {r.status === 'archived' ? (
-                    <span className="text-[11px] text-neutral-500">停止済</span>
-                  ) : (
-                    <form action={forceUnpublishProductAction} className="inline-flex items-center gap-2">
-                      <input type="hidden" name="product_id" value={r.id} />
-                      <input type="hidden" name="q" value={q} />
-                      <input
-                        type="text"
-                        name="reason"
-                        placeholder="理由 (任意、監査ログへ)"
-                        className="h-8 border border-neutral-300 rounded px-2 text-[12px] bg-white w-56"
-                        maxLength={1000}
-                      />
-                      <ConfirmSubmitButton />
-                    </form>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const adminSuspended = r.admin_suspended_at !== null
+              return (
+                <tr key={r.id} className="border-t border-neutral-100 align-top">
+                  <td className="px-4 py-3 text-neutral-900">{r.name}</td>
+                  <td className="px-4 py-3 text-neutral-700">{r.shop_brands?.name ?? '-'}</td>
+                  <td className="px-4 py-3 space-y-1">
+                    <div>
+                      <span
+                        className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded border ${statusBadgeClass(r.status)}`}
+                      >
+                        {statusLabel(r.status)}
+                      </span>
+                    </div>
+                    {adminSuspended && (
+                      <div>
+                        <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded border bg-red-50 text-red-800 border-red-200">
+                          🔒 運営停止中
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[11px] text-neutral-500 font-mono">{r.id}</td>
+                  <td className="px-4 py-3 text-right">
+                    {adminSuspended ? (
+                      <form action={reopenProductAction} className="inline-flex items-center gap-2">
+                        <input type="hidden" name="product_id" value={r.id} />
+                        <input type="hidden" name="q" value={q} />
+                        <input
+                          type="text"
+                          name="reason"
+                          placeholder="解除理由 (任意)"
+                          className="h-8 border border-neutral-300 rounded px-2 text-[12px] bg-white w-56"
+                          maxLength={1000}
+                        />
+                        <ConfirmReopenButton />
+                      </form>
+                    ) : (
+                      <form action={forceUnpublishProductAction} className="inline-flex items-center gap-2">
+                        <input type="hidden" name="product_id" value={r.id} />
+                        <input type="hidden" name="q" value={q} />
+                        <input
+                          type="text"
+                          name="reason"
+                          placeholder="理由 (任意、監査ログへ)"
+                          className="h-8 border border-neutral-300 rounded px-2 text-[12px] bg-white w-56"
+                          maxLength={1000}
+                        />
+                        <ConfirmForceUnpublishButton />
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

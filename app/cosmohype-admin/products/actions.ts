@@ -69,3 +69,47 @@ export async function forceUnpublishProductAction(formData: FormData): Promise<v
   revalidatePath(backUrl)
   redirect(`${backWithQ}${searchQ ? '&' : '?'}saved=unpublished`)
 }
+
+/**
+ * 商品の運営停止を解除する (admin_suspended_at を null に戻す)。
+ * status は archived のまま — ブランドが以後、通常フローで revert-to-draft → publish する。
+ * 対象が admin_suspended でない (すでに解除済) 場合は RPC 側で拒否される。
+ */
+export async function reopenProductAction(formData: FormData): Promise<void> {
+  await getCosmohypeAdminContext()
+
+  const backUrl = '/cosmohype-admin/products'
+  const productId = assertUUID(formData.get('product_id'))
+  const reason = trimReason(formData.get('reason'))
+  const searchQ = String(formData.get('q') ?? '').trim()
+
+  const backWithQ = searchQ.length > 0
+    ? `${backUrl}?q=${encodeURIComponent(searchQ)}`
+    : backUrl
+
+  const supabase = await createClient()
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+    }
+  ).rpc('shop_admin_reopen_product', {
+    p_product_id: productId,
+    p_reason: reason,
+  })
+
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code = 'update_failed'
+    if (msg.includes('forbidden'))                    code = 'forbidden'
+    else if (msg.includes('not_authenticated'))       code = 'not_authenticated'
+    else if (msg.includes('product_not_found'))       code = 'product_not_found'
+    else if (msg.includes('product_not_admin_suspended')) code = 'product_not_admin_suspended'
+    else if (msg.includes('reason_too_long'))         code = 'reason_too_long'
+    // eslint-disable-next-line no-console
+    console.error('[cosmohype-admin/products] rpc reopen failed', error)
+    redirect(`${backWithQ}${searchQ ? '&' : '?'}err=${encodeURIComponent(code)}`)
+  }
+
+  revalidatePath(backUrl)
+  redirect(`${backWithQ}${searchQ ? '&' : '?'}saved=reopened`)
+}
