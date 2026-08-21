@@ -436,3 +436,140 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
   revalidatePath(returnUrl)
   redirect(`${returnUrl}?saved=profile`)
 }
+
+// =============================================================================
+// updateDeliveryReturnPolicyAction (Phase B / Migration 155)
+//
+// フォーム入力 (すべて任意、空 = null にリセット可能):
+//   ・dispatch_lead_days   int? (1..90)
+//   ・return_accepted      "unset" | "yes" | "no"  (client 側 tri-state select)
+//   ・return_days          int? (1..365)  ─ return_accepted=yes のとき必須
+//   ・exchange_accepted    "unset" | "yes" | "no"
+//   ・return_policy_note   text? (1..1000 chars, plain text)
+//
+// Dev Bypass 経路: 固定 brand_id + admin client で shop_brands を直接 UPDATE。
+// 通常経路: getBrandAdminContext() 経由の brand_id + shop_brand_update_delivery_return_policy
+//   RPC (SECURITY DEFINER + owner/admin role 検証) を呼ぶ。 staff は RPC 内で forbidden。
+//
+// 生 Postgrest error は client へ露出させず、既存 errorLabel() で日本語化される
+// snake_case code に必ずマップして redirect する。
+// =============================================================================
+
+/** tri-state "unset"/"yes"/"no" → null/true/false */
+function parseTri(v: FormDataEntryValue | null): boolean | null {
+  const s = String(v ?? 'unset')
+  if (s === 'yes') return true
+  if (s === 'no')  return false
+  return null
+}
+
+/** "" → null / "3" → 3 / invalid → NaN */
+function parseOptionalInt(v: FormDataEntryValue | null): number | null | typeof NaN {
+  const s = String(v ?? '').trim()
+  if (s === '') return null
+  const n = Number(s)
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return NaN
+  return n
+}
+
+export async function updateDeliveryReturnPolicyAction(formData: FormData): Promise<void> {
+  const returnUrl = '/brand-admin/settings'
+
+  const dispatchLead = parseOptionalInt(formData.get('dispatch_lead_days'))
+  const returnAccepted = parseTri(formData.get('return_accepted'))
+  const returnDays = parseOptionalInt(formData.get('return_days'))
+  const exchangeAccepted = parseTri(formData.get('exchange_accepted'))
+  const noteRaw = String(formData.get('return_policy_note') ?? '').trim()
+  const note = noteRaw.length > 0 ? noteRaw.slice(0, 1000) : null
+
+  // ─── validation ───
+  if (Number.isNaN(dispatchLead)) redirect(`${returnUrl}?err=invalid_dispatch_lead_days`)
+  if (Number.isNaN(returnDays))   redirect(`${returnUrl}?err=invalid_return_days`)
+  if (dispatchLead !== null && (dispatchLead as number) !== null
+      && ((dispatchLead as number) < 1 || (dispatchLead as number) > 90)) {
+    redirect(`${returnUrl}?err=invalid_dispatch_lead_days`)
+  }
+  if (returnDays !== null
+      && ((returnDays as number) < 1 || (returnDays as number) > 365)) {
+    redirect(`${returnUrl}?err=invalid_return_days`)
+  }
+  // return_accepted と return_days の整合性チェック (Migration 155 の DB CHECK と RPC を先取り)。
+  //   true  + null → return_days_required_when_accepted
+  //   false + 非null → return_days_only_when_accepted (silent normalize 禁止、要件通り拒否)
+  //   null  + 非null → return_days_only_when_accepted
+  // DB CHECK / RPC 側でも同じルールを検証する 3 段防御。
+  if (returnAccepted === true && returnDays === null) {
+    redirect(`${returnUrl}?err=return_days_required_when_accepted`)
+  }
+  if (returnAccepted !== true && returnDays !== null) {
+    redirect(`${returnUrl}?err=return_days_only_when_accepted`)
+  }
+  if (note !== null && note.length > 1000) {
+    redirect(`${returnUrl}?err=return_policy_note_too_long`)
+  }
+
+  const bypass = isBrandAdminDevBypassEnabled()
+
+  if (bypass) {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      redirect(`${returnUrl}?err=service_role_missing`)
+    }
+    const admin = createAdminClient() as unknown as {
+      from: (t: string) => {
+        update: (patch: Record<string, unknown>) => {
+          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
+        }
+      }
+    }
+    const upd = await admin.from('shop_brands').update({
+      dispatch_lead_days:  dispatchLead as number | null,
+      return_accepted:     returnAccepted,
+      return_days:         returnDays   as number | null,
+      exchange_accepted:   exchangeAccepted,
+      return_policy_note:  note,
+      updated_at:          new Date().toISOString(),
+    }).eq('id', DEV_BYPASS_BRAND_ID)
+    if (upd.error) {
+      console.error('[brand-admin/settings] dev bypass policy update failed', upd.error)
+      redirect(`${returnUrl}?err=update_failed`)
+    }
+  } else {
+    const ctx = await getBrandAdminContext()
+    const brandId = assertUUID(ctx.currentBrand.brandId)
+    const supabase = await createClient()
+    const { error } = await (
+      supabase as unknown as {
+        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+      }
+    ).rpc('shop_brand_update_delivery_return_policy', {
+      p_brand_id:            brandId,
+      p_dispatch_lead_days:  dispatchLead as number | null,
+      p_return_accepted:     returnAccepted,
+      p_return_days:         returnDays   as number | null,
+      p_exchange_accepted:   exchangeAccepted,
+      p_return_policy_note:  note,
+    })
+    if (error) {
+      const msg = error.message.toLowerCase()
+      let code: string = 'update_failed'
+      if (msg.includes('forbidden'))                            code = 'forbidden'
+      else if (msg.includes('not_authenticated'))               code = 'not_authenticated'
+      else if (msg.includes('invalid_dispatch_lead_days'))      code = 'invalid_dispatch_lead_days'
+      else if (msg.includes('invalid_return_days'))             code = 'invalid_return_days'
+      // Migration 155 追加: return_accepted と return_days の整合性エラー。
+      // 通常経路は事前 pre-validation で fire するので RPC からは来ないが、
+      // 直接 RPC 叩き / 未来の別 caller からの流入 / CHECK 制約由来メッセージにも対応。
+      else if (msg.includes('return_days_required'))            code = 'return_days_required_when_accepted'
+      else if (msg.includes('return_days_only_when_accepted'))  code = 'return_days_only_when_accepted'
+      else if (msg.includes('shop_brands_return_days_consistency'))
+                                                                code = 'return_days_only_when_accepted'
+      else if (msg.includes('return_policy_note_too_long'))     code = 'return_policy_note_too_long'
+      else if (msg.includes('brand_not_found'))                 code = 'brand_not_found'
+      console.error('[brand-admin/settings] rpc policy update failed', error)
+      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
+    }
+  }
+
+  revalidatePath(returnUrl)
+  redirect(`${returnUrl}?saved=policy`)
+}

@@ -5,7 +5,14 @@ import ReturnAddressSection from '@/components/brand-admin/ReturnAddressSection'
 import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRulesForm'
 import ShippingRulesSection from '@/components/brand-admin/ShippingRulesSection'
 import BrandProfileForm, { type BrandProfileInitial } from '@/components/brand-admin/BrandProfileForm'
-import { updateReturnAddressAction, updateShippingRulesAction, updateBrandProfileAction } from './actions'
+import { type DeliveryReturnPolicyInitial } from '@/components/brand-admin/DeliveryReturnPolicyForm'
+import DeliveryReturnPolicySection from '@/components/brand-admin/DeliveryReturnPolicySection'
+import {
+  updateReturnAddressAction,
+  updateShippingRulesAction,
+  updateBrandProfileAction,
+  updateDeliveryReturnPolicyAction,
+} from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,8 +54,26 @@ function errorLabel(code: string): string {
     case 'upload_failed':          return '画像のアップロードに失敗しました。時間をおいて再度お試しください。'
     case 'name_required':          return 'ブランド名を入力してください。'
     case 'name_too_long':          return 'ブランド名は 100 文字以内で入力してください。'
+    // Phase B (Migration 155): 配送・返品ポリシー
+    case 'invalid_dispatch_lead_days':      return '発送目安は 1〜90 日の整数で入力してください。'
+    case 'invalid_return_days':             return '返品受付期間は 1〜365 日の整数で入力してください。'
+    case 'return_days_required_when_accepted': return '返品を「受付する」に設定した場合は、受付期間 (日数) を入力してください。'
+    // Migration 155 整合性 CHECK 由来: 「受付しない」/「未設定」なのに日数が入っている状態を拒否
+    case 'return_days_only_when_accepted':  return '返品を「受付する」以外に設定した場合は、受付期間 (日数) を入力しないでください。'
+    case 'return_policy_note_too_long':     return '返品・交換の補足条件は 1000 文字以内で入力してください。'
+    case 'brand_not_found':                 return 'ブランド情報が見つかりませんでした。ページを再読み込みしてお試しください。'
     default:                       return `保存に失敗しました (${code})`
   }
+}
+
+/// Phase B (Migration 155): 配送・返品ポリシー取得用の nullable row。
+/// Migration 未 apply 環境では 5 列すべて undefined → decode 後 null にフォールバック。
+interface PolicyRow {
+  dispatch_lead_days:  number  | null
+  return_accepted:     boolean | null
+  return_days:         number  | null
+  exchange_accepted:   boolean | null
+  return_policy_note:  string  | null
 }
 
 interface ProfileRow {
@@ -74,6 +99,8 @@ export default async function BrandAdminSettingsPage({
   const savedOk = sp.saved === '1'
   const savedShipping = sp.saved === 'shipping'
   const savedProfile = sp.saved === 'profile'
+  // Phase B: 配送・返品ポリシー保存後の success banner。 既存 saved 判定と分離。
+  const savedPolicy = sp.saved === 'policy'
   const errCode = sp.err ?? null
 
   const ctx = await getBrandAdminContext()
@@ -107,8 +134,8 @@ export default async function BrandAdminSettingsPage({
     ? `${supaUrlBase}/storage/v1/object/public/shop-brand-assets/`
     : ''
 
-  // 高速化: 返品先住所 + 送料ルール + brand profile を Promise.all で並列化
-  const [res, shipProbe, profileProbe] = await Promise.all([
+  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー を Promise.all で並列化
+  const [res, shipProbe, profileProbe, policyProbe] = await Promise.all([
     loose
       .from('shop_brands')
       .select(
@@ -146,6 +173,21 @@ export default async function BrandAdminSettingsPage({
     })
       .from('shop_brands')
       .select('name, description, logo_path, cover_path, logo_crop_zoom, logo_crop_offset_x, logo_crop_offset_y, cover_crop_zoom, cover_crop_offset_x, cover_crop_offset_y')
+      .eq('id', ctx.currentBrand.brandId)
+      .maybeSingle(),
+    // Phase B (Migration 155): 配送・返品ポリシー probe。
+    //   Migration 155 未 apply 環境ではエラーで返るが、UI 側で「未設定」扱いにフォールバックする。
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: PolicyRow | null; error: { message: string } | null }>
+          }
+        }
+      }
+    })
+      .from('shop_brands')
+      .select('dispatch_lead_days, return_accepted, return_days, exchange_accepted, return_policy_note')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
   ])
@@ -217,6 +259,21 @@ export default async function BrandAdminSettingsPage({
   }
   const profileReadError = profileProbe.error?.message ?? null
 
+  // Phase B (Migration 155): 配送・返品ポリシー initial。
+  //   Migration 155 未 apply 環境では列不在エラーで policyProbe.error あり → 全 null で「未設定」扱い。
+  const migration155NotApplied =
+    policyProbe.error !== null &&
+    /column .*(dispatch_lead_days|return_accepted|return_days|exchange_accepted|return_policy_note).* does not exist/i.test(policyProbe.error.message)
+  const policyInitial: DeliveryReturnPolicyInitial = {
+    dispatchLeadDays: policyProbe.data?.dispatch_lead_days ?? null,
+    returnAccepted:   policyProbe.data?.return_accepted    ?? null,
+    returnDays:       policyProbe.data?.return_days        ?? null,
+    exchangeAccepted: policyProbe.data?.exchange_accepted  ?? null,
+    returnPolicyNote: policyProbe.data?.return_policy_note ?? null,
+  }
+  const policyReadError =
+    (!migration155NotApplied && policyProbe.error) ? policyProbe.error.message : null
+
   // staff は編集不可 (owner / admin のみ)。Dev Bypass は admin なので編集可。
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
   const disabledReason = canEdit
@@ -250,7 +307,12 @@ export default async function BrandAdminSettingsPage({
           ブランドプロフィールを保存しました。
         </div>
       )}
-      {errCode && !savedOk && !savedShipping && !savedProfile && (
+      {savedPolicy && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          配送・返品ポリシーを保存しました。
+        </div>
+      )}
+      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorLabel(errCode)}
         </div>
@@ -315,6 +377,37 @@ export default async function BrandAdminSettingsPage({
           <ShippingRulesSection
             initial={shipInitial}
             action={updateShippingRulesAction}
+            canEdit={canEdit}
+            disabledReason={disabledReason}
+          />
+        )}
+      </section>
+
+      {/* Phase B (Migration 155): 配送・返品ポリシー。 送料計算 (shipping rules) とは
+          意図的に別セクションに分ける — 送料は金額計算ロジック、こちらは購入者向け
+          期日・可否表示のポリシーで意味が別。 */}
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold">配送・返品ポリシー</h2>
+          <div className="mt-1 text-[11px] text-neutral-500">
+            発送目安・返品受付・交換受付・補足条件を設定します。 iOS 商品詳細と Checkout で
+            購入者に表示されます。 未設定のままにすることも可能です (「未設定」表示になります)。
+          </div>
+          {migration155NotApplied && (
+            <div className="mt-2 text-[12px] text-orange-800 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+              配送・返品ポリシー機能の準備が完了していません (DB 側の準備待ち)。設定完了までしばらくお待ちください。
+            </div>
+          )}
+          {policyReadError && !migration155NotApplied && (
+            <div className="mt-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+              ポリシーの読込に失敗しました。新規入力として扱います。詳細: {policyReadError}
+            </div>
+          )}
+        </div>
+        {!migration155NotApplied && (
+          <DeliveryReturnPolicySection
+            initial={policyInitial}
+            action={updateDeliveryReturnPolicyAction}
             canEdit={canEdit}
             disabledReason={disabledReason}
           />
