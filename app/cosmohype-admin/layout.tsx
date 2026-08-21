@@ -40,6 +40,9 @@ export default async function CosmohypeAdminLayout({
             <Link href="/cosmohype-admin/brands" className="text-neutral-700 hover:text-neutral-900">
               ブランド管理
             </Link>
+            <Link href="/cosmohype-admin/orders" className="text-neutral-700 hover:text-neutral-900">
+              注文管理
+            </Link>
           </nav>
           <div className="ml-auto text-[11px] text-neutral-500">
             {ctx.user.email ?? ctx.user.id}
