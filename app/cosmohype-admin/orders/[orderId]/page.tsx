@@ -35,6 +35,7 @@ interface OrderJson {
   shipping_address_line1: string
   shipping_address_line2: string | null
   shipping_phone: string
+  shipping_country_code: string
   stripe_payment_intent_id: string | null
   user_id: string
 }
@@ -42,6 +43,7 @@ interface BuyerJson {
   id: string
   username: string | null
   display_name: string | null
+  email: string | null
 }
 interface GroupJson {
   id: string
@@ -227,6 +229,7 @@ export default async function CosmohypeAdminOrderDetailPage({
         <h2 className="text-sm font-semibold text-neutral-900 mb-3">購入者</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[13px]">
           <Kv label="user_id" value={o.user_id} mono />
+          <Kv label="email" value={d.buyer?.email ?? '-'} mono />
           <Kv label="username" value={d.buyer?.username ?? '-'} />
           <Kv label="display_name" value={d.buyer?.display_name ?? '-'} />
         </div>
@@ -238,6 +241,7 @@ export default async function CosmohypeAdminOrderDetailPage({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[13px]">
           <Kv label="宛名" value={o.shipping_name} />
           <Kv label="電話" value={o.shipping_phone} mono />
+          <Kv label="国" value={o.shipping_country_code} mono />
           <Kv label="郵便番号" value={o.shipping_postal_code} mono />
           <Kv label="住所"
               value={`${o.shipping_prefecture}${o.shipping_city}${o.shipping_address_line1}${o.shipping_address_line2 ? ' ' + o.shipping_address_line2 : ''}`} />

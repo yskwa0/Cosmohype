@@ -144,7 +144,7 @@ export default async function CosmohypeAdminOrdersPage({
           type="text"
           name="q"
           defaultValue={q}
-          placeholder="order id / user id / brand id / product id / ユーザー名 / ブランド名 / 商品名"
+          placeholder="order id / order_group id / user id / brand id / product id / ユーザー名 / ブランド名 / 商品名 / email / Stripe PI id"
           className="flex-1 min-w-[280px] h-10 border border-neutral-300 rounded px-3 text-sm bg-white"
         />
         <select
