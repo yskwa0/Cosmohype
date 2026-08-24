@@ -490,56 +490,34 @@ export async function updateBrandSocialLinksAction(formData: FormData): Promise<
     }
   }
 
-  const bypass = isBrandAdminDevBypassEnabled()
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    redirect(`${returnUrl}?err=service_role_missing`)
-  }
+  // Production 一本運用: Dev Bypass 経路は本 action から意図的に削除。
+  // 通常経路のみ = getBrandAdminContext() で認証済 owner/admin を検証し、
+  // 常に SECURITY DEFINER RPC (shop_brand_update_social_links) を叩く。
+  // Vercel Production / local dev いずれも .env の NEXT_PUBLIC_SUPABASE_URL に沿って
+  // 動くため、Test project に書込む余地を残さない。
+  const brandId = assertUUID((await getBrandAdminContext()).currentBrand.brandId)
+  const supabase = await createClient()
 
-  const brandId: string = bypass
-    ? DEV_BYPASS_BRAND_ID
-    : assertUUID((await getBrandAdminContext()).currentBrand.brandId)
-
-  const supabase = bypass ? createAdminClient() : await createClient()
-
-  if (bypass) {
-    const admin = supabase as unknown as {
-      from: (t: string) => {
-        update: (patch: Record<string, unknown>) => {
-          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
-        }
-      }
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
     }
-    const upd = await admin.from('shop_brands').update({
-      website_url:   websiteInput,
-      instagram_url: instagramInput,
-      updated_at:    new Date().toISOString(),
-    }).eq('id', brandId)
-    if (upd.error) {
-      console.error('[brand-admin/settings] dev bypass social links update failed', upd.error)
-      redirect(`${returnUrl}?err=update_failed`)
-    }
-  } else {
-    const { error } = await (
-      supabase as unknown as {
-        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      }
-    ).rpc('shop_brand_update_social_links', {
-      p_brand_id:      brandId,
-      p_website_url:   websiteInput,
-      p_instagram_url: instagramInput,
-    })
-    if (error) {
-      const msg = error.message.toLowerCase()
-      let code: string = 'update_failed'
-      if (msg.includes('forbidden'))                    code = 'forbidden'
-      else if (msg.includes('not_authenticated'))       code = 'not_authenticated'
-      else if (msg.includes('website_url_too_long'))    code = 'website_url_too_long'
-      else if (msg.includes('instagram_url_too_long'))  code = 'instagram_url_too_long'
-      else if (msg.includes('website_url_invalid'))     code = 'website_url_invalid'
-      else if (msg.includes('instagram_url_invalid'))   code = 'instagram_url_invalid'
-      console.error('[brand-admin/settings] rpc social links update failed', error)
-      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
-    }
+  ).rpc('shop_brand_update_social_links', {
+    p_brand_id:      brandId,
+    p_website_url:   websiteInput,
+    p_instagram_url: instagramInput,
+  })
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code: string = 'update_failed'
+    if (msg.includes('forbidden'))                    code = 'forbidden'
+    else if (msg.includes('not_authenticated'))       code = 'not_authenticated'
+    else if (msg.includes('website_url_too_long'))    code = 'website_url_too_long'
+    else if (msg.includes('instagram_url_too_long'))  code = 'instagram_url_too_long'
+    else if (msg.includes('website_url_invalid'))     code = 'website_url_invalid'
+    else if (msg.includes('instagram_url_invalid'))   code = 'instagram_url_invalid'
+    console.error('[brand-admin/settings] rpc social links update failed', error)
+    redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
   }
 
   revalidatePath(returnUrl)
