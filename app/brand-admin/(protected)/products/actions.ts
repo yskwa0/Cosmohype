@@ -153,8 +153,19 @@ function mapPricesOrError(fd: FormData, back: string): { basePrice: number | nul
 
 // -----------------------------------------------------------------------------
 // publish 前 validation
-//   images >= 1 かつ active variants >= 1 (inventory row 付き) を要求。
-// 不足がある場合は specific err code を throw (redirect)。
+//   ・base_price > 0
+//   ・images >= 1
+//   ・active variants >= 1 (inventory row 付き)
+//   ・Phase 2 (Migration 163): 販売事業者情報 (legal_*) 必須 8 項目 (line2 は任意)
+//   ・Phase 2: 有効な shipping rule が 1 件以上存在
+//   ・Phase 2: 配送・返品ポリシー (dispatch_lead_days / return_accepted /
+//              return_days [returnAccepted=true 時] / exchange_accepted) が設定済
+//
+// 既存 published 商品は「本ゲートを経由しない update / archive / revert」については
+// 現状の値を preserve するので影響なし = 既存 row を deploy 瞬間に自動 unpublish しない。
+// 新規 publishProductAction / updateProductAction 経由で `status='published'` へ遷移する
+// タイミングにのみ本 gate が発火する。
+// 不足があれば `publish_requires_*` err code で redirect し、日本語で不足内容を返す。
 // -----------------------------------------------------------------------------
 async function assertPublishableOrRedirect(
   supabase: Rpc & LooseFrom,
@@ -162,8 +173,8 @@ async function assertPublishableOrRedirect(
   back: string
 ): Promise<void> {
   // 通常価格 (base_price) が 0 のまま公開させない (autosave の draft 段階では 0 許容だが、公開時は必須)
-  const priceRes = await supabase.from('shop_products').select('base_price').eq('id', productId).maybeSingle()
-  const priceRow = priceRes.data as { base_price: number } | null
+  const priceRes = await supabase.from('shop_products').select('base_price, brand_id').eq('id', productId).maybeSingle()
+  const priceRow = priceRes.data as { base_price: number; brand_id: string } | null
   if (!priceRow || priceRow.base_price <= 0) redirect(`${back}?err=publish_requires_price`)
 
   // 画像
@@ -176,6 +187,46 @@ async function assertPublishableOrRedirect(
   const variants = (varRes.data as Array<{ id: string; status: string; shop_inventory: { variant_id: string } | null }> | null) ?? []
   const activeWithInv = variants.filter((v) => v.status === 'active' && v.shop_inventory !== null)
   if (activeWithInv.length === 0) redirect(`${back}?err=publish_requires_variant`)
+
+  const brandId = priceRow!.brand_id
+
+  // Phase 2 (Migration 163): 販売事業者情報 + 配送・返品ポリシー を brand row から確認
+  const brandRes = await supabase
+    .from('shop_brands')
+    .select('legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_phone, legal_email, dispatch_lead_days, return_accepted, return_days, exchange_accepted')
+    .eq('id', brandId)
+    .maybeSingle()
+  const brandRow = brandRes.data as {
+    legal_name: string | null; legal_representative_name: string | null;
+    legal_postal_code: string | null; legal_prefecture: string | null; legal_city: string | null;
+    legal_address_line1: string | null; legal_phone: string | null; legal_email: string | null;
+    dispatch_lead_days: number | null; return_accepted: boolean | null; return_days: number | null;
+    exchange_accepted: boolean | null;
+  } | null
+  if (!brandRow) redirect(`${back}?err=publish_requires_legal_info`)
+
+  // 販売事業者情報: line2 以外の 8 項目必須 (Phase 1 で shop_brands に追加した legal_*)
+  const legalRequired = brandRow!.legal_name && brandRow!.legal_representative_name
+    && brandRow!.legal_postal_code && brandRow!.legal_prefecture && brandRow!.legal_city
+    && brandRow!.legal_address_line1 && brandRow!.legal_phone && brandRow!.legal_email
+  if (!legalRequired) redirect(`${back}?err=publish_requires_legal_info`)
+
+  // 配送・返品ポリシー: 発送目安 + 返品受付判定 (accepted=true なら日数必須) + 交換受付
+  if (brandRow!.dispatch_lead_days === null) redirect(`${back}?err=publish_requires_delivery_policy`)
+  if (brandRow!.return_accepted === null)    redirect(`${back}?err=publish_requires_delivery_policy`)
+  if (brandRow!.return_accepted === true && brandRow!.return_days === null) {
+    redirect(`${back}?err=publish_requires_delivery_policy`)
+  }
+  if (brandRow!.exchange_accepted === null)  redirect(`${back}?err=publish_requires_delivery_policy`)
+
+  // 有効な shipping rule (JP, is_active=true) が 1 件以上存在
+  const shipRes = await supabase
+    .from('shop_brand_shipping_rules')
+    .select('id')
+    .eq('brand_id', brandId)
+    .limit(1)
+  const shipRows = (shipRes.data as Array<{ id: string }> | null) ?? []
+  if (shipRows.length === 0) redirect(`${back}?err=publish_requires_shipping`)
 }
 
 // =============================================================================
