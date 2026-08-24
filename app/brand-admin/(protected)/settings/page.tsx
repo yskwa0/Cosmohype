@@ -5,12 +5,14 @@ import ReturnAddressSection from '@/components/brand-admin/ReturnAddressSection'
 import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRulesForm'
 import ShippingRulesSection from '@/components/brand-admin/ShippingRulesSection'
 import BrandProfileForm, { type BrandProfileInitial } from '@/components/brand-admin/BrandProfileForm'
+import BrandSocialLinksForm, { type BrandSocialLinksInitial } from '@/components/brand-admin/BrandSocialLinksForm'
 import { type DeliveryReturnPolicyInitial } from '@/components/brand-admin/DeliveryReturnPolicyForm'
 import DeliveryReturnPolicySection from '@/components/brand-admin/DeliveryReturnPolicySection'
 import {
   updateReturnAddressAction,
   updateShippingRulesAction,
   updateBrandProfileAction,
+  updateBrandSocialLinksAction,
   updateDeliveryReturnPolicyAction,
 } from './actions'
 
@@ -54,6 +56,11 @@ function errorLabel(code: string): string {
     case 'upload_failed':          return '画像のアップロードに失敗しました。時間をおいて再度お試しください。'
     case 'name_required':          return 'ブランド名を入力してください。'
     case 'name_too_long':          return 'ブランド名は 100 文字以内で入力してください。'
+    // Migration 162: SNS リンク
+    case 'website_url_too_long':   return '公式サイト URL は 500 文字以内で入力してください。'
+    case 'instagram_url_too_long': return 'Instagram URL は 500 文字以内で入力してください。'
+    case 'website_url_invalid':    return '公式サイト URL は http:// または https:// で始まる URL を入力してください。'
+    case 'instagram_url_invalid':  return 'Instagram URL は https://www.instagram.com/<ユーザー名>/ 形式で入力してください。'
     // Phase B (Migration 155): 配送・返品ポリシー
     case 'invalid_dispatch_lead_days':      return '発送目安は 1〜90 日の整数で入力してください。'
     case 'invalid_return_days':             return '返品受付期間は 1〜365 日の整数で入力してください。'
@@ -90,6 +97,12 @@ interface ProfileRow {
   cover_crop_offset_y: number | null
 }
 
+// Migration 162: SNS リンク (2 列)。 未 apply 環境でも column は 145 で追加済みなので必ず存在。
+interface SocialLinksRow {
+  website_url:   string | null
+  instagram_url: string | null
+}
+
 export default async function BrandAdminSettingsPage({
   searchParams,
 }: {
@@ -101,6 +114,8 @@ export default async function BrandAdminSettingsPage({
   const savedProfile = sp.saved === 'profile'
   // Phase B: 配送・返品ポリシー保存後の success banner。 既存 saved 判定と分離。
   const savedPolicy = sp.saved === 'policy'
+  // Migration 162: SNS リンク保存後の success banner。
+  const savedSocial = sp.saved === 'social'
   const errCode = sp.err ?? null
 
   const ctx = await getBrandAdminContext()
@@ -134,8 +149,8 @@ export default async function BrandAdminSettingsPage({
     ? `${supaUrlBase}/storage/v1/object/public/shop-brand-assets/`
     : ''
 
-  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー を Promise.all で並列化
-  const [res, shipProbe, profileProbe, policyProbe] = await Promise.all([
+  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー + SNS リンク を Promise.all で並列化
+  const [res, shipProbe, profileProbe, policyProbe, socialProbe] = await Promise.all([
     loose
       .from('shop_brands')
       .select(
@@ -188,6 +203,20 @@ export default async function BrandAdminSettingsPage({
     })
       .from('shop_brands')
       .select('dispatch_lead_days, return_accepted, return_days, exchange_accepted, return_policy_note')
+      .eq('id', ctx.currentBrand.brandId)
+      .maybeSingle(),
+    // Migration 162: SNS リンク probe。 145 で追加済 column なので列不在エラーは想定しない。
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: SocialLinksRow | null; error: { message: string } | null }>
+          }
+        }
+      }
+    })
+      .from('shop_brands')
+      .select('website_url, instagram_url')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
   ])
@@ -274,6 +303,14 @@ export default async function BrandAdminSettingsPage({
   const policyReadError =
     (!migration155NotApplied && policyProbe.error) ? policyProbe.error.message : null
 
+  // Migration 162: SNS リンク initial。 column は 145 で存在するので基本 error は起きない想定だが、
+  // 万一 read 失敗した場合は空値 + warning banner にフォールバックする (profile と同じパターン)。
+  const socialInitial: BrandSocialLinksInitial = {
+    websiteUrl:   socialProbe.data?.website_url   ?? null,
+    instagramUrl: socialProbe.data?.instagram_url ?? null,
+  }
+  const socialReadError = socialProbe.error?.message ?? null
+
   // staff は編集不可 (owner / admin のみ)。Dev Bypass は admin なので編集可。
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
   const disabledReason = canEdit
@@ -312,7 +349,12 @@ export default async function BrandAdminSettingsPage({
           配送・返品ポリシーを保存しました。
         </div>
       )}
-      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && (
+      {savedSocial && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          公式サイト / Instagram の URL を保存しました。
+        </div>
+      )}
+      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorLabel(errCode)}
         </div>
@@ -334,6 +376,30 @@ export default async function BrandAdminSettingsPage({
         <BrandProfileForm
           initial={profileInitial}
           action={updateBrandProfileAction}
+          disabled={!canEdit}
+          disabledReason={disabledReason}
+        />
+      </section>
+
+      {/* Migration 162: 公式サイト URL / Instagram URL。 BrandProfileForm とは
+          意図的に別セクション。 shop_brand_update_profile RPC には触らず独立 RPC
+          shop_brand_update_social_links を叩く = blast radius を最小化。 */}
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold">公式サイト / Instagram リンク</h2>
+          <div className="mt-1 text-[11px] text-neutral-500">
+            iOS HYPE のブランドページに「公式サイト」「Instagram」ボタンとして表示されます。
+            空欄で保存すると「未設定」に戻せます。
+          </div>
+          {socialReadError && (
+            <div className="mt-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+              SNS リンクの読込に失敗しました。 新規入力として扱います。 詳細: {socialReadError}
+            </div>
+          )}
+        </div>
+        <BrandSocialLinksForm
+          initial={socialInitial}
+          action={updateBrandSocialLinksAction}
           disabled={!canEdit}
           disabledReason={disabledReason}
         />

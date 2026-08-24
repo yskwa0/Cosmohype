@@ -438,6 +438,115 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
 }
 
 // =============================================================================
+// updateBrandSocialLinksAction  (Migration 162: 公式サイト URL / Instagram URL)
+//
+// フォーム入力:
+//   ・website_url    text?  http(s)://... 形式のみ、空 → NULL
+//   ・instagram_url  text?  https?://(www.)?instagram.com/... のみ、空 → NULL
+//
+// server / client 両方で validate:
+//   ・client (BrandSocialLinksForm.tsx) は UX、送信ボタン disable
+//   ・本 action は最終防波堤: pattern match + 長さ 500 char 上限
+//   ・RPC 側 (shop_brand_update_social_links) がさらに三重にチェック
+//
+// 独立 RPC のため shop_brand_update_profile (11 引数版) には一切触れない = 既存
+// name/description/logo/cover の保存フローと副作用を分離する。
+// Dev Bypass 経路: 固定 brand_id + admin client で shop_brands 直 UPDATE。
+// 通常経路: RPC shop_brand_update_social_links (SECURITY DEFINER + owner/admin gate)。
+// =============================================================================
+
+const WEBSITE_RE   = /^https?:\/\/[^\s]+$/i
+const INSTAGRAM_RE = /^https?:\/\/(www\.)?instagram\.com\/[^\s]*$/i
+const SOCIAL_MAX   = 500
+
+/** 入力を trim → 空文字は null、非空なら 500 char 上限で slice。 */
+function normalizeUrlInput(v: FormDataEntryValue | null): string | null {
+  const s = String(v ?? '').trim()
+  if (s.length === 0) return null
+  return s.slice(0, SOCIAL_MAX + 1) // 501 になったら pattern match で拒否
+}
+
+export async function updateBrandSocialLinksAction(formData: FormData): Promise<void> {
+  const returnUrl = '/brand-admin/settings'
+
+  const websiteInput   = normalizeUrlInput(formData.get('website_url'))
+  const instagramInput = normalizeUrlInput(formData.get('instagram_url'))
+
+  // 長さ + パターン (RPC 側も enforce するが手前で早期 return)
+  if (websiteInput !== null) {
+    if (websiteInput.length > SOCIAL_MAX) {
+      redirect(`${returnUrl}?err=website_url_too_long`)
+    }
+    if (!WEBSITE_RE.test(websiteInput)) {
+      redirect(`${returnUrl}?err=website_url_invalid`)
+    }
+  }
+  if (instagramInput !== null) {
+    if (instagramInput.length > SOCIAL_MAX) {
+      redirect(`${returnUrl}?err=instagram_url_too_long`)
+    }
+    if (!INSTAGRAM_RE.test(instagramInput)) {
+      redirect(`${returnUrl}?err=instagram_url_invalid`)
+    }
+  }
+
+  const bypass = isBrandAdminDevBypassEnabled()
+  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    redirect(`${returnUrl}?err=service_role_missing`)
+  }
+
+  const brandId: string = bypass
+    ? DEV_BYPASS_BRAND_ID
+    : assertUUID((await getBrandAdminContext()).currentBrand.brandId)
+
+  const supabase = bypass ? createAdminClient() : await createClient()
+
+  if (bypass) {
+    const admin = supabase as unknown as {
+      from: (t: string) => {
+        update: (patch: Record<string, unknown>) => {
+          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
+        }
+      }
+    }
+    const upd = await admin.from('shop_brands').update({
+      website_url:   websiteInput,
+      instagram_url: instagramInput,
+      updated_at:    new Date().toISOString(),
+    }).eq('id', brandId)
+    if (upd.error) {
+      console.error('[brand-admin/settings] dev bypass social links update failed', upd.error)
+      redirect(`${returnUrl}?err=update_failed`)
+    }
+  } else {
+    const { error } = await (
+      supabase as unknown as {
+        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+      }
+    ).rpc('shop_brand_update_social_links', {
+      p_brand_id:      brandId,
+      p_website_url:   websiteInput,
+      p_instagram_url: instagramInput,
+    })
+    if (error) {
+      const msg = error.message.toLowerCase()
+      let code: string = 'update_failed'
+      if (msg.includes('forbidden'))                    code = 'forbidden'
+      else if (msg.includes('not_authenticated'))       code = 'not_authenticated'
+      else if (msg.includes('website_url_too_long'))    code = 'website_url_too_long'
+      else if (msg.includes('instagram_url_too_long'))  code = 'instagram_url_too_long'
+      else if (msg.includes('website_url_invalid'))     code = 'website_url_invalid'
+      else if (msg.includes('instagram_url_invalid'))   code = 'instagram_url_invalid'
+      console.error('[brand-admin/settings] rpc social links update failed', error)
+      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
+    }
+  }
+
+  revalidatePath(returnUrl)
+  redirect(`${returnUrl}?saved=social`)
+}
+
+// =============================================================================
 // updateDeliveryReturnPolicyAction (Phase B / Migration 155)
 //
 // フォーム入力 (すべて任意、空 = null にリセット可能):
