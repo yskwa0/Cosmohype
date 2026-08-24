@@ -52,29 +52,19 @@ export default async function BrandAdminProtectedLayout({
             <div className="text-[10px] text-neutral-500 mt-0.5">
               role: {ctx.currentBrand.role}
             </div>
-            {ctx.isDevBypass ? (
-              <div className="mt-3 border border-orange-300 bg-orange-50 rounded px-2 py-1.5">
-                <div className="text-[10px] font-bold tracking-widest text-orange-700">
-                  DEV BYPASS
-                </div>
-                <div className="text-[9px] text-orange-600 leading-tight mt-0.5">
-                  TEST ONLY / ログイン省略中
-                </div>
-              </div>
-            ) : (
-              <form action={brandAdminSignOutAction} className="mt-3">
-                <button
-                  type="submit"
-                  className={
-                    'w-full text-[11px] text-neutral-600 hover:text-red-600 ' +
-                    'border border-neutral-300 rounded py-1.5 ' +
-                    pressableClass
-                  }
-                >
-                  ログアウト
-                </button>
-              </form>
-            )}
+            {/* Dev Bypass 撤去済 (Production Supabase 一本運用)。 常にログアウトボタンを表示。 */}
+            <form action={brandAdminSignOutAction} className="mt-3">
+              <button
+                type="submit"
+                className={
+                  'w-full text-[11px] text-neutral-600 hover:text-red-600 ' +
+                  'border border-neutral-300 rounded py-1.5 ' +
+                  pressableClass
+                }
+              >
+                ログアウト
+              </button>
+            </form>
           </div>
         </aside>
 
@@ -89,20 +79,15 @@ export default async function BrandAdminProtectedLayout({
                 <NavPendingSpinner size={10} />
               </span>
             </Link>
-            {ctx.isDevBypass ? (
-              <span className="text-[10px] font-bold tracking-widest text-orange-700 border border-orange-300 bg-orange-50 rounded px-2 py-1">
-                DEV BYPASS
-              </span>
-            ) : (
-              <form action={brandAdminSignOutAction}>
-                <button
-                  type="submit"
-                  className={'text-[11px] text-neutral-600 border border-neutral-300 rounded px-2 py-1 ' + pressableClass}
-                >
-                  ログアウト
-                </button>
-              </form>
-            )}
+            {/* Dev Bypass 撤去済 (Production Supabase 一本運用)。 常にログアウトボタンを表示。 */}
+            <form action={brandAdminSignOutAction}>
+              <button
+                type="submit"
+                className={'text-[11px] text-neutral-600 border border-neutral-300 rounded px-2 py-1 ' + pressableClass}
+              >
+                ログアウト
+              </button>
+            </form>
           </div>
           {/* Mobile-only navigation strip */}
           <div className="md:hidden border-b border-neutral-200 bg-white overflow-x-auto">

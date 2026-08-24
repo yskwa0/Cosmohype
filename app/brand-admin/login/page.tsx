@@ -1,6 +1,4 @@
-import { redirect } from 'next/navigation'
 import BrandAdminLoginForm from './BrandAdminLoginForm'
-import { isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,17 +9,13 @@ export const dynamic = 'force-dynamic'
  * 使うため、同 email/password で入る。ただしログイン後の遷移先は /brand-admin。
  * 一般 Web のヘッダーからは絶対に link しない (URL 直打ちのみ)。
  *
- * Dev Bypass 有効時 (development + BRAND_ADMIN_DEV_BYPASS=true + Test URL) は
- * ログインを飛ばして直接 /brand-admin に遷移する。Production では絶対に成立しない。
+ * Dev Bypass は撤去済 (Production Supabase 一本運用のため)。
  */
 export default function BrandAdminLoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ err?: string }>
 }) {
-  if (isBrandAdminDevBypassEnabled()) {
-    redirect('/brand-admin')
-  }
   return <BrandAdminLoginFormWrapper searchParams={searchParams} />
 }
 

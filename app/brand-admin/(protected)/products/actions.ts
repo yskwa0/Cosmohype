@@ -3,7 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { isBrandAdminDevBypassEnabled, getBrandAdminContext } from '@/lib/brandAdmin'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+
+// Dev Bypass 撤去済 (Production Supabase 一本運用)。
+// createAdminClient は brand 画像 upload の storage RLS gap 回避 (Migration 145 未整備) と
+// storage の brand-scoped 直 write でのみ引き続き使用。 DB write は RPC 経由に統一済。
 
 // -----------------------------------------------------------------------------
 // 型緩和 (types/database に shop_* 未生成のため)
@@ -98,12 +102,10 @@ function mapErrorCode(msg: string): string {
 
 async function getContextAndClient() {
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    redirect('/brand-admin/products?err=service_role_missing')
-  }
-  const supabase = bypass ? createAdminClient() : await createClient()
-  return { ctx, bypass, supabase: supabase as unknown as (Rpc & LooseFrom) }
+  const supabase = await createClient()
+  // Dev Bypass 撤去済 (Production 一本運用)。 `bypass` は常に false の sentinel。
+  // 既存 callsite の `if (bypass) { ... }` ブランチは dead code として残るが runtime 実行 = 0。
+  return { ctx, bypass: false as const, supabase: supabase as unknown as (Rpc & LooseFrom) }
 }
 
 // -----------------------------------------------------------------------------
@@ -826,11 +828,7 @@ export async function upsertVariantAction(formData: FormData): Promise<void> {
 // =============================================================================
 export async function deleteVariantAction(formData: FormData): Promise<void> {
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    redirect('/brand-admin/products?err=service_role_missing')
-  }
-  // DELETE 権限は authenticated に無いため、両経路で admin client を使い
+  // DELETE 権限は authenticated に無いため admin client (service_role) を使い、
   // brand ownership / role を server-side で必ず検証する。
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     redirect('/brand-admin/products?err=service_role_missing')
@@ -1090,6 +1088,12 @@ export async function deleteImageAction(formData: FormData): Promise<void> {
 //   通常経路は shop_brand_update_image_crop RPC (owner/admin 検証、SECURITY DEFINER)。
 //   Dev Bypass 経路は admin client で直接 UPDATE。
 //   RSC 全体再描画は避け throw しない (Client 側で optimistic update する)。
+//
+// 【error 方針】
+//   他 action と同じく Postgres / Storage の生 message を client へ throw せず、
+//   snake_case な error code だけを throw する。詳細は console.error に残す。
+//   client 側 (ShopImageCropEditor) は code を判定せず「保存に失敗しました」の
+//   固定文言を出す (現時点 crop 特有の user 分岐は不要)。
 // =============================================================================
 export async function updateImageCropAction(formData: FormData): Promise<void> {
   const { bypass, supabase } = await getContextAndClient()
@@ -1109,7 +1113,7 @@ export async function updateImageCropAction(formData: FormData): Promise<void> {
       .eq('id', imageId)
     if (upd.error) {
       console.error('[brand-admin/products] dev bypass crop update failed', upd.error)
-      throw new Error(upd.error.message)
+      throw new Error(mapErrorCode(upd.error.message))
     }
   } else {
     const res = await supabase.rpc('shop_brand_update_image_crop', {
@@ -1120,7 +1124,7 @@ export async function updateImageCropAction(formData: FormData): Promise<void> {
     })
     if (res.error) {
       console.error('[brand-admin/products] rpc crop update failed', res.error)
-      throw new Error(res.error.message)
+      throw new Error(mapErrorCode(res.error.message))
     }
   }
 }

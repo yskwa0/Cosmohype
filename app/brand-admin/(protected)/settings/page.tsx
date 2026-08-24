@@ -1,5 +1,5 @@
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { createClient } from '@/lib/supabase/server'
 import { type ReturnAddressInitial } from '@/components/brand-admin/ReturnAddressForm'
 import ReturnAddressSection from '@/components/brand-admin/ReturnAddressSection'
 import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRulesForm'
@@ -119,18 +119,7 @@ export default async function BrandAdminSettingsPage({
   const errCode = sp.err ?? null
 
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return (
-      <ErrorBanner
-        title="Dev Bypass 設定不足"
-        detail="Dev Bypass 経路では .env.local に SUPABASE_SERVICE_ROLE_KEY を Test project の service_role key で設定する必要があります。"
-      />
-    )
-  }
-
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
   const loose = supabase as unknown as {
     from: (t: string) => {
       select: (s: string) => {

@@ -3,11 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { isBrandAdminDevBypassEnabled, getBrandAdminContext } from '@/lib/brandAdmin'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
 
-// Dev Bypass 経路の固定 brand (URBAN NOTE、Test seed)。
-// Production では isBrandAdminDevBypassEnabled() が常に false のためこの ID は使われない。
-const DEV_BYPASS_BRAND_ID = '11111111-1111-4111-8111-111111111111'
+// Dev Bypass 撤去済 (Production Supabase 一本運用)。
+// createAdminClient は「brand 画像 upload の storage RLS gap 回避 (Migration 145 の未整備を
+// 補うため)」でのみ引き続き使用。 DB write 系はすべて SECURITY DEFINER RPC 経由に統一。
 
 function trimOrEmpty(v: FormDataEntryValue | null, max = 200): string {
   return String(v ?? '').trim().slice(0, max)
@@ -60,60 +60,31 @@ export async function updateReturnAddressAction(formData: FormData): Promise<voi
     redirect(`${returnUrl}?err=invalid_postal_code`)
   }
 
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  if (bypass) {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      redirect(`${returnUrl}?err=service_role_missing`)
+  const ctx = await getBrandAdminContext()
+  const brandId = assertUUID(ctx.currentBrand.brandId)
+  const supabase = await createClient()
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
     }
-    const admin = createAdminClient() as unknown as {
-      from: (t: string) => {
-        update: (patch: Record<string, unknown>) => {
-          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
-        }
-      }
-    }
-    const upd = await admin.from('shop_brands').update({
-      return_recipient_name: recipient,
-      return_postal_code: postal,
-      return_prefecture: prefecture,
-      return_city: city,
-      return_address_line1: line1,
-      return_address_line2: line2.length > 0 ? line2 : null,
-      return_phone: phone,
-      updated_at: new Date().toISOString(),
-    }).eq('id', DEV_BYPASS_BRAND_ID)
-    if (upd.error) {
-      console.error('[brand-admin/settings] dev bypass update failed', upd.error)
-      redirect(`${returnUrl}?err=update_failed`)
-    }
-  } else {
-    const ctx = await getBrandAdminContext()
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    const supabase = await createClient()
-    const { error } = await (
-      supabase as unknown as {
-        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      }
-    ).rpc('shop_brand_update_return_address', {
-      p_brand_id: brandId,
-      p_return_recipient_name: recipient,
-      p_return_postal_code: postal,
-      p_return_prefecture: prefecture,
-      p_return_city: city,
-      p_return_address_line1: line1,
-      p_return_address_line2: line2.length > 0 ? line2 : null,
-      p_return_phone: phone,
-    })
-    if (error) {
-      const msg = error.message.toLowerCase()
-      let code: string = 'update_failed'
-      if (msg.includes('forbidden')) code = 'forbidden'
-      else if (msg.includes('not_authenticated')) code = 'not_authenticated'
-      else if (msg.includes('required_field_missing')) code = 'required_field_missing'
-      console.error('[brand-admin/settings] rpc update failed', error)
-      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
-    }
+  ).rpc('shop_brand_update_return_address', {
+    p_brand_id: brandId,
+    p_return_recipient_name: recipient,
+    p_return_postal_code: postal,
+    p_return_prefecture: prefecture,
+    p_return_city: city,
+    p_return_address_line1: line1,
+    p_return_address_line2: line2.length > 0 ? line2 : null,
+    p_return_phone: phone,
+  })
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code: string = 'update_failed'
+    if (msg.includes('forbidden')) code = 'forbidden'
+    else if (msg.includes('not_authenticated')) code = 'not_authenticated'
+    else if (msg.includes('required_field_missing')) code = 'required_field_missing'
+    console.error('[brand-admin/settings] rpc update failed', error)
+    redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
   }
 
   revalidatePath(returnUrl)
@@ -176,83 +147,35 @@ export async function updateShippingRulesAction(formData: FormData): Promise<voi
     rOki = readNonNegInt('rate_okinawa')
   }
 
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  if (bypass) {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      redirect(`${returnUrl}?err=service_role_missing`)
+  const ctx = await getBrandAdminContext()
+  const brandId = assertUUID(ctx.currentBrand.brandId)
+  const supabase = await createClient()
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
     }
-    const admin = createAdminClient() as unknown as {
-      from: (t: string) => {
-        update: (patch: Record<string, unknown>) => {
-          eq: (col: string, val: string) => {
-            eq: (col: string, val: string) => {
-              eq: (col: string, val: boolean) => Promise<{ error: { message: string } | null }>
-            }
-          }
-        }
-        insert: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      }
-    }
-    // 既存 active ルールを一旦落として INSERT で唯一性を担保
-    // (Migration 116 の partial unique index (brand_id, country_code) where is_active に依存)
-    await admin
-      .from('shop_brand_shipping_rules')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('brand_id', DEV_BYPASS_BRAND_ID)
-      .eq('country_code', 'JP')
-      .eq('is_active', true)
-    const ins = await admin.from('shop_brand_shipping_rules').insert({
-      brand_id: DEV_BYPASS_BRAND_ID,
-      country_code: 'JP',
-      flat_rate: flatRate,
-      free_shipping_threshold: freeThreshold,
-      rate_hokkaido: rHok,
-      rate_tohoku:   rToh,
-      rate_kanto:    rKan,
-      rate_chubu:    rChu,
-      rate_kinki:    rKin,
-      rate_chugoku:  rCg,
-      rate_shikoku:  rShi,
-      rate_kyushu:   rKyu,
-      rate_okinawa:  rOki,
-      is_active: true,
-    })
-    if (ins.error) {
-      console.error('[brand-admin/settings] dev bypass shipping upsert failed', ins.error)
-      redirect(`${returnUrl}?err=shipping_update_failed`)
-    }
-  } else {
-    const ctx = await getBrandAdminContext()
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    const supabase = await createClient()
-    const { error } = await (
-      supabase as unknown as {
-        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      }
-    ).rpc('shop_brand_upsert_shipping_rule', {
-      p_brand_id: brandId,
-      p_flat_rate: flatRate,
-      p_free_shipping_threshold: freeThreshold,
-      p_rate_hokkaido: rHok,
-      p_rate_tohoku:   rToh,
-      p_rate_kanto:    rKan,
-      p_rate_chubu:    rChu,
-      p_rate_kinki:    rKin,
-      p_rate_chugoku:  rCg,
-      p_rate_shikoku:  rShi,
-      p_rate_kyushu:   rKyu,
-      p_rate_okinawa:  rOki,
-    })
-    if (error) {
-      const msg = error.message.toLowerCase()
-      let code = 'shipping_update_failed'
-      if (msg.includes('forbidden')) code = 'forbidden'
-      else if (msg.includes('not_authenticated')) code = 'not_authenticated'
-      else if (msg.includes('invalid_flat_rate')) code = 'shipping_flat_required'
-      console.error('[brand-admin/settings] rpc shipping upsert failed', error)
-      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
-    }
+  ).rpc('shop_brand_upsert_shipping_rule', {
+    p_brand_id: brandId,
+    p_flat_rate: flatRate,
+    p_free_shipping_threshold: freeThreshold,
+    p_rate_hokkaido: rHok,
+    p_rate_tohoku:   rToh,
+    p_rate_kanto:    rKan,
+    p_rate_chubu:    rChu,
+    p_rate_kinki:    rKin,
+    p_rate_chugoku:  rCg,
+    p_rate_shikoku:  rShi,
+    p_rate_kyushu:   rKyu,
+    p_rate_okinawa:  rOki,
+  })
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code = 'shipping_update_failed'
+    if (msg.includes('forbidden')) code = 'forbidden'
+    else if (msg.includes('not_authenticated')) code = 'not_authenticated'
+    else if (msg.includes('invalid_flat_rate')) code = 'shipping_flat_required'
+    console.error('[brand-admin/settings] rpc shipping upsert failed', error)
+    redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
   }
 
   revalidatePath(returnUrl)
@@ -304,22 +227,14 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
   const coverOffX    = readClamped('cover_crop_offset_x', 0.0, -1.0, 1.0)
   const coverOffY    = readClamped('cover_crop_offset_y', 0.0, -1.0, 1.0)
 
-  const bypass = isBrandAdminDevBypassEnabled()
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    redirect(`${returnUrl}?err=service_role_missing`)
-  }
-
-  const brandId: string = bypass
-    ? DEV_BYPASS_BRAND_ID
-    : assertUUID((await getBrandAdminContext()).currentBrand.brandId)
-
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const brandId = assertUUID((await getBrandAdminContext()).currentBrand.brandId)
+  const supabase = await createClient()
 
   // 画像 upload ヘルパ (既存 uploadImageAction と同じ upsert / contentType 検証パターン)
   //
   // **2026-08-19 hotfix**: shop-brand-assets bucket は Migration 145 の実装計画
   // (コメント「別 turn で bucket policy 追加」) が Production へ反映されないまま
-  // 稼働しており、通常経路 (bypass=false) の user client での upload は
+  // 稼働しており、通常経路の user client での upload は
   // `storage.objects` の per-brand INSERT policy が無いため 403
   // (StorageApiError: "new row violates row-level security policy") で必ず失敗する。
   //
@@ -375,62 +290,34 @@ export async function updateBrandProfileAction(formData: FormData): Promise<void
   const logoPath  = await uploadIfPresent('logo_file',  'logo',  existingLogoPath)
   const coverPath = await uploadIfPresent('cover_file', 'cover', existingCoverPath)
 
-  if (bypass) {
-    const admin = supabase as unknown as {
-      from: (t: string) => {
-        update: (patch: Record<string, unknown>) => {
-          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
-        }
-      }
+  // Migration 147: RPC は 11 引数版 (name + description + logo/cover path + crop 6)。
+  // website / instagram は本 RPC の関心外、送出しない = server 側でも書換不可。
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
     }
-    // Migration 147: website_url / instagram_url は本 patch に含めない (既存 DB 値を破壊しない)。
-    const upd = await admin.from('shop_brands').update({
-      name:                 brandName,
-      description:          description.length > 0 ? description : null,
-      logo_path:            logoPath,
-      cover_path:           coverPath,
-      logo_crop_zoom:       logoZoom,
-      logo_crop_offset_x:   logoOffX,
-      logo_crop_offset_y:   logoOffY,
-      cover_crop_zoom:      coverZoom,
-      cover_crop_offset_x:  coverOffX,
-      cover_crop_offset_y:  coverOffY,
-      updated_at: new Date().toISOString(),
-    }).eq('id', brandId)
-    if (upd.error) {
-      console.error('[brand-admin/settings] dev bypass profile update failed', upd.error)
-      redirect(`${returnUrl}?err=update_failed`)
-    }
-  } else {
-    // Migration 147: RPC は 11 引数版 (name + description + logo/cover path + crop 6)。
-    // website / instagram は本 RPC の関心外、送出しない = server 側でも書換不可。
-    const { error } = await (
-      supabase as unknown as {
-        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      }
-    ).rpc('shop_brand_update_profile', {
-      p_brand_id:             brandId,
-      p_name:                 brandName,
-      p_description:          description.length > 0 ? description : null,
-      p_logo_path:            logoPath,
-      p_cover_path:           coverPath,
-      p_logo_crop_zoom:       logoZoom,
-      p_logo_crop_offset_x:   logoOffX,
-      p_logo_crop_offset_y:   logoOffY,
-      p_cover_crop_zoom:      coverZoom,
-      p_cover_crop_offset_x:  coverOffX,
-      p_cover_crop_offset_y:  coverOffY,
-    })
-    if (error) {
-      const msg = error.message.toLowerCase()
-      let code: string = 'update_failed'
-      if (msg.includes('forbidden'))         code = 'forbidden'
-      else if (msg.includes('not_authenticated')) code = 'not_authenticated'
-      else if (msg.includes('name_required'))     code = 'name_required'
-      else if (msg.includes('name_too_long'))     code = 'name_too_long'
-      console.error('[brand-admin/settings] rpc profile update failed', error)
-      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
-    }
+  ).rpc('shop_brand_update_profile', {
+    p_brand_id:             brandId,
+    p_name:                 brandName,
+    p_description:          description.length > 0 ? description : null,
+    p_logo_path:            logoPath,
+    p_cover_path:           coverPath,
+    p_logo_crop_zoom:       logoZoom,
+    p_logo_crop_offset_x:   logoOffX,
+    p_logo_crop_offset_y:   logoOffY,
+    p_cover_crop_zoom:      coverZoom,
+    p_cover_crop_offset_x:  coverOffX,
+    p_cover_crop_offset_y:  coverOffY,
+  })
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code: string = 'update_failed'
+    if (msg.includes('forbidden'))         code = 'forbidden'
+    else if (msg.includes('not_authenticated')) code = 'not_authenticated'
+    else if (msg.includes('name_required'))     code = 'name_required'
+    else if (msg.includes('name_too_long'))     code = 'name_too_long'
+    console.error('[brand-admin/settings] rpc profile update failed', error)
+    redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
   }
 
   revalidatePath(returnUrl)
@@ -595,66 +482,39 @@ export async function updateDeliveryReturnPolicyAction(formData: FormData): Prom
     redirect(`${returnUrl}?err=return_policy_note_too_long`)
   }
 
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  if (bypass) {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      redirect(`${returnUrl}?err=service_role_missing`)
+  const ctx = await getBrandAdminContext()
+  const brandId = assertUUID(ctx.currentBrand.brandId)
+  const supabase = await createClient()
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
     }
-    const admin = createAdminClient() as unknown as {
-      from: (t: string) => {
-        update: (patch: Record<string, unknown>) => {
-          eq: (col: string, val: string) => Promise<{ error: { message: string } | null }>
-        }
-      }
-    }
-    const upd = await admin.from('shop_brands').update({
-      dispatch_lead_days:  dispatchLead as number | null,
-      return_accepted:     returnAccepted,
-      return_days:         returnDays   as number | null,
-      exchange_accepted:   exchangeAccepted,
-      return_policy_note:  note,
-      updated_at:          new Date().toISOString(),
-    }).eq('id', DEV_BYPASS_BRAND_ID)
-    if (upd.error) {
-      console.error('[brand-admin/settings] dev bypass policy update failed', upd.error)
-      redirect(`${returnUrl}?err=update_failed`)
-    }
-  } else {
-    const ctx = await getBrandAdminContext()
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    const supabase = await createClient()
-    const { error } = await (
-      supabase as unknown as {
-        rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
-      }
-    ).rpc('shop_brand_update_delivery_return_policy', {
-      p_brand_id:            brandId,
-      p_dispatch_lead_days:  dispatchLead as number | null,
-      p_return_accepted:     returnAccepted,
-      p_return_days:         returnDays   as number | null,
-      p_exchange_accepted:   exchangeAccepted,
-      p_return_policy_note:  note,
-    })
-    if (error) {
-      const msg = error.message.toLowerCase()
-      let code: string = 'update_failed'
-      if (msg.includes('forbidden'))                            code = 'forbidden'
-      else if (msg.includes('not_authenticated'))               code = 'not_authenticated'
-      else if (msg.includes('invalid_dispatch_lead_days'))      code = 'invalid_dispatch_lead_days'
-      else if (msg.includes('invalid_return_days'))             code = 'invalid_return_days'
-      // Migration 155 追加: return_accepted と return_days の整合性エラー。
-      // 通常経路は事前 pre-validation で fire するので RPC からは来ないが、
-      // 直接 RPC 叩き / 未来の別 caller からの流入 / CHECK 制約由来メッセージにも対応。
-      else if (msg.includes('return_days_required'))            code = 'return_days_required_when_accepted'
-      else if (msg.includes('return_days_only_when_accepted'))  code = 'return_days_only_when_accepted'
-      else if (msg.includes('shop_brands_return_days_consistency'))
-                                                                code = 'return_days_only_when_accepted'
-      else if (msg.includes('return_policy_note_too_long'))     code = 'return_policy_note_too_long'
-      else if (msg.includes('brand_not_found'))                 code = 'brand_not_found'
-      console.error('[brand-admin/settings] rpc policy update failed', error)
-      redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
-    }
+  ).rpc('shop_brand_update_delivery_return_policy', {
+    p_brand_id:            brandId,
+    p_dispatch_lead_days:  dispatchLead as number | null,
+    p_return_accepted:     returnAccepted,
+    p_return_days:         returnDays   as number | null,
+    p_exchange_accepted:   exchangeAccepted,
+    p_return_policy_note:  note,
+  })
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code: string = 'update_failed'
+    if (msg.includes('forbidden'))                            code = 'forbidden'
+    else if (msg.includes('not_authenticated'))               code = 'not_authenticated'
+    else if (msg.includes('invalid_dispatch_lead_days'))      code = 'invalid_dispatch_lead_days'
+    else if (msg.includes('invalid_return_days'))             code = 'invalid_return_days'
+    // Migration 155 追加: return_accepted と return_days の整合性エラー。
+    // 通常経路は事前 pre-validation で fire するので RPC からは来ないが、
+    // 直接 RPC 叩き / 未来の別 caller からの流入 / CHECK 制約由来メッセージにも対応。
+    else if (msg.includes('return_days_required'))            code = 'return_days_required_when_accepted'
+    else if (msg.includes('return_days_only_when_accepted'))  code = 'return_days_only_when_accepted'
+    else if (msg.includes('shop_brands_return_days_consistency'))
+                                                              code = 'return_days_only_when_accepted'
+    else if (msg.includes('return_policy_note_too_long'))     code = 'return_policy_note_too_long'
+    else if (msg.includes('brand_not_found'))                 code = 'brand_not_found'
+    console.error('[brand-admin/settings] rpc policy update failed', error)
+    redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
   }
 
   revalidatePath(returnUrl)

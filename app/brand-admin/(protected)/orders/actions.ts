@@ -22,7 +22,10 @@ import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { isBrandAdminDevBypassEnabled, getBrandAdminContext } from '@/lib/brandAdmin'
 
-/** Test seed URBAN NOTE — dev bypass の brand_id 制約に使う */
+// Dev Bypass 撤去済 (Production Supabase 一本運用)。
+// `isBrandAdminDevBypassEnabled` は lib 側で常に false を返すよう neutralize 済のため、
+// 以下 `if (bypass) { ... }` ブランチは dead code (runtime 実行 = 0)。
+// DEV_BYPASS_BRAND_ID / createAdminClient は dead branch 内でのみ参照される (未使用扱い)。
 const DEV_BYPASS_BRAND_ID = '11111111-1111-4111-8111-111111111111'
 
 type LooseAdmin = {

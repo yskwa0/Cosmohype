@@ -22,6 +22,7 @@
 // =============================================================================
 
 import 'server-only'
+import { cache } from 'react'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
@@ -49,54 +50,25 @@ export interface BrandAdminContext {
   }
   currentBrand: BrandMembership
   memberships: BrandMembership[]
-  /** Phase 1 開発中の Dev Bypass 経路で入っているかどうか (UI 表示 + logout 抑止に使う) */
-  isDevBypass: boolean
 }
 
 // -----------------------------------------------------------------------------
-// Dev Bypass (開発中のみ、認証をスキップして管理画面を触れるようにする)
+// Dev Bypass は撤去 (Production Supabase 一本運用)
 // -----------------------------------------------------------------------------
-// 有効化条件はすべて満たす必要あり (AND):
-//   (a) process.env.NODE_ENV === 'development'
-//   (b) process.env.BRAND_ADMIN_DEV_BYPASS === 'true'
-//   (c) NEXT_PUBLIC_SUPABASE_URL が Test project ref を含む
-//       (Production ref pyrxyhyjzufefobcjqnc を向いている場合は絶対に無効)
+// 以前は `BRAND_ADMIN_DEV_BYPASS=true` + Test project URL の組合せで認証を skip し、
+// admin client 経由で shop_brands を直接 UPDATE できる開発用抜け道が存在した。
 //
-// これにより:
-//   - Vercel Production は NODE_ENV='production' なので (a) で必ず false
-//   - Test 環境変数が付いていない環境も (b)/(c) で false
-//   - 万一 Production Supabase を向いている dev 環境でも (c) で false
-//   - 3 条件すべて hard-coded、一部を偶発的に外しても bypass は成立しない
+// 現在は Cosmohype / HYPE 全体を Production Supabase (pyrxyhyjzufefobcjqnc) 一本
+// で運用する方針となったため、Test project への write が発生する可能性を根本から
+// 排除する目的で本ヘルパを削除した。
 //
-// Test project ref を hard-code しているため、リポジトリを見れば
-// 「これは Test 用の抜け道」と即座に読み取れる。
-const TEST_PROJECT_HOST_MARKER = 'scrddddtgvnbptkwgqml.supabase.co'
-
+// - `isBrandAdminDevBypassEnabled()` は互換性のため残し、常に `false` を返す
+//   (旧 callsite の import と `if (bypass) { ... }` 分岐が残っていても runtime で
+//    絶対に true にならない)。
+// - `DEV_BYPASS_MEMBERSHIP` / `DEV_BYPASS_CONTEXT` / 固定 brand_id は削除済。
+// - `BrandAdminContext.isDevBypass` field も撤去。
 export function isBrandAdminDevBypassEnabled(): boolean {
-  if (process.env.NODE_ENV !== 'development') return false
-  if (process.env.BRAND_ADMIN_DEV_BYPASS !== 'true') return false
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  if (!url.includes(TEST_PROJECT_HOST_MARKER)) return false
-  return true
-}
-
-/** Dev Bypass 時に返す固定 context (URBAN NOTE / admin)。Production では絶対に到達しない。 */
-const DEV_BYPASS_MEMBERSHIP: BrandMembership = {
-  brandId: '11111111-1111-4111-8111-111111111111', // Test seed: URBAN NOTE
-  brandName: 'URBAN NOTE',
-  brandSlug: 'urban-note',
-  role: 'admin',
-  status: 'active',
-}
-const DEV_BYPASS_CONTEXT: BrandAdminContext = {
-  user: {
-    // 固定 UUID。auth.uid() ではないので DB write 系は動かない前提。
-    id: '00000000-0000-0000-0000-0000000dev00',
-    email: 'dev-bypass@cosmohype.test',
-  },
-  currentBrand: DEV_BYPASS_MEMBERSHIP,
-  memberships: [DEV_BYPASS_MEMBERSHIP],
-  isDevBypass: true,
+  return false
 }
 
 interface RawBrandMemberRow {
@@ -120,13 +92,13 @@ function isRole(v: string): v is BrandRole {
  * 未認証 → /brand-admin/login にリダイレクト。
  * membership 無し / active 無し → /brand-admin/login?err=no_membership にリダイレクト。
  * 有効 memberships があれば cookie を見て current brand を確定 (無ければ 1 番目)。
+ *
+ * ★ 高速化: React `cache()` で 1 リクエスト内の重複呼出を dedupe。
+ *    layout.tsx が呼び、その後の page.tsx が同一 request 内で再度呼んでも
+ *    Supabase auth.getUser + shop_brand_members query は 1 回のみ実行される。
+ *    (React `cache` は per-request なのでユーザー間で共有されない = 安全)
  */
-export async function getBrandAdminContext(): Promise<BrandAdminContext> {
-  // Dev Bypass 経路 (Production では上記 3 条件により常に false)
-  if (isBrandAdminDevBypassEnabled()) {
-    return DEV_BYPASS_CONTEXT
-  }
-
+export const getBrandAdminContext = cache(async (): Promise<BrandAdminContext> => {
   const supabase = await createClient()
   const { data: userData } = await supabase.auth.getUser()
   const user = userData?.user
@@ -179,9 +151,8 @@ export async function getBrandAdminContext(): Promise<BrandAdminContext> {
     user: { id: user!.id, email: user!.email ?? null },
     currentBrand: current,
     memberships,
-    isDevBypass: false,
   }
-}
+})
 
 // -----------------------------------------------------------------------------
 // role 権限 helper (Phase 1 は Dashboard 内表示用のみ、実制御は次フェーズ)
