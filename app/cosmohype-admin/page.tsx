@@ -53,6 +53,18 @@ export default function CosmohypeAdminDashboardPage() {
             order id / buyer / brand / product / payment status で絞込。
           </div>
         </Link>
+
+        <Link
+          href="/cosmohype-admin/reports"
+          className="block rounded-xl border border-neutral-200 bg-white p-5 hover:border-neutral-400 hover:shadow-sm transition"
+        >
+          <div className="text-[10px] font-bold tracking-widest text-neutral-500">REPORTS</div>
+          <div className="mt-1 text-base font-semibold text-neutral-900">商品通報</div>
+          <div className="mt-2 text-[12px] text-neutral-600">
+            HYPE 商品に対するユーザー通報を一覧・詳細確認し、status を open → reviewing → resolved / dismissed に更新できます。
+            対応が必要な商品は「商品管理へ」から Phase C の販売停止に遷移できます。
+          </div>
+        </Link>
       </div>
 
       <div className="rounded-xl border border-neutral-200 bg-white p-5">
