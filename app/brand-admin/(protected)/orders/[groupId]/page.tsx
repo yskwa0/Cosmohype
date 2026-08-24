@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { createClient } from '@/lib/supabase/server'
 import {
   StatusPill,
   statusLabel,
@@ -74,16 +74,7 @@ export default async function BrandAdminOrderDetailPage({
   if (!/^[0-9a-fA-F-]{36}$/.test(groupId)) notFound()
 
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return (
-      <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-        Dev Bypass 経路では .env.local に SUPABASE_SERVICE_ROLE_KEY を Test project の service_role key で設定する必要があります。
-      </div>
-    )
-  }
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
 
   // 2 段階 fetch (list 側と同理由: admin/anon で挙動差を排除、原因切り分け容易化)
   type LooseFrom = {

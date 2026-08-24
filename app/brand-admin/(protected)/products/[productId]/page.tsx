@@ -1,8 +1,8 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { createClient } from '@/lib/supabase/server'
 import ProductBasicsForm from '@/components/brand-admin/products/ProductBasicsForm'
 import ImageUploadForm from '@/components/brand-admin/products/ImageUploadForm'
 import ProductImageGrid from '@/components/brand-admin/products/ProductImageGrid'
@@ -150,11 +150,7 @@ export default async function BrandAdminProductEditPage({
 
   const ctx = await getBrandAdminContext()
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
-  const bypass = isBrandAdminDevBypassEnabled()
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return <ErrorBanner title="Dev Bypass 設定不足" detail="SUPABASE_SERVICE_ROLE_KEY を設定してください。" />
-  }
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
 
   type LooseFrom = {
     from: (t: string) => {
@@ -251,7 +247,6 @@ export default async function BrandAdminProductEditPage({
           productId={product.id}
           canEdit={canEdit}
           publicBase={publicBase}
-          bypass={bypass}
           justUploadedImageId={justUploadedImageId}
         />
       </Suspense>
@@ -277,7 +272,6 @@ async function ProductStepSection({
   productId,
   canEdit,
   publicBase,
-  bypass,
   justUploadedImageId,
 }: {
   stepNum: 1 | 2 | 3 | 4
@@ -285,10 +279,9 @@ async function ProductStepSection({
   productId: string
   canEdit: boolean
   publicBase: string
-  bypass: boolean
   justUploadedImageId: string | null
 }) {
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
   type LooseFrom = {
     from: (t: string) => {
       select: (s: string) => {

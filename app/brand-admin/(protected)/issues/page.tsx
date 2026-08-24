@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { createClient } from '@/lib/supabase/server'
 import { formatJSTDateTime } from '@/lib/brandAdminDate'
 import { pressableClass } from '@/lib/brandAdminUi'
 import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
@@ -47,15 +47,6 @@ export default async function BrandAdminIssuesListPage({
   searchParams: Promise<{ f?: string }>
 }) {
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return (
-      <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-        Dev Bypass: SUPABASE_SERVICE_ROLE_KEY を .env.local に設定してください。
-      </div>
-    )
-  }
 
   const sp = await searchParams
   const activeFilter = FILTERS.find((f) => f.key === sp.f) ?? FILTERS[0]
@@ -94,7 +85,6 @@ export default async function BrandAdminIssuesListPage({
       <Suspense fallback={<IssueListSkeleton />}>
         <IssueListSection
           brandId={ctx.currentBrand.brandId}
-          bypass={bypass}
           statuses={[...activeFilter.statuses]}
         />
       </Suspense>
@@ -104,14 +94,12 @@ export default async function BrandAdminIssuesListPage({
 
 async function IssueListSection({
   brandId,
-  bypass,
   statuses,
 }: {
   brandId: string
-  bypass: boolean
   statuses: string[]
 }) {
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
   type LooseFrom = {
     from: (t: string) => {
       select: (s: string) => {

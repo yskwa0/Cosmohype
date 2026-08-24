@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { createClient } from '@/lib/supabase/server'
 import { createProductAction } from '../actions'
 import ProductBasicsForm from '@/components/brand-admin/products/ProductBasicsForm'
 import { pressableClass } from '@/lib/brandAdminUi'
@@ -47,8 +47,7 @@ export default async function BrandAdminProductNewPage({
   if (!canEdit) {
     redirect('/brand-admin/products?err=forbidden')
   }
-  const bypass = isBrandAdminDevBypassEnabled()
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
   const loose = supabase as unknown as {
     from: (t: string) => {
       select: (s: string) => {

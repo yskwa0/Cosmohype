@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { createClient } from '@/lib/supabase/server'
 import { formatJSTDateTime } from '@/lib/brandAdminDate'
 import { pressableClass } from '@/lib/brandAdminUi'
 import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
@@ -41,30 +41,8 @@ interface GroupRow extends GroupRowBase {
     | null
 }
 
-function ErrorBanner({ title, detail }: { title: string; detail: string }) {
-  return (
-    <div>
-      <h1 className="text-lg font-semibold mb-2">{title}</h1>
-      <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 whitespace-pre-wrap break-words">
-        {detail}
-      </div>
-    </div>
-  )
-}
-
 export default async function BrandAdminOrdersListPage() {
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-
-  // Dev Bypass では service_role が必須。無いと admin client は 401 になる。
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return (
-      <ErrorBanner
-        title="Dev Bypass 設定不足"
-        detail="Dev Bypass 経路では .env.local に SUPABASE_SERVICE_ROLE_KEY を Test project の service_role key で設定する必要があります。"
-      />
-    )
-  }
 
   return (
     <div>
@@ -79,15 +57,15 @@ export default async function BrandAdminOrdersListPage() {
       </div>
 
       <Suspense fallback={<OrderListSkeleton />}>
-        <OrderListSection brandId={ctx.currentBrand.brandId} bypass={bypass} />
+        <OrderListSection brandId={ctx.currentBrand.brandId} />
       </Suspense>
     </div>
   )
 }
 
 // 一覧本体を async component 化し親 Suspense の後追いで stream。
-async function OrderListSection({ brandId, bypass }: { brandId: string; bypass: boolean }) {
-  const supabase = bypass ? createAdminClient() : await createClient()
+async function OrderListSection({ brandId }: { brandId: string }) {
+  const supabase = await createClient()
   type LooseFrom = {
     from: (t: string) => {
       select: (s: string) => {

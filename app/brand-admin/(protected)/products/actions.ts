@@ -6,8 +6,9 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { getBrandAdminContext } from '@/lib/brandAdmin'
 
 // Dev Bypass 撤去済 (Production Supabase 一本運用)。
-// createAdminClient は brand 画像 upload の storage RLS gap 回避 (Migration 145 未整備) と
-// storage の brand-scoped 直 write でのみ引き続き使用。 DB write は RPC 経由に統一済。
+// createAdminClient は deleteProductAction / deleteVariantAction の DELETE 権限 (RLS で
+// authenticated に DELETE grant なし) に対する server-side ガード付き service_role アクセスで
+// のみ引き続き使用。 通常の UPDATE / INSERT はすべて SECURITY DEFINER RPC 経由に統一済。
 
 // -----------------------------------------------------------------------------
 // 型緩和 (types/database に shop_* 未生成のため)
@@ -103,9 +104,7 @@ function mapErrorCode(msg: string): string {
 async function getContextAndClient() {
   const ctx = await getBrandAdminContext()
   const supabase = await createClient()
-  // Dev Bypass 撤去済 (Production 一本運用)。 `bypass` は常に false の sentinel。
-  // 既存 callsite の `if (bypass) { ... }` ブランチは dead code として残るが runtime 実行 = 0。
-  return { ctx, bypass: false as const, supabase: supabase as unknown as (Rpc & LooseFrom) }
+  return { ctx, supabase: supabase as unknown as (Rpc & LooseFrom) }
 }
 
 // -----------------------------------------------------------------------------
@@ -183,7 +182,7 @@ async function assertPublishableOrRedirect(
 // createProductAction
 // =============================================================================
 export async function createProductAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { ctx, supabase } = await getContextAndClient()
   const brandId = assertUUID(ctx.currentBrand.brandId)
   const back = '/brand-admin/products/new'
 
@@ -207,60 +206,33 @@ export async function createProductAction(formData: FormData): Promise<void> {
   // published への遷移は publishProductAction、archived は archiveProductAction 経由のみ。
   const status: 'draft' = 'draft'
 
-  if (bypass) {
-    const publishedAt: string | null = null   // 新規は draft のため常に null
-    const ins = await supabase.from('shop_products').insert({
-      brand_id: brandId,
-      category_id: categoryId,
-      name,
-      description: description.length > 0 ? description : null,
-      base_price: finalBasePrice,
-      compare_at_price: finalCompareAtPrice,
-      currency: 'JPY',
-      status,
-      style_id_tags: [],
-      is_new: isNew,
-      published_at: publishedAt,
-    })
-    if (ins.error) {
-      console.error('[brand-admin/products] dev bypass create failed', ins.error)
-      redirect(`${back}?err=update_failed`)
-    }
-    // 直近作成 row を name+brand で拾って id を得る (client insert returning が LooseFrom で無いため)
-    const sel = await supabase.from('shop_products').select('id').eq('brand_id', brandId).eq('name', name).order('created_at', { ascending: false }).limit(1)
-    const rows = (sel.data as Array<{ id: string }> | null) ?? []
-    revalidatePath('/brand-admin/products')
-    if (rows[0]) redirect(`/brand-admin/products/${rows[0].id}?saved=1&created=1&step=${targetStep}`)
-    redirect('/brand-admin/products?saved=1')
-  } else {
-    const res = await supabase.rpc('shop_brand_create_product', {
-      p_brand_id:         brandId,
-      p_category_id:      categoryId,
-      p_name:             name,
-      p_description:      description.length > 0 ? description : null,
-      p_base_price:       finalBasePrice,
-      p_compare_at_price: finalCompareAtPrice,
-      p_currency:         'JPY',
-      p_status:           status,
-      p_style_id_tags:    [],
-      p_is_new:           isNew,
-    })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc create failed', res.error)
-      redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
-    const newId = (res.data as string | null) ?? null
-    revalidatePath('/brand-admin/products')
-    if (newId) redirect(`/brand-admin/products/${newId}?saved=1&created=1&step=${targetStep}`)
-    redirect('/brand-admin/products?saved=1')
+  const res = await supabase.rpc('shop_brand_create_product', {
+    p_brand_id:         brandId,
+    p_category_id:      categoryId,
+    p_name:             name,
+    p_description:      description.length > 0 ? description : null,
+    p_base_price:       finalBasePrice,
+    p_compare_at_price: finalCompareAtPrice,
+    p_currency:         'JPY',
+    p_status:           status,
+    p_style_id_tags:    [],
+    p_is_new:           isNew,
+  })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc create failed', res.error)
+    redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
+  const newId = (res.data as string | null) ?? null
+  revalidatePath('/brand-admin/products')
+  if (newId) redirect(`/brand-admin/products/${newId}?saved=1&created=1&step=${targetStep}`)
+  redirect('/brand-admin/products?saved=1')
 }
 
 // =============================================================================
 // updateProductAction
 // =============================================================================
 export async function updateProductAction(formData: FormData): Promise<void> {
-  const { bypass, supabase, ctx } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const back = `/brand-admin/products/${productId}`
 
@@ -285,46 +257,24 @@ export async function updateProductAction(formData: FormData): Promise<void> {
   const finalBasePrice = basePrice ?? curRow!.base_price
   const finalCompareAtPrice = basePrice === null ? curRow!.compare_at_price : compareAtPrice
 
-  if (bypass) {
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    if (curRow!.brand_id !== brandId) redirect(`${back}?err=forbidden`)
-    const upd = await supabase.from('shop_products').update({
-      category_id: categoryId,
-      name,
-      description: description.length > 0 ? description : null,
-      base_price: finalBasePrice,
-      compare_at_price: finalCompareAtPrice,
-      status,
-      style_id_tags: preservedTags,
-      is_new: isNew,
-    }).eq('id', productId)
-    if (upd.error) {
-      console.error('[brand-admin/products] dev bypass update failed', upd.error)
-      redirect(`${back}?err=update_failed`)
-    }
-    // autosave 経路: 成功時は redirect しない (URL 変更で form state を壊さない)
-    revalidatePath(back)
-    return
-  } else {
-    const res = await supabase.rpc('shop_brand_update_product', {
-      p_product_id:       productId,
-      p_category_id:      categoryId,
-      p_name:             name,
-      p_description:      description.length > 0 ? description : null,
-      p_base_price:       finalBasePrice,
-      p_compare_at_price: finalCompareAtPrice,
-      p_currency:         'JPY',
-      p_status:           status,
-      p_style_id_tags:    preservedTags,
-      p_is_new:           isNew,
-    })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc update failed', res.error)
-      redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
-    revalidatePath(back)
-    return
+  const res = await supabase.rpc('shop_brand_update_product', {
+    p_product_id:       productId,
+    p_category_id:      categoryId,
+    p_name:             name,
+    p_description:      description.length > 0 ? description : null,
+    p_base_price:       finalBasePrice,
+    p_compare_at_price: finalCompareAtPrice,
+    p_currency:         'JPY',
+    p_status:           status,
+    p_style_id_tags:    preservedTags,
+    p_is_new:           isNew,
+  })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc update failed', res.error)
+    redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
+  revalidatePath(back)
+  return
 }
 
 // -----------------------------------------------------------------------------
@@ -356,7 +306,7 @@ function generateSku(brandSlug: string | null, productId: string, colorName: str
 //   - RPC / permission / brand ownership は既存経路をそのまま利用 (新 RPC 追加なし)
 // =============================================================================
 export async function publishProductAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const back = `/brand-admin/products/${productId}`
 
@@ -373,34 +323,21 @@ export async function publishProductAction(formData: FormData): Promise<void> {
 
   await assertPublishableOrRedirect(supabase, productId, back)
 
-  if (bypass) {
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    if (row!.brand_id !== brandId) redirect(`${back}?err=forbidden`)
-    const upd = await supabase.from('shop_products').update({
-      status: 'published',
-      published_at: new Date().toISOString(),
-    }).eq('id', productId)
-    if (upd.error) {
-      console.error('[brand-admin/products] dev bypass publish failed', upd.error)
-      redirect(`${back}?err=update_failed`)
-    }
-  } else {
-    const res = await supabase.rpc('shop_brand_update_product', {
-      p_product_id:       productId,
-      p_category_id:      row!.category_id,
-      p_name:             row!.name,
-      p_description:      row!.description,
-      p_base_price:       row!.base_price,
-      p_compare_at_price: row!.compare_at_price,
-      p_currency:         row!.currency,
-      p_status:           'published',
-      p_style_id_tags:    row!.style_id_tags ?? [],
-      p_is_new:           row!.is_new,
-    })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc publish failed', res.error)
-      redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
+  const res = await supabase.rpc('shop_brand_update_product', {
+    p_product_id:       productId,
+    p_category_id:      row!.category_id,
+    p_name:             row!.name,
+    p_description:      row!.description,
+    p_base_price:       row!.base_price,
+    p_compare_at_price: row!.compare_at_price,
+    p_currency:         row!.currency,
+    p_status:           'published',
+    p_style_id_tags:    row!.style_id_tags ?? [],
+    p_is_new:           row!.is_new,
+  })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc publish failed', res.error)
+    redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
   revalidatePath(back)
   redirect(`${back}?saved=1&published=1`)
@@ -411,7 +348,7 @@ export async function publishProductAction(formData: FormData): Promise<void> {
 //   status → 'archived' のみ。iOS 一覧から非表示、既存注文には影響なし。
 // =============================================================================
 export async function archiveProductAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   // 一覧「…」メニューから呼ばれた時は back='list' → 一覧へ redirect (既存詳細ページからの呼出は back 未指定で従来通り詳細へ戻る)
   const backFrom = String(formData.get('back') || '')
@@ -434,33 +371,21 @@ export async function archiveProductAction(formData: FormData): Promise<void> {
     redirect(`${back}?err=already_archived`)
   }
 
-  if (bypass) {
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    if (row!.brand_id !== brandId) redirect(`${back}?err=forbidden`)
-    const upd = await supabase.from('shop_products').update({
-      status: 'archived',
-    }).eq('id', productId)
-    if (upd.error) {
-      console.error('[brand-admin/products] dev bypass archive failed', upd.error)
-      redirect(`${back}?err=update_failed`)
-    }
-  } else {
-    const res = await supabase.rpc('shop_brand_update_product', {
-      p_product_id:       productId,
-      p_category_id:      row!.category_id,
-      p_name:             row!.name,
-      p_description:      row!.description,
-      p_base_price:       row!.base_price,
-      p_compare_at_price: row!.compare_at_price,
-      p_currency:         row!.currency,
-      p_status:           'archived',
-      p_style_id_tags:    row!.style_id_tags ?? [],
-      p_is_new:           row!.is_new,
-    })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc archive failed', res.error)
-      redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
+  const res = await supabase.rpc('shop_brand_update_product', {
+    p_product_id:       productId,
+    p_category_id:      row!.category_id,
+    p_name:             row!.name,
+    p_description:      row!.description,
+    p_base_price:       row!.base_price,
+    p_compare_at_price: row!.compare_at_price,
+    p_currency:         row!.currency,
+    p_status:           'archived',
+    p_style_id_tags:    row!.style_id_tags ?? [],
+    p_is_new:           row!.is_new,
+  })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc archive failed', res.error)
+    redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
   // list 経路は list を revalidate、詳細経路は詳細を revalidate
   revalidatePath(back)
@@ -595,7 +520,7 @@ export async function deleteProductAction(formData: FormData): Promise<void> {
 //   revalidate は一覧側 (/brand-admin/products) と詳細側の両方。
 // =============================================================================
 export async function revertToDraftAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const backList = `/brand-admin/products`
   const backDetail = `/brand-admin/products/${productId}`
@@ -613,33 +538,21 @@ export async function revertToDraftAction(formData: FormData): Promise<void> {
     revalidatePath(backList); redirect(`${backList}?saved=1`)
   }
 
-  if (bypass) {
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    if (row!.brand_id !== brandId) redirect(`${backList}?err=forbidden`)
-    const upd = await supabase.from('shop_products').update({
-      status: 'draft',
-    }).eq('id', productId)
-    if (upd.error) {
-      console.error('[brand-admin/products] dev bypass revert-to-draft failed', upd.error)
-      redirect(`${backList}?err=update_failed`)
-    }
-  } else {
-    const res = await supabase.rpc('shop_brand_update_product', {
-      p_product_id:       productId,
-      p_category_id:      row!.category_id,
-      p_name:             row!.name,
-      p_description:      row!.description,
-      p_base_price:       row!.base_price,
-      p_compare_at_price: row!.compare_at_price,
-      p_currency:         row!.currency,
-      p_status:           'draft',
-      p_style_id_tags:    row!.style_id_tags ?? [],
-      p_is_new:           row!.is_new,
-    })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc revert-to-draft failed', res.error)
-      redirect(`${backList}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
+  const res = await supabase.rpc('shop_brand_update_product', {
+    p_product_id:       productId,
+    p_category_id:      row!.category_id,
+    p_name:             row!.name,
+    p_description:      row!.description,
+    p_base_price:       row!.base_price,
+    p_compare_at_price: row!.compare_at_price,
+    p_currency:         row!.currency,
+    p_status:           'draft',
+    p_style_id_tags:    row!.style_id_tags ?? [],
+    p_is_new:           row!.is_new,
+  })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc revert-to-draft failed', res.error)
+    redirect(`${backList}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
   revalidatePath(backList)
   revalidatePath(backDetail)
@@ -653,7 +566,7 @@ export async function revertToDraftAction(formData: FormData): Promise<void> {
 //   publish validation は緩め (元 published → sold_out → published の復帰なので)。
 // =============================================================================
 export async function revertSoldOutAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const back = `/brand-admin/products/${productId}`
 
@@ -668,29 +581,19 @@ export async function revertSoldOutAction(formData: FormData): Promise<void> {
   if (!row) redirect(`${back}?err=product_not_found`)
   if (row!.status !== 'sold_out') redirect(`${back}?err=not_sold_out`)
 
-  if (bypass) {
-    const brandId = assertUUID(ctx.currentBrand.brandId)
-    if (row!.brand_id !== brandId) redirect(`${back}?err=forbidden`)
-    const upd = await supabase.from('shop_products').update({
-      status: 'published',
-      published_at: new Date().toISOString(),
-    }).eq('id', productId)
-    if (upd.error) redirect(`${back}?err=update_failed`)
-  } else {
-    const res = await supabase.rpc('shop_brand_update_product', {
-      p_product_id:       productId,
-      p_category_id:      row!.category_id,
-      p_name:             row!.name,
-      p_description:      row!.description,
-      p_base_price:       row!.base_price,
-      p_compare_at_price: row!.compare_at_price,
-      p_currency:         row!.currency,
-      p_status:           'published',
-      p_style_id_tags:    row!.style_id_tags ?? [],
-      p_is_new:           row!.is_new,
-    })
-    if (res.error) redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-  }
+  const res = await supabase.rpc('shop_brand_update_product', {
+    p_product_id:       productId,
+    p_category_id:      row!.category_id,
+    p_name:             row!.name,
+    p_description:      row!.description,
+    p_base_price:       row!.base_price,
+    p_compare_at_price: row!.compare_at_price,
+    p_currency:         row!.currency,
+    p_status:           'published',
+    p_style_id_tags:    row!.style_id_tags ?? [],
+    p_is_new:           row!.is_new,
+  })
+  if (res.error) redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   revalidatePath(back)
   redirect(`${back}?saved=1&reverted=1`)
 }
@@ -702,7 +605,7 @@ export async function revertSoldOutAction(formData: FormData): Promise<void> {
 //   既存: 現行 DB 値を fetch して保持 (勝手にリネームしない)
 // =============================================================================
 export async function upsertVariantAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { ctx, supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const back = `/brand-admin/products/${productId}`
 
@@ -736,86 +639,31 @@ export async function upsertVariantAction(formData: FormData): Promise<void> {
     priceRaw = row!.price   // 既存 variant.price を維持
   }
 
-  if (bypass) {
-    if (variantId === null) {
-      // 新規 insert (unique_violation で最大 5 回 sku 再生成 retry)
-      let insertedId: string | null = null
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const vinsRes = await supabase.from('shop_product_variants').insert({
-          product_id: productId,
-          sku,
-          size: size.length > 0 ? size : null,
-          color_name: colorName.length > 0 ? colorName : null,
-          color_hex: colorHex.length > 0 ? colorHex : null,
-          price: priceRaw,
-          status,
-        })
-        if (!vinsRes.error) {
-          const sel = await supabase.from('shop_product_variants').select('id').eq('sku', sku).eq('product_id', productId).maybeSingle()
-          insertedId = (sel.data as { id: string } | null)?.id ?? null
-          break
-        }
-        if (/duplicate|unique/i.test(vinsRes.error.message)) {
-          sku = generateSku(ctx.currentBrand.brandSlug, productId, colorName, size)
-          continue
-        }
-        console.error('[brand-admin/products] dev bypass variant insert failed', vinsRes.error)
-        redirect(`${back}?err=update_failed`)
-      }
-      if (!insertedId) redirect(`${back}?err=sku_generation_failed`)
-      const invIns = await supabase.from('shop_inventory').insert({
-        variant_id: insertedId!, quantity_available: qty, quantity_reserved: 0,
-      })
-      if (invIns.error) {
-        console.error('[brand-admin/products] dev bypass inventory insert failed', invIns.error)
-        redirect(`${back}?err=update_failed`)
-      }
-    } else {
-      // 既存 update: sku は既存値のまま
-      const vupd = await supabase.from('shop_product_variants').update({
-        sku,
-        size: size.length > 0 ? size : null,
-        color_name: colorName.length > 0 ? colorName : null,
-        color_hex: colorHex.length > 0 ? colorHex : null,
-        price: priceRaw,
-        status,
-      }).eq('id', variantId)
-      if (vupd.error) {
-        console.error('[brand-admin/products] dev bypass variant update failed', vupd.error)
-        redirect(`${back}?err=update_failed`)
-      }
-      const invUpd = await supabase.from('shop_inventory').update({ quantity_available: qty }).eq('variant_id', variantId)
-      if (invUpd.error) redirect(`${back}?err=update_failed`)
+  // RPC 経路 (新規時は unique_violation → sku 再生成 retry)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const res = await supabase.rpc('shop_brand_upsert_variant', {
+      p_product_id:         productId,
+      p_variant_id:         variantId,
+      p_sku:                sku,
+      p_size:               size.length > 0 ? size : null,
+      p_color_name:         colorName.length > 0 ? colorName : null,
+      p_color_hex:          colorHex.length > 0 ? colorHex : null,
+      p_price:              priceRaw,
+      p_status:             status,
+      p_quantity_available: qty,
+    })
+    if (!res.error) {
+      revalidatePath(back)
+      return
     }
-    revalidatePath(back)
-    return
-  } else {
-    // RPC 経路 (新規時は unique_violation → sku 再生成 retry)
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const res = await supabase.rpc('shop_brand_upsert_variant', {
-        p_product_id:         productId,
-        p_variant_id:         variantId,
-        p_sku:                sku,
-        p_size:               size.length > 0 ? size : null,
-        p_color_name:         colorName.length > 0 ? colorName : null,
-        p_color_hex:          colorHex.length > 0 ? colorHex : null,
-        p_price:              priceRaw,
-        p_status:             status,
-        p_quantity_available: qty,
-      })
-      if (!res.error) {
-        revalidatePath(back)
-        return
-      }
-      if (variantId === null && /sku_already_used/i.test(res.error.message)) {
-        sku = generateSku(ctx.currentBrand.brandSlug, productId, colorName, size)
-        continue
-      }
-      console.error('[brand-admin/products] rpc upsert variant failed', res.error)
-      redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
+    if (variantId === null && /sku_already_used/i.test(res.error.message)) {
+      sku = generateSku(ctx.currentBrand.brandSlug, productId, colorName, size)
+      continue
     }
-    redirect(`${back}?err=sku_generation_failed`)
+    console.error('[brand-admin/products] rpc upsert variant failed', res.error)
+    redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
+  redirect(`${back}?err=sku_generation_failed`)
 }
 
 // =============================================================================
@@ -884,19 +732,13 @@ export async function deleteVariantAction(formData: FormData): Promise<void> {
 // archiveVariantAction  (物理 delete しない、既存互換のみ保持)
 // =============================================================================
 export async function archiveVariantAction(formData: FormData): Promise<void> {
-  const { bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const variantId = assertUUID(formData.get('variant_id'))
   const back = `/brand-admin/products/${productId}`
 
-  if (bypass) {
-    const vupd = await supabase.from('shop_product_variants').update({ status: 'archived' }).eq('id', variantId)
-    if (vupd.error) redirect(`${back}?err=update_failed`)
-    await supabase.from('shop_inventory').update({ quantity_available: 0 }).eq('variant_id', variantId)
-  } else {
-    const res = await supabase.rpc('shop_brand_archive_variant', { p_variant_id: variantId })
-    if (res.error) redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-  }
+  const res = await supabase.rpc('shop_brand_archive_variant', { p_variant_id: variantId })
+  if (res.error) redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   revalidatePath(back)
   redirect(`${back}?saved=1`)
 }
@@ -905,22 +747,17 @@ export async function archiveVariantAction(formData: FormData): Promise<void> {
 // updateInventoryAction  (quantity_available のみ)
 // =============================================================================
 export async function updateInventoryAction(formData: FormData): Promise<void> {
-  const { bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const variantId = assertUUID(formData.get('variant_id'))
   const qty = toInt(formData.get('quantity_available'))
   const back = `/brand-admin/products/${productId}`
   if (!Number.isFinite(qty) || qty < 0) redirect(`${back}?err=invalid_quantity`)
 
-  if (bypass) {
-    const upd = await supabase.from('shop_inventory').update({ quantity_available: qty }).eq('variant_id', variantId)
-    if (upd.error) redirect(`${back}?err=update_failed`)
-  } else {
-    const res = await supabase.rpc('shop_brand_update_inventory', {
-      p_variant_id: variantId, p_quantity_available: qty,
-    })
-    if (res.error) redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-  }
+  const res = await supabase.rpc('shop_brand_update_inventory', {
+    p_variant_id: variantId, p_quantity_available: qty,
+  })
+  if (res.error) redirect(`${back}?err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   revalidatePath(back)
   redirect(`${back}?saved=1`)
 }
@@ -929,7 +766,7 @@ export async function updateInventoryAction(formData: FormData): Promise<void> {
 // uploadImageAction  (max 5 枚制限、file upload + row insert)
 // =============================================================================
 export async function uploadImageAction(formData: FormData): Promise<void> {
-  const { ctx, bypass, supabase } = await getContextAndClient()
+  const { ctx, supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   // 画像操作は必ず STEP2 UI 上で発火する。redirect に step=2 を含めないと
   // 完了後 STEP1 (=default) に戻ってしまうため、成功/失敗どちらも step=2 で戻す。
@@ -967,43 +804,21 @@ export async function uploadImageAction(formData: FormData): Promise<void> {
   const isPrimary = existing.length === 0
   // 追加行の image_id を取得して redirect param に載せる (Grid 側で crop editor を auto-open)
   let newImageId: string | null = null
-  if (bypass) {
-    const ins = await supabase.from('shop_product_images').insert({
-      product_id: productId,
-      storage_path: path,
-      sort_order: existing.length,
-      is_primary: isPrimary,
-    })
-    if (ins.error) {
-      await supabase.storage.from('shop-product-images').remove([path]).catch(() => {})
-      console.error('[brand-admin/products] dev bypass image row insert failed', ins.error)
-      redirect(`${back}&err=update_failed`)
-    }
-    // 直近 insert 行を storage_path で lookup (LooseFrom.insert が returning を型定義していないため)
-    const sel = await supabase
-      .from('shop_product_images')
-      .select('id')
-      .eq('storage_path', path)
-      .limit(1)
-    const rows = ((sel.data as Array<{ id: string }> | null) ?? [])
-    newImageId = rows[0]?.id ?? null
-  } else {
-    const res = await supabase.rpc('shop_brand_add_product_image', {
-      p_product_id: productId,
-      p_storage_path: path,
-      p_sort_order: existing.length,
-      p_is_primary: isPrimary,
-    })
-    if (res.error) {
-      await supabase.storage.from('shop-product-images').remove([path]).catch(() => {})
-      console.error('[brand-admin/products] rpc add image failed', res.error)
-      redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
-    // RPC は新規 image UUID を返す (Migration 130)
-    const raw = res.data
-    if (typeof raw === 'string' && /^[0-9a-fA-F-]{36}$/.test(raw)) {
-      newImageId = raw
-    }
+  const res = await supabase.rpc('shop_brand_add_product_image', {
+    p_product_id: productId,
+    p_storage_path: path,
+    p_sort_order: existing.length,
+    p_is_primary: isPrimary,
+  })
+  if (res.error) {
+    await supabase.storage.from('shop-product-images').remove([path]).catch(() => {})
+    console.error('[brand-admin/products] rpc add image failed', res.error)
+    redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
+  }
+  // RPC は新規 image UUID を返す (Migration 130)
+  const raw = res.data
+  if (typeof raw === 'string' && /^[0-9a-fA-F-]{36}$/.test(raw)) {
+    newImageId = raw
   }
   // revalidate は step クエリなしの base path で
   revalidatePath(`/brand-admin/products/${productId}`)
@@ -1015,35 +830,16 @@ export async function uploadImageAction(formData: FormData): Promise<void> {
 // setPrimaryImageAction  (unique index 対応の原子的 primary 切替)
 // =============================================================================
 export async function setPrimaryImageAction(formData: FormData): Promise<void> {
-  const { bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const imageId = assertUUID(formData.get('image_id'))
   // 画像操作は STEP2 UI 上で発火するため redirect にも step=2 を保持
   const back = `/brand-admin/products/${productId}?step=2`
 
-  if (bypass) {
-    // admin client 経由: 単一 UPDATE で切替 (unique index (product_id) where is_primary=true を安全に扱う)
-    // shop_product_images の update signature は eq 1 個だが product_id で全件更新する必要があるため
-    // set 式で条件付き値を使う: is_primary = (id = ?)。
-    // LooseFrom.update は eq 1 段しか型付けしていないが、実行時は複数条件 OK。
-    // ここでは product_id で全件を対象に取り、set is_primary = (id = imageId) にする。
-    const upd = await (supabase as unknown as {
-      from: (t: string) => {
-        update: (patch: Record<string, unknown>) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> }
-      }
-    }).from('shop_product_images')
-      .update({ is_primary: false })
-      .eq('product_id', productId)
-    if (upd.error) redirect(`${back}&err=update_failed`)
-    // target のみ true
-    const upd2 = await supabase.from('shop_product_images').update({ is_primary: true }).eq('id', imageId)
-    if (upd2.error) redirect(`${back}&err=update_failed`)
-  } else {
-    const res = await supabase.rpc('shop_brand_set_primary_image', { p_image_id: imageId })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc set primary failed', res.error)
-      redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    }
+  const res = await supabase.rpc('shop_brand_set_primary_image', { p_image_id: imageId })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc set primary failed', res.error)
+    redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
   }
   revalidatePath(`/brand-admin/products/${productId}`)
   redirect(`${back}&saved=1`)
@@ -1053,26 +849,15 @@ export async function setPrimaryImageAction(formData: FormData): Promise<void> {
 // deleteImageAction
 // =============================================================================
 export async function deleteImageAction(formData: FormData): Promise<void> {
-  const { bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const productId = assertUUID(formData.get('product_id'))
   const imageId = assertUUID(formData.get('image_id'))
   // 画像操作は STEP2 UI 上で発火するため redirect にも step=2 を保持
   const back = `/brand-admin/products/${productId}?step=2`
 
-  let storagePath: string | null = null
-
-  if (bypass) {
-    const sel = await supabase.from('shop_product_images').select('storage_path').eq('id', imageId).maybeSingle()
-    const row = sel.data as { storage_path: string } | null
-    if (!row) redirect(`${back}&err=image_not_found`)
-    storagePath = row!.storage_path
-    const delOp = await supabase.from('shop_product_images').delete().eq('id', imageId)
-    if (delOp.error) redirect(`${back}&err=update_failed`)
-  } else {
-    const res = await supabase.rpc('shop_brand_delete_product_image', { p_image_id: imageId })
-    if (res.error) redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
-    storagePath = (res.data as string | null) ?? null
-  }
+  const res = await supabase.rpc('shop_brand_delete_product_image', { p_image_id: imageId })
+  if (res.error) redirect(`${back}&err=${encodeURIComponent(mapErrorCode(res.error.message))}`)
+  const storagePath = (res.data as string | null) ?? null
 
   if (storagePath) {
     const rm = await supabase.storage.from('shop-product-images').remove([storagePath])
@@ -1096,7 +881,7 @@ export async function deleteImageAction(formData: FormData): Promise<void> {
 //   固定文言を出す (現時点 crop 特有の user 分岐は不要)。
 // =============================================================================
 export async function updateImageCropAction(formData: FormData): Promise<void> {
-  const { bypass, supabase } = await getContextAndClient()
+  const { supabase } = await getContextAndClient()
   const imageId = assertUUID(formData.get('image_id'))
   const zoom    = Number(formData.get('crop_zoom'))
   const offX    = Number(formData.get('crop_offset_x'))
@@ -1105,26 +890,14 @@ export async function updateImageCropAction(formData: FormData): Promise<void> {
   if (!Number.isFinite(offX) || offX < -1.0 || offX > 1.0) throw new Error('invalid_offset_x')
   if (!Number.isFinite(offY) || offY < -1.0 || offY > 1.0) throw new Error('invalid_offset_y')
 
-  if (bypass) {
-    // Dev Bypass: admin client で直接 UPDATE (Migration 137 未適用時は列不在で失敗する)
-    const upd = await supabase
-      .from('shop_product_images')
-      .update({ crop_zoom: zoom, crop_offset_x: offX, crop_offset_y: offY })
-      .eq('id', imageId)
-    if (upd.error) {
-      console.error('[brand-admin/products] dev bypass crop update failed', upd.error)
-      throw new Error(mapErrorCode(upd.error.message))
-    }
-  } else {
-    const res = await supabase.rpc('shop_brand_update_image_crop', {
-      p_image_id: imageId,
-      p_zoom: zoom,
-      p_offset_x: offX,
-      p_offset_y: offY,
-    })
-    if (res.error) {
-      console.error('[brand-admin/products] rpc crop update failed', res.error)
-      throw new Error(mapErrorCode(res.error.message))
-    }
+  const res = await supabase.rpc('shop_brand_update_image_crop', {
+    p_image_id: imageId,
+    p_zoom: zoom,
+    p_offset_x: offX,
+    p_offset_y: offY,
+  })
+  if (res.error) {
+    console.error('[brand-admin/products] rpc crop update failed', res.error)
+    throw new Error(mapErrorCode(res.error.message))
   }
 }

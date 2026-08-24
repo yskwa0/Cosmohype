@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { getBrandAdminContext, isBrandAdminDevBypassEnabled } from '@/lib/brandAdmin'
+import { getBrandAdminContext } from '@/lib/brandAdmin'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { formatJSTDateTime } from '@/lib/brandAdminDate'
 import {
@@ -96,15 +96,7 @@ export default async function BrandAdminIssueDetailPage({
   if (!/^[0-9a-fA-F-]{36}$/.test(issueId)) notFound()
 
   const ctx = await getBrandAdminContext()
-  const bypass = isBrandAdminDevBypassEnabled()
-  if (bypass && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return (
-      <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-        Dev Bypass: SUPABASE_SERVICE_ROLE_KEY を .env.local に設定してください。
-      </div>
-    )
-  }
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
 
   type LooseFrom = {
     from: (t: string) => {
@@ -205,8 +197,10 @@ export default async function BrandAdminIssueDetailPage({
 // 対象商品カード / 購入者カード / 証拠写真 / 審査結果 / 操作導線を描画
 // -----------------------------------------------------------------------------
 async function IssueRelated({ issue }: { issue: IssueDetail }) {
-  const bypass = isBrandAdminDevBypassEnabled()
-  const supabase = bypass ? createAdminClient() : await createClient()
+  const supabase = await createClient()
+  // 証拠画像 (issue-evidence bucket) は storage RLS 未整備のため signed URL 発行を
+  // service_role (createAdminClient) で行う。 これは Dev Bypass ではなく Production
+  // の恒常運用に必要な admin client 経路 (storage 権限 gap 対応)。
   const adminForSigned = createAdminClient()
   type LooseFrom = {
     from: (t: string) => {
