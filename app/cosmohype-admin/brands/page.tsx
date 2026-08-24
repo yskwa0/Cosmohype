@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCosmohypeAdminContext } from '@/lib/cosmohypeAdmin'
 import { suspendBrandAction, reactivateBrandAction } from './actions'
@@ -159,7 +160,15 @@ export default async function CosmohypeAdminBrandsPage({
                     {statusLabel(r.status)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-[11px] text-neutral-500 font-mono">{r.id}</td>
+                <td className="px-4 py-3 text-[11px] text-neutral-500 font-mono">
+                  <div>{r.id}</div>
+                  <Link
+                    href={`/cosmohype-admin/brands/${r.id}`}
+                    className="mt-1 inline-block text-[11px] text-neutral-700 hover:underline"
+                  >
+                    販売事業者情報を確認 →
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-right">
                   {r.status === 'active' && (
                     <form action={suspendBrandAction} className="inline-flex items-center gap-2">

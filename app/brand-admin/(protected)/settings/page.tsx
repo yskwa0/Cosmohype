@@ -6,6 +6,7 @@ import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRule
 import ShippingRulesSection from '@/components/brand-admin/ShippingRulesSection'
 import BrandProfileForm, { type BrandProfileInitial } from '@/components/brand-admin/BrandProfileForm'
 import BrandSocialLinksForm, { type BrandSocialLinksInitial } from '@/components/brand-admin/BrandSocialLinksForm'
+import BrandLegalInfoForm, { type BrandLegalInfoInitial } from '@/components/brand-admin/BrandLegalInfoForm'
 import { type DeliveryReturnPolicyInitial } from '@/components/brand-admin/DeliveryReturnPolicyForm'
 import DeliveryReturnPolicySection from '@/components/brand-admin/DeliveryReturnPolicySection'
 import {
@@ -13,6 +14,7 @@ import {
   updateShippingRulesAction,
   updateBrandProfileAction,
   updateBrandSocialLinksAction,
+  updateBrandLegalInfoAction,
   updateDeliveryReturnPolicyAction,
 } from './actions'
 
@@ -69,6 +71,18 @@ function errorLabel(code: string): string {
     case 'return_days_only_when_accepted':  return '返品を「受付する」以外に設定した場合は、受付期間 (日数) を入力しないでください。'
     case 'return_policy_note_too_long':     return '返品・交換の補足条件は 1000 文字以内で入力してください。'
     case 'brand_not_found':                 return 'ブランド情報が見つかりませんでした。ページを再読み込みしてお試しください。'
+    // Migration 163: 特商法表記 販売事業者情報
+    case 'invalid_legal_postal_code':               return '郵便番号は 7 桁 (例: 273-0002 / 2730002) で入力してください。'
+    case 'invalid_legal_phone':                     return '電話番号は数字 / - / 空白 / () で入力してください。'
+    case 'invalid_legal_email':                     return '正しいメールアドレス形式で入力してください。'
+    case 'legal_name_too_long':                     return '販売事業者名は 100 文字以内で入力してください。'
+    case 'legal_representative_name_too_long':      return '代表責任者名は 100 文字以内で入力してください。'
+    case 'legal_prefecture_too_long':               return '都道府県は 20 文字以内で入力してください。'
+    case 'legal_city_too_long':                     return '市区町村は 100 文字以内で入力してください。'
+    case 'legal_address_line1_too_long':            return '番地は 200 文字以内で入力してください。'
+    case 'legal_address_line2_too_long':            return '建物名・部屋番号は 200 文字以内で入力してください。'
+    case 'legal_phone_too_long':                    return '電話番号は 30 文字以内で入力してください。'
+    case 'legal_email_too_long':                    return 'メールアドレスは 200 文字以内で入力してください。'
     default:                       return `保存に失敗しました (${code})`
   }
 }
@@ -103,6 +117,20 @@ interface SocialLinksRow {
   instagram_url: string | null
 }
 
+// Migration 163: 特商法表記 販売事業者法定情報 (9 列)。
+// Migration 未 apply 環境では列不在エラーで返るが、UI 側で空値扱いにフォールバック。
+interface LegalInfoRow {
+  legal_name:                 string | null
+  legal_representative_name:  string | null
+  legal_postal_code:          string | null
+  legal_prefecture:           string | null
+  legal_city:                 string | null
+  legal_address_line1:        string | null
+  legal_address_line2:        string | null
+  legal_phone:                string | null
+  legal_email:                string | null
+}
+
 export default async function BrandAdminSettingsPage({
   searchParams,
 }: {
@@ -116,6 +144,8 @@ export default async function BrandAdminSettingsPage({
   const savedPolicy = sp.saved === 'policy'
   // Migration 162: SNS リンク保存後の success banner。
   const savedSocial = sp.saved === 'social'
+  // Migration 163: 特商法表記 販売事業者情報保存後の success banner。
+  const savedLegal = sp.saved === 'legal'
   const errCode = sp.err ?? null
 
   const ctx = await getBrandAdminContext()
@@ -138,8 +168,8 @@ export default async function BrandAdminSettingsPage({
     ? `${supaUrlBase}/storage/v1/object/public/shop-brand-assets/`
     : ''
 
-  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー + SNS リンク を Promise.all で並列化
-  const [res, shipProbe, profileProbe, policyProbe, socialProbe] = await Promise.all([
+  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー + SNS リンク + 法定事業者情報 を Promise.all で並列化
+  const [res, shipProbe, profileProbe, policyProbe, socialProbe, legalProbe] = await Promise.all([
     loose
       .from('shop_brands')
       .select(
@@ -206,6 +236,21 @@ export default async function BrandAdminSettingsPage({
     })
       .from('shop_brands')
       .select('website_url, instagram_url')
+      .eq('id', ctx.currentBrand.brandId)
+      .maybeSingle(),
+    // Migration 163: 特商法表記 販売事業者情報 probe。
+    //   Migration 163 未 apply 環境では列不在エラーで返るが、UI 側で「未設定」扱いにフォールバックする。
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: LegalInfoRow | null; error: { message: string } | null }>
+          }
+        }
+      }
+    })
+      .from('shop_brands')
+      .select('legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_address_line2, legal_phone, legal_email')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
   ])
@@ -300,6 +345,26 @@ export default async function BrandAdminSettingsPage({
   }
   const socialReadError = socialProbe.error?.message ?? null
 
+  // Migration 163: 特商法表記 販売事業者法定情報 initial。
+  //   Migration 163 未 apply 環境 (production DB へ未反映) では列不在エラーで返るので、
+  //   全 field null (未入力) にフォールバック + 説明バナー表示。
+  const migration163NotApplied =
+    legalProbe.error !== null &&
+    /column .*(legal_name|legal_representative_name|legal_postal_code|legal_prefecture|legal_city|legal_address_line1|legal_address_line2|legal_phone|legal_email).* does not exist/i.test(legalProbe.error.message)
+  const legalInitial: BrandLegalInfoInitial = {
+    legalName:               legalProbe.data?.legal_name                ?? null,
+    legalRepresentativeName: legalProbe.data?.legal_representative_name ?? null,
+    legalPostalCode:         legalProbe.data?.legal_postal_code         ?? null,
+    legalPrefecture:         legalProbe.data?.legal_prefecture          ?? null,
+    legalCity:               legalProbe.data?.legal_city                ?? null,
+    legalAddressLine1:       legalProbe.data?.legal_address_line1       ?? null,
+    legalAddressLine2:       legalProbe.data?.legal_address_line2       ?? null,
+    legalPhone:              legalProbe.data?.legal_phone               ?? null,
+    legalEmail:              legalProbe.data?.legal_email               ?? null,
+  }
+  const legalReadError =
+    (!migration163NotApplied && legalProbe.error) ? legalProbe.error.message : null
+
   // staff は編集不可 (owner / admin のみ)。Dev Bypass は admin なので編集可。
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
   const disabledReason = canEdit
@@ -343,7 +408,12 @@ export default async function BrandAdminSettingsPage({
           公式サイト / Instagram の URL を保存しました。
         </div>
       )}
-      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && (
+      {savedLegal && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          特商法表記 販売事業者情報を保存しました。
+        </div>
+      )}
+      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && !savedLegal && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorLabel(errCode)}
         </div>
@@ -392,6 +462,39 @@ export default async function BrandAdminSettingsPage({
           disabled={!canEdit}
           disabledReason={disabledReason}
         />
+      </section>
+
+      {/* Migration 163: 販売事業者情報 (特定商取引法に基づく表記)。
+          shop_brand_update_profile / _social_links / _return_address 系とは責務が完全に別で、
+          独立 RPC shop_brand_update_legal_info を叩く = blast radius 最小。
+          Phase 1: DB + 入力 UI のみ。 published gate 強化 / iOS 表示は次 phase。 */}
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold">販売事業者情報 (特定商取引法に基づく表記)</h2>
+          <div className="mt-1 text-[11px] text-neutral-500">
+            HYPE で商品を販売するにあたり、法定表示に必要な販売事業者情報を登録します。
+            返品先住所 (下段) とは責務が別で、こちらは「消費者に公開される販売業者としての情報」です。
+            すべて任意入力ですが、実運用開始前にすべての項目を入力してください。
+          </div>
+          {migration163NotApplied && (
+            <div className="mt-2 text-[12px] text-orange-800 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+              販売事業者情報の準備が完了していません (DB 側の準備待ち)。設定完了までしばらくお待ちください。
+            </div>
+          )}
+          {legalReadError && !migration163NotApplied && (
+            <div className="mt-2 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+              販売事業者情報の読込に失敗しました。 新規入力として扱います。 詳細: {legalReadError}
+            </div>
+          )}
+        </div>
+        {!migration163NotApplied && (
+          <BrandLegalInfoForm
+            initial={legalInitial}
+            action={updateBrandLegalInfoAction}
+            disabled={!canEdit}
+            disabledReason={disabledReason}
+          />
+        )}
       </section>
 
       <section className="border border-neutral-200 rounded-xl bg-white p-6">

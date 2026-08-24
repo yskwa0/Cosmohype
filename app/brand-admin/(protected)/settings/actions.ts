@@ -412,6 +412,100 @@ export async function updateBrandSocialLinksAction(formData: FormData): Promise<
 }
 
 // =============================================================================
+// updateBrandLegalInfoAction  (Migration 163: 特商法表記 販売事業者情報)
+//
+// フォーム入力 (すべて任意、空欄は NULL に戻せる):
+//   ・legal_name / legal_representative_name (<=100 chars)
+//   ・legal_postal_code                       (7 digits after strip - RPC で正規化)
+//   ・legal_prefecture (<=20) / legal_city (<=100) / legal_address_line1/2 (<=200)
+//   ・legal_phone      (digits / - / space / () / +、<=30)
+//   ・legal_email      (@ 含む、<=200)
+//
+// server / client 両方で validate:
+//   ・BrandLegalInfoForm.tsx (client) は UX、送信ボタン disable
+//   ・本 action は最終防波堤: 郵便番号正規化 + 空欄 → NULL
+//   ・RPC 側 (shop_brand_update_legal_info) がさらに三重にチェック
+//
+// 独立 RPC のため shop_brand_update_profile / _social_links / _return_address /
+// _delivery_return_policy には一切触れない = 既存 5 action の副作用を分離する。
+// Dev Bypass は撤去済 (Production 一本運用)、通常経路のみ。
+// =============================================================================
+export async function updateBrandLegalInfoAction(formData: FormData): Promise<void> {
+  const returnUrl = '/brand-admin/settings'
+
+  const legalName    = trimOrEmpty(formData.get('legal_name'), 100)
+  const legalRep     = trimOrEmpty(formData.get('legal_representative_name'), 100)
+  const legalPostal  = trimOrEmpty(formData.get('legal_postal_code'), 20)
+  const legalPref    = trimOrEmpty(formData.get('legal_prefecture'), 20)
+  const legalCity    = trimOrEmpty(formData.get('legal_city'), 100)
+  const legalA1      = trimOrEmpty(formData.get('legal_address_line1'), 200)
+  const legalA2      = trimOrEmpty(formData.get('legal_address_line2'), 200)
+  const legalPhone   = trimOrEmpty(formData.get('legal_phone'), 30)
+  const legalEmail   = trimOrEmpty(formData.get('legal_email'), 200)
+
+  // 郵便番号: 空欄なら null、非空なら - を除いて 7 桁 数字必須
+  let postalForRpc: string | null = null
+  if (legalPostal.length > 0) {
+    const normalized = normalizePostal(legalPostal)
+    if (!normalized) {
+      redirect(`${returnUrl}?err=invalid_legal_postal_code`)
+    }
+    postalForRpc = normalized
+  }
+
+  // 電話 / email 形式チェック (Empty はスルー、非空なら validate)
+  if (legalPhone.length > 0 && !/^[0-9\-\s()+]+$/.test(legalPhone)) {
+    redirect(`${returnUrl}?err=invalid_legal_phone`)
+  }
+  if (legalEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(legalEmail)) {
+    redirect(`${returnUrl}?err=invalid_legal_email`)
+  }
+
+  const ctx = await getBrandAdminContext()
+  const brandId = assertUUID(ctx.currentBrand.brandId)
+  const supabase = await createClient()
+
+  const { error } = await (
+    supabase as unknown as {
+      rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
+    }
+  ).rpc('shop_brand_update_legal_info', {
+    p_brand_id:                    brandId,
+    p_legal_name:                  legalName.length > 0 ? legalName : null,
+    p_legal_representative_name:   legalRep.length > 0 ? legalRep : null,
+    p_legal_postal_code:           postalForRpc,
+    p_legal_prefecture:            legalPref.length > 0 ? legalPref : null,
+    p_legal_city:                  legalCity.length > 0 ? legalCity : null,
+    p_legal_address_line1:         legalA1.length > 0 ? legalA1 : null,
+    p_legal_address_line2:         legalA2.length > 0 ? legalA2 : null,
+    p_legal_phone:                 legalPhone.length > 0 ? legalPhone : null,
+    p_legal_email:                 legalEmail.length > 0 ? legalEmail : null,
+  })
+  if (error) {
+    const msg = error.message.toLowerCase()
+    let code: string = 'update_failed'
+    if (msg.includes('forbidden'))                                code = 'forbidden'
+    else if (msg.includes('not_authenticated'))                   code = 'not_authenticated'
+    else if (msg.includes('invalid_legal_postal_code'))           code = 'invalid_legal_postal_code'
+    else if (msg.includes('invalid_legal_phone'))                 code = 'invalid_legal_phone'
+    else if (msg.includes('invalid_legal_email'))                 code = 'invalid_legal_email'
+    else if (msg.includes('legal_name_too_long'))                 code = 'legal_name_too_long'
+    else if (msg.includes('legal_representative_name_too_long'))  code = 'legal_representative_name_too_long'
+    else if (msg.includes('legal_prefecture_too_long'))           code = 'legal_prefecture_too_long'
+    else if (msg.includes('legal_city_too_long'))                 code = 'legal_city_too_long'
+    else if (msg.includes('legal_address_line1_too_long'))        code = 'legal_address_line1_too_long'
+    else if (msg.includes('legal_address_line2_too_long'))        code = 'legal_address_line2_too_long'
+    else if (msg.includes('legal_phone_too_long'))                code = 'legal_phone_too_long'
+    else if (msg.includes('legal_email_too_long'))                code = 'legal_email_too_long'
+    console.error('[brand-admin/settings] rpc legal info update failed', error)
+    redirect(`${returnUrl}?err=${encodeURIComponent(code)}`)
+  }
+
+  revalidatePath(returnUrl)
+  redirect(`${returnUrl}?saved=legal`)
+}
+
+// =============================================================================
 // updateDeliveryReturnPolicyAction (Phase B / Migration 155)
 //
 // フォーム入力 (すべて任意、空 = null にリセット可能):
