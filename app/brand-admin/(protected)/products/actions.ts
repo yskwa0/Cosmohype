@@ -190,10 +190,10 @@ async function assertPublishableOrRedirect(
 
   const brandId = priceRow!.brand_id
 
-  // Phase 2 / Migration 166: 販売事業者情報 + 販売者区分 + 配送・返品ポリシー を brand row から確認
+  // Phase 2 / Migration 166 + Phase 4-A / Migration 167: 販売事業者情報 + 販売者区分 + 配送・返品ポリシー + 返品送料負担者 を brand row から確認
   const brandRes = await supabase
     .from('shop_brands')
-    .select('legal_entity_type, legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_phone, legal_email, dispatch_lead_days, return_accepted, return_days, exchange_accepted')
+    .select('legal_entity_type, legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_phone, legal_email, dispatch_lead_days, return_accepted, return_days, exchange_accepted, return_shipping_cost_bearer')
     .eq('id', brandId)
     .maybeSingle()
   const brandRow = brandRes.data as {
@@ -203,6 +203,7 @@ async function assertPublishableOrRedirect(
     legal_address_line1: string | null; legal_phone: string | null; legal_email: string | null;
     dispatch_lead_days: number | null; return_accepted: boolean | null; return_days: number | null;
     exchange_accepted: boolean | null;
+    return_shipping_cost_bearer: string | null;
   } | null
   if (!brandRow) redirect(`${back}?err=publish_requires_legal_info`)
 
@@ -224,10 +225,17 @@ async function assertPublishableOrRedirect(
     : commonRequired
   if (!legalRequired) redirect(`${back}?err=publish_requires_legal_info`)
 
-  // 配送・返品ポリシー: 発送目安 + 返品受付判定 (accepted=true なら日数必須) + 交換受付
+  // 配送・返品ポリシー: 発送目安 + 返品受付判定 (accepted=true なら日数必須 + Phase 4-A で送料負担者必須) + 交換受付
   if (brandRow!.dispatch_lead_days === null) redirect(`${back}?err=publish_requires_delivery_policy`)
   if (brandRow!.return_accepted === null)    redirect(`${back}?err=publish_requires_delivery_policy`)
   if (brandRow!.return_accepted === true && brandRow!.return_days === null) {
+    redirect(`${back}?err=publish_requires_delivery_policy`)
+  }
+  // Phase 4-A (Migration 167): 返品受付する場合、送料負担者 ('buyer' | 'seller') が必須。
+  //   未設定 or 未 apply 環境 (null) は publish 拒否。
+  if (brandRow!.return_accepted === true
+      && brandRow!.return_shipping_cost_bearer !== 'buyer'
+      && brandRow!.return_shipping_cost_bearer !== 'seller') {
     redirect(`${back}?err=publish_requires_delivery_policy`)
   }
   if (brandRow!.exchange_accepted === null)  redirect(`${back}?err=publish_requires_delivery_policy`)

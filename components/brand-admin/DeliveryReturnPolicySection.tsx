@@ -27,6 +27,7 @@ function isAnythingConfigured(i: DeliveryReturnPolicyInitial): boolean {
     || i.returnAccepted     !== null
     || i.returnDays         !== null
     || i.exchangeAccepted   !== null
+    || i.returnShippingCostBearer !== null
     || (i.returnPolicyNote !== null && i.returnPolicyNote.trim().length > 0)
 }
 
@@ -52,6 +53,13 @@ function ViewCard({
     if (initial.returnAccepted === false) return '受付しない'
     return '未設定'
   })()
+  // Phase 4-A: 購入者都合返品の送料負担者 (return_accepted=true のときのみ意味を持つ)
+  const bearerLabel: string | null = (() => {
+    if (initial.returnAccepted !== true) return null
+    if (initial.returnShippingCostBearer === 'buyer')  return '購入者負担'
+    if (initial.returnShippingCostBearer === 'seller') return '販売事業者負担'
+    return '未設定'
+  })()
   const exchangeLabel: string =
     initial.exchangeAccepted === true  ? '受付する' :
     initial.exchangeAccepted === false ? '受付しない' :
@@ -68,6 +76,13 @@ function ViewCard({
         <div className="text-[11px] font-semibold text-neutral-500 tracking-wider">返品</div>
         <div className="mt-1 text-sm text-neutral-800">{returnLabel}</div>
       </div>
+
+      {bearerLabel !== null && (
+        <div>
+          <div className="text-[11px] font-semibold text-neutral-500 tracking-wider">返品送料 (購入者都合)</div>
+          <div className="mt-1 text-sm text-neutral-800">{bearerLabel}</div>
+        </div>
+      )}
 
       <div>
         <div className="text-[11px] font-semibold text-neutral-500 tracking-wider">交換</div>

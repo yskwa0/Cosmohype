@@ -69,6 +69,10 @@ function errorLabel(code: string): string {
     case 'return_days_required_when_accepted': return '返品を「受付する」に設定した場合は、受付期間 (日数) を入力してください。'
     // Migration 155 整合性 CHECK 由来: 「受付しない」/「未設定」なのに日数が入っている状態を拒否
     case 'return_days_only_when_accepted':  return '返品を「受付する」以外に設定した場合は、受付期間 (日数) を入力しないでください。'
+    // Phase 4-A (Migration 167): 返品送料負担者
+    case 'invalid_return_shipping_cost_bearer':          return '返品送料の負担 (購入者都合返品) は「購入者負担」または「販売事業者負担」を選択してください。'
+    case 'return_shipping_cost_bearer_required':         return '返品を「受付する」に設定した場合は、返品送料の負担 (購入者都合返品) を選択してください。'
+    case 'return_shipping_cost_bearer_only_when_accepted': return '返品を「受付する」以外に設定した場合は、返品送料の負担 (購入者都合返品) を選択しないでください。'
     case 'return_policy_note_too_long':     return '返品・交換の補足条件は 1000 文字以内で入力してください。'
     case 'brand_not_found':                 return 'ブランド情報が見つかりませんでした。ページを再読み込みしてお試しください。'
     // Migration 163: 特商法表記 販売事業者情報
@@ -99,14 +103,16 @@ function errorLabel(code: string): string {
   }
 }
 
-/// Phase B (Migration 155): 配送・返品ポリシー取得用の nullable row。
-/// Migration 未 apply 環境では 5 列すべて undefined → decode 後 null にフォールバック。
+/// Phase B (Migration 155) + Phase 4-A (Migration 167): 配送・返品ポリシー取得用の nullable row。
+/// Migration 未 apply 環境では該当列 undefined → decode 後 null にフォールバック。
 interface PolicyRow {
   dispatch_lead_days:  number  | null
   return_accepted:     boolean | null
   return_days:         number  | null
   exchange_accepted:   boolean | null
   return_policy_note:  string  | null
+  /** Migration 167 未 apply 環境では undefined。 UI 側で null 扱い。 */
+  return_shipping_cost_bearer: string | null
 }
 
 interface ProfileRow {
@@ -234,7 +240,7 @@ export default async function BrandAdminSettingsPage({
       }
     })
       .from('shop_brands')
-      .select('dispatch_lead_days, return_accepted, return_days, exchange_accepted, return_policy_note')
+      .select('dispatch_lead_days, return_accepted, return_days, exchange_accepted, return_policy_note, return_shipping_cost_bearer')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
     // Migration 162: SNS リンク probe。 145 で追加済 column なので列不在エラーは想定しない。
@@ -335,17 +341,21 @@ export default async function BrandAdminSettingsPage({
   }
   const profileReadError = profileProbe.error?.message ?? null
 
-  // Phase B (Migration 155): 配送・返品ポリシー initial。
-  //   Migration 155 未 apply 環境では列不在エラーで policyProbe.error あり → 全 null で「未設定」扱い。
+  // Phase B (Migration 155) + Phase 4-A (Migration 167): 配送・返品ポリシー initial。
+  //   Migration 155 / 167 未 apply 環境では列不在エラーで policyProbe.error あり → 全 null で「未設定」扱い。
   const migration155NotApplied =
     policyProbe.error !== null &&
-    /column .*(dispatch_lead_days|return_accepted|return_days|exchange_accepted|return_policy_note).* does not exist/i.test(policyProbe.error.message)
+    /column .*(dispatch_lead_days|return_accepted|return_days|exchange_accepted|return_policy_note|return_shipping_cost_bearer).* does not exist/i.test(policyProbe.error.message)
+  const rawBearer = policyProbe.data?.return_shipping_cost_bearer ?? null
+  const returnShippingCostBearer: 'buyer' | 'seller' | null =
+    rawBearer === 'buyer' || rawBearer === 'seller' ? rawBearer : null
   const policyInitial: DeliveryReturnPolicyInitial = {
     dispatchLeadDays: policyProbe.data?.dispatch_lead_days ?? null,
     returnAccepted:   policyProbe.data?.return_accepted    ?? null,
     returnDays:       policyProbe.data?.return_days        ?? null,
     exchangeAccepted: policyProbe.data?.exchange_accepted  ?? null,
     returnPolicyNote: policyProbe.data?.return_policy_note ?? null,
+    returnShippingCostBearer,
   }
   const policyReadError =
     (!migration155NotApplied && policyProbe.error) ? policyProbe.error.message : null

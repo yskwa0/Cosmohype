@@ -587,6 +587,11 @@ export async function updateDeliveryReturnPolicyAction(formData: FormData): Prom
   const exchangeAccepted = parseTri(formData.get('exchange_accepted'))
   const noteRaw = String(formData.get('return_policy_note') ?? '').trim()
   const note = noteRaw.length > 0 ? noteRaw.slice(0, 1000) : null
+  // Phase 4-A / Migration 167: 購入者都合返品の送料負担者。 空文字 = 未選択 = null。
+  const bearerRaw = String(formData.get('return_shipping_cost_bearer') ?? '').trim()
+  const bearer: 'buyer' | 'seller' | null =
+    bearerRaw === 'buyer' ? 'buyer' :
+    bearerRaw === 'seller' ? 'seller' : null
 
   // ─── validation ───
   if (Number.isNaN(dispatchLead)) redirect(`${returnUrl}?err=invalid_dispatch_lead_days`)
@@ -610,6 +615,19 @@ export async function updateDeliveryReturnPolicyAction(formData: FormData): Prom
   if (returnAccepted !== true && returnDays !== null) {
     redirect(`${returnUrl}?err=return_days_only_when_accepted`)
   }
+  // Phase 4-A: 送料負担者の整合性検証。
+  //   ・raw が非空かつ whitelist 外 → invalid
+  //   ・return_accepted=true + bearer null → required
+  //   ・return_accepted != true + bearer 非null → only_when_accepted
+  if (bearerRaw.length > 0 && bearer === null) {
+    redirect(`${returnUrl}?err=invalid_return_shipping_cost_bearer`)
+  }
+  if (returnAccepted === true && bearer === null) {
+    redirect(`${returnUrl}?err=return_shipping_cost_bearer_required`)
+  }
+  if (returnAccepted !== true && bearer !== null) {
+    redirect(`${returnUrl}?err=return_shipping_cost_bearer_only_when_accepted`)
+  }
   if (note !== null && note.length > 1000) {
     redirect(`${returnUrl}?err=return_policy_note_too_long`)
   }
@@ -622,12 +640,13 @@ export async function updateDeliveryReturnPolicyAction(formData: FormData): Prom
       rpc: (fn: string, params: Record<string, unknown>) => Promise<{ error: { message: string } | null }>
     }
   ).rpc('shop_brand_update_delivery_return_policy', {
-    p_brand_id:            brandId,
-    p_dispatch_lead_days:  dispatchLead as number | null,
-    p_return_accepted:     returnAccepted,
-    p_return_days:         returnDays   as number | null,
-    p_exchange_accepted:   exchangeAccepted,
-    p_return_policy_note:  note,
+    p_brand_id:                     brandId,
+    p_dispatch_lead_days:           dispatchLead as number | null,
+    p_return_accepted:              returnAccepted,
+    p_return_days:                  returnDays   as number | null,
+    p_exchange_accepted:            exchangeAccepted,
+    p_return_policy_note:           note,
+    p_return_shipping_cost_bearer:  bearer,
   })
   if (error) {
     const msg = error.message.toLowerCase()
@@ -643,6 +662,17 @@ export async function updateDeliveryReturnPolicyAction(formData: FormData): Prom
     else if (msg.includes('return_days_only_when_accepted'))  code = 'return_days_only_when_accepted'
     else if (msg.includes('shop_brands_return_days_consistency'))
                                                               code = 'return_days_only_when_accepted'
+    // Phase 4-A: 返品送料負担者エラー
+    else if (msg.includes('invalid_return_shipping_cost_bearer'))
+                                                              code = 'invalid_return_shipping_cost_bearer'
+    else if (msg.includes('return_shipping_cost_bearer_required'))
+                                                              code = 'return_shipping_cost_bearer_required'
+    else if (msg.includes('return_shipping_cost_bearer_only_when_accepted'))
+                                                              code = 'return_shipping_cost_bearer_only_when_accepted'
+    else if (msg.includes('shop_brands_return_shipping_cost_bearer_consistency'))
+                                                              code = 'return_shipping_cost_bearer_only_when_accepted'
+    else if (msg.includes('shop_brands_return_shipping_cost_bearer_value'))
+                                                              code = 'invalid_return_shipping_cost_bearer'
     else if (msg.includes('return_policy_note_too_long'))     code = 'return_policy_note_too_long'
     else if (msg.includes('brand_not_found'))                 code = 'brand_not_found'
     console.error('[brand-admin/settings] rpc policy update failed', error)

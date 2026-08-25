@@ -26,6 +26,9 @@ export interface DeliveryReturnPolicyInitial {
   exchangeAccepted: boolean | null
   /** 1..1000 chars, plain text, or null */
   returnPolicyNote: string | null
+  /** Phase 4-A / Migration 167: 購入者都合返品の送料負担者。 'buyer' | 'seller' | null。
+   *  不良品 / 誤配送等 販売者責任範囲は本フィールドと無関係 (法令上販売者負担で固定)。 */
+  returnShippingCostBearer: 'buyer' | 'seller' | null
 }
 
 interface Props {
@@ -79,6 +82,8 @@ export default function DeliveryReturnPolicyForm({ initial, action, disabled, di
   )
   const [exchangeTri, setExchangeTri] = useState<TriState>(toTri(initial.exchangeAccepted))
   const [note, setNote] = useState<string>(initial.returnPolicyNote ?? '')
+  // Phase 4-A: 購入者都合返品の送料負担者 ('' = 未選択、returnTri=yes 時のみ意味を持つ)
+  const [bearer, setBearer] = useState<'' | 'buyer' | 'seller'>(initial.returnShippingCostBearer ?? '')
 
   const dispatchNum = dispatchStr === '' ? null : Number(dispatchStr)
   const returnDaysNum = returnDaysStr === '' ? null : Number(returnDaysStr)
@@ -89,9 +94,12 @@ export default function DeliveryReturnPolicyForm({ initial, action, disabled, di
     || (Number.isInteger(returnDaysNum) && returnDaysNum >= 1 && returnDaysNum <= 365)
   // 返品受付 = 受付 なら return_days は必須 (1..365)
   const returnDaysRequiredOK = returnTri !== 'yes' || (returnDaysNum !== null && returnDaysValid)
+  // Phase 4-A: 返品受付 = 受付 なら bearer は必須 ('buyer' | 'seller')
+  const bearerRequiredOK = returnTri !== 'yes' || bearer === 'buyer' || bearer === 'seller'
   const noteValid = note.length <= 1000
 
-  const canSubmit = !disabled && dispatchValid && returnDaysValid && returnDaysRequiredOK && noteValid
+  const canSubmit = !disabled && dispatchValid && returnDaysValid && returnDaysRequiredOK
+                 && bearerRequiredOK && noteValid
 
   return (
     <form action={action} className="space-y-4 max-w-2xl">
@@ -154,6 +162,28 @@ export default function DeliveryReturnPolicyForm({ initial, action, disabled, di
         )}
         {returnTri === 'yes' && !returnDaysRequiredOK && (
           <div className="mt-1 text-[11px] text-red-600">「受付する」を選択した場合は日数を入力してください。</div>
+        )}
+      </Row>
+
+      {/* Phase 4-A: 返品送料の負担者 (返品受付する場合のみ意味を持つ) */}
+      <Row label="返品送料の負担 (購入者都合返品)" required={returnTri === 'yes'}>
+        <select
+          name="return_shipping_cost_bearer"
+          value={bearer}
+          onChange={(e) => setBearer(e.target.value as '' | 'buyer' | 'seller')}
+          disabled={disabled || returnTri !== 'yes'}
+          className={fieldClass + ' max-w-[300px]'}
+        >
+          <option value="">未選択</option>
+          <option value="buyer">購入者負担</option>
+          <option value="seller">販売事業者負担</option>
+        </select>
+        <div className="mt-1 text-[11px] text-neutral-500">
+          サイズ違い・色違い等、購入者都合の返品時の送料負担者を選択します。
+          不良品・誤配送・契約違反等、販売者責任範囲の返品送料は法令上販売事業者負担となるため、本項目とは無関係です (別途 SCT 画面に固定表示)。
+        </div>
+        {returnTri === 'yes' && !bearerRequiredOK && (
+          <div className="mt-1 text-[11px] text-red-600">返品受付する場合、送料負担者を選択してください。</div>
         )}
       </Row>
 
