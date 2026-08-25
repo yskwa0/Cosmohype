@@ -81,6 +81,26 @@ function RequiredMark() {
   return <span className="ml-1 text-red-600 text-[11px] font-bold">必須</span>
 }
 
+/** ラベル + 任意 hint + 必須マーク付き 1 行レイアウト。
+ *  【重要】この Row は必ず BrandLegalInfoForm の "外側" に定義すること。
+ *  内側 (component 本体スコープ) で定義すると、state 更新のたびに Row が
+ *  新しい関数参照になり React が全 Row を unmount / remount = 各 input が
+ *  キーストロークごとにフォーカスを失って実質入力不能になる (Bug 2026-08-25)。 */
+function Row({ label, required, hint, children }: { label: React.ReactNode; required?: boolean; hint?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[12px] font-semibold text-neutral-700 mb-1">
+        {label}{required && <RequiredMark />}
+      </label>
+      {children}
+      {hint && <div className="mt-1 text-[11px] text-neutral-500">{hint}</div>}
+    </div>
+  )
+}
+
+const INPUT_CLASS =
+  'w-full h-10 border border-neutral-300 rounded px-3 text-sm bg-white disabled:bg-neutral-100'
+
 export default function BrandLegalInfoForm({ initial, action, disabled, disabledReason }: Props) {
   const [entityType, setEntityType] = useState<LegalEntityType | ''>(initial.legalEntityType ?? '')
 
@@ -158,21 +178,6 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
   if (!phoneFilled)     missingItems.push('電話番号')
   if (!emailFilled)     missingItems.push('メールアドレス')
 
-  function Row({ label, required, hint, children }: { label: React.ReactNode; required?: boolean; hint?: string; children: React.ReactNode }) {
-    return (
-      <div>
-        <label className="block text-[12px] font-semibold text-neutral-700 mb-1">
-          {label}{required && <RequiredMark />}
-        </label>
-        {children}
-        {hint && <div className="mt-1 text-[11px] text-neutral-500">{hint}</div>}
-      </div>
-    )
-  }
-
-  const inputClass =
-    'w-full h-10 border border-neutral-300 rounded px-3 text-sm bg-white disabled:bg-neutral-100'
-
   return (
     <form action={action} className="space-y-4">
       {/* Migration 166 / Phase 4: 販売者区分は保存時必須。 未選択 → canSubmit=false で保存ボタン disable。 */}
@@ -198,7 +203,7 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
       <Row label={nameLabel} required hint={nameHint}>
         <input name="legal_name" type="text" value={name} onChange={(e) => setName(e.target.value)}
                maxLength={100} placeholder={isCorporation ? '株式会社サンプル' : (isIndividual ? '山田 太郎' : '株式会社サンプル / 山田 太郎')}
-               disabled={disabled} className={inputClass} />
+               disabled={disabled} className={INPUT_CLASS} />
         {!nameFmtOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
       </Row>
 
@@ -208,7 +213,7 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
         <Row label="代表者 / 通信販売責任者" required={isCorporation} hint="法人の場合は代表取締役名または通信販売業務責任者名を入力してください。">
           <input name="legal_representative_name" type="text" value={rep} onChange={(e) => setRep(e.target.value)}
                  maxLength={100} placeholder="山田 太郎"
-                 disabled={disabled} className={inputClass} />
+                 disabled={disabled} className={INPUT_CLASS} />
           {!repFmtOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
         </Row>
       )}
@@ -221,7 +226,7 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
       <Row label="郵便番号" required hint="7 桁数字。 ハイフンあり ('273-0002') / なし ('2730002') どちらでも可、保存時に数字のみに正規化されます。">
         <input name="legal_postal_code" type="text" inputMode="numeric" value={postal} onChange={(e) => setPostal(e.target.value)}
                maxLength={20} placeholder="273-0002"
-               disabled={disabled} className={inputClass + ' font-mono max-w-[180px]'} />
+               disabled={disabled} className={INPUT_CLASS + ' font-mono max-w-[180px]'} />
         {!postalFmtOk && <div className="mt-1 text-[11px] text-red-600">郵便番号は 7 桁 (例: 273-0002 / 2730002) で入力してください。</div>}
       </Row>
 
@@ -229,13 +234,13 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
         <Row label="都道府県" required>
           <input name="legal_prefecture" type="text" value={pref} onChange={(e) => setPref(e.target.value)}
                  maxLength={20} placeholder="千葉県"
-                 disabled={disabled} className={inputClass} />
+                 disabled={disabled} className={INPUT_CLASS} />
           {!prefFmtOk && <div className="mt-1 text-[11px] text-red-600">20 文字以内で入力してください。</div>}
         </Row>
         <Row label="市区町村" required>
           <input name="legal_city" type="text" value={city} onChange={(e) => setCity(e.target.value)}
                  maxLength={100} placeholder="船橋市"
-                 disabled={disabled} className={inputClass} />
+                 disabled={disabled} className={INPUT_CLASS} />
           {!cityFmtOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
         </Row>
       </div>
@@ -243,21 +248,21 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
       <Row label="番地" required>
         <input name="legal_address_line1" type="text" value={a1} onChange={(e) => setA1(e.target.value)}
                maxLength={200} placeholder="海神 1-1-1"
-               disabled={disabled} className={inputClass} />
+               disabled={disabled} className={INPUT_CLASS} />
         {!a1FmtOk && <div className="mt-1 text-[11px] text-red-600">200 文字以内で入力してください。</div>}
       </Row>
 
       <Row label="建物名等（任意）">
         <input name="legal_address_line2" type="text" value={a2} onChange={(e) => setA2(e.target.value)}
                maxLength={200} placeholder="サンプルビル 101"
-               disabled={disabled} className={inputClass} />
+               disabled={disabled} className={INPUT_CLASS} />
         {!a2FmtOk && <div className="mt-1 text-[11px] text-red-600">200 文字以内で入力してください。</div>}
       </Row>
 
       <Row label="電話番号" required hint="数字 / ハイフン / 空白 / () のみ許容。 消費者からの問合せに応答できる番号。">
         <input name="legal_phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                maxLength={30} placeholder="03-1234-5678"
-               disabled={disabled} className={inputClass + ' font-mono max-w-[260px]'} />
+               disabled={disabled} className={INPUT_CLASS + ' font-mono max-w-[260px]'} />
         {!phoneFmtOk && <div className="mt-1 text-[11px] text-red-600">数字 / - / 空白 / () で 30 文字以内で入力してください。</div>}
       </Row>
 
@@ -265,7 +270,7 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
         <input name="legal_email" type="email" inputMode="email" autoComplete="off"
                value={email} onChange={(e) => setEmail(e.target.value)}
                maxLength={200} placeholder="contact@example.com"
-               disabled={disabled} className={inputClass + ' max-w-[380px]'} />
+               disabled={disabled} className={INPUT_CLASS + ' max-w-[380px]'} />
         {!emailFmtOk && <div className="mt-1 text-[11px] text-red-600">正しいメールアドレス形式で入力してください。</div>}
       </Row>
 
