@@ -412,23 +412,26 @@ export async function updateBrandSocialLinksAction(formData: FormData): Promise<
 }
 
 // =============================================================================
-// updateBrandLegalInfoAction  (Migration 163: 特商法表記 販売事業者情報)
+// updateBrandLegalInfoAction  (Migration 163 / 166: 特商法表記 販売事業者情報)
 //
-// フォーム入力 (すべて任意、空欄は NULL に戻せる):
-//   ・legal_name / legal_representative_name (<=100 chars)
-//   ・legal_postal_code                       (7 digits after strip - RPC で正規化)
-//   ・legal_prefecture (<=20) / legal_city (<=100) / legal_address_line1/2 (<=200)
-//   ・legal_phone      (digits / - / space / () / +、<=30)
-//   ・legal_email      (@ 含む、<=200)
+// 【保存ルール — Phase 4 更新: 途中保存廃止 / 保存時全必須】
+//   ・販売者区分 + 区分別必須項目がすべて入っていないと保存不可
+//   ・必須 (両区分共通): legal_name / legal_postal_code / legal_prefecture / legal_city
+//                        / legal_address_line1 / legal_phone / legal_email
+//   ・必須 (法人のみ):    legal_representative_name
+//   ・任意:               legal_address_line2 (建物名等)
 //
-// server / client 両方で validate:
-//   ・BrandLegalInfoForm.tsx (client) は UX、送信ボタン disable
-//   ・本 action は最終防波堤: 郵便番号正規化 + 空欄 → NULL
-//   ・RPC 側 (shop_brand_update_legal_info) がさらに三重にチェック
+//   client 側 (BrandLegalInfoForm.tsx canSubmit) と同じルールを本 action で再検証
+//   (client disable の bypass に耐える二重防波堤)。 商品公開 gate
+//   (assertPublishableOrRedirect) は撤去せず据え置き = 三重防御。
+//
+// 各種形式検証:
+//   ・legal_postal_code   RPC で数字 7 桁に正規化 (invalid → invalid_legal_postal_code)
+//   ・legal_phone         digits / - / 空白 / () / + のみ (<=30)
+//   ・legal_email         @ 含む (<=200)
 //
 // 独立 RPC のため shop_brand_update_profile / _social_links / _return_address /
 // _delivery_return_policy には一切触れない = 既存 5 action の副作用を分離する。
-// Dev Bypass は撤去済 (Production 一本運用)、通常経路のみ。
 // =============================================================================
 export async function updateBrandLegalInfoAction(formData: FormData): Promise<void> {
   const returnUrl = '/brand-admin/settings'
@@ -442,27 +445,55 @@ export async function updateBrandLegalInfoAction(formData: FormData): Promise<vo
   const legalA2      = trimOrEmpty(formData.get('legal_address_line2'), 200)
   const legalPhone   = trimOrEmpty(formData.get('legal_phone'), 30)
   const legalEmail   = trimOrEmpty(formData.get('legal_email'), 200)
-  // Migration 166: 販売者区分 (未選択 = '' → 保存時 NULL、選択済み = whitelist)
+  // Migration 166: 販売者区分 (Phase 4 以降は保存必須。 未選択 → *_required で reject)
   const legalEntityRaw = trimOrEmpty(formData.get('legal_entity_type'), 20)
-  if (legalEntityRaw.length > 0 && legalEntityRaw !== 'corporation' && legalEntityRaw !== 'individual') {
+  if (legalEntityRaw.length === 0) {
+    redirect(`${returnUrl}?err=legal_entity_type_required`)
+  }
+  if (legalEntityRaw !== 'corporation' && legalEntityRaw !== 'individual') {
     redirect(`${returnUrl}?err=invalid_legal_entity_type`)
   }
 
-  // 郵便番号: 空欄なら null、非空なら - を除いて 7 桁 数字必須
-  let postalForRpc: string | null = null
-  if (legalPostal.length > 0) {
-    const normalized = normalizePostal(legalPostal)
-    if (!normalized) {
-      redirect(`${returnUrl}?err=invalid_legal_postal_code`)
-    }
-    postalForRpc = normalized
+  // ─── 区分別必須検証 (client canSubmit と同一) ───
+  //   client 側 disable の bypass を防ぐ最終防波堤。 個別 code を返して page.tsx で
+  //   errorLabel から日本語化する。
+  if (legalName.length === 0) {
+    redirect(`${returnUrl}?err=legal_name_required`)
+  }
+  if (legalEntityRaw === 'corporation' && legalRep.length === 0) {
+    redirect(`${returnUrl}?err=legal_representative_name_required`)
+  }
+  if (legalPostal.length === 0) {
+    redirect(`${returnUrl}?err=legal_postal_code_required`)
+  }
+  if (legalPref.length === 0) {
+    redirect(`${returnUrl}?err=legal_prefecture_required`)
+  }
+  if (legalCity.length === 0) {
+    redirect(`${returnUrl}?err=legal_city_required`)
+  }
+  if (legalA1.length === 0) {
+    redirect(`${returnUrl}?err=legal_address_line1_required`)
+  }
+  if (legalPhone.length === 0) {
+    redirect(`${returnUrl}?err=legal_phone_required`)
+  }
+  if (legalEmail.length === 0) {
+    redirect(`${returnUrl}?err=legal_email_required`)
   }
 
-  // 電話 / email 形式チェック (Empty はスルー、非空なら validate)
-  if (legalPhone.length > 0 && !/^[0-9\-\s()+]+$/.test(legalPhone)) {
+  // ─── 形式検証 ───
+  // 郵便番号: - を除いて 7 桁 数字必須 (必須検証済のため空欄はここに来ない)
+  const normalizedPostal = normalizePostal(legalPostal)
+  if (!normalizedPostal) {
+    redirect(`${returnUrl}?err=invalid_legal_postal_code`)
+  }
+  const postalForRpc: string | null = normalizedPostal
+
+  if (!/^[0-9\-\s()+]+$/.test(legalPhone)) {
     redirect(`${returnUrl}?err=invalid_legal_phone`)
   }
-  if (legalEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(legalEmail)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(legalEmail)) {
     redirect(`${returnUrl}?err=invalid_legal_email`)
   }
 

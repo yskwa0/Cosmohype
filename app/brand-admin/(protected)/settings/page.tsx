@@ -85,6 +85,16 @@ function errorLabel(code: string): string {
     case 'legal_address_line2_too_long':            return '建物名・部屋番号は 200 文字以内で入力してください。'
     case 'legal_phone_too_long':                    return '電話番号は 30 文字以内で入力してください。'
     case 'legal_email_too_long':                    return 'メールアドレスは 200 文字以内で入力してください。'
+    // Phase 4: 販売事業者情報 保存時必須検証 (途中保存廃止、二重防御 - 保存時 + 公開 gate)
+    case 'legal_entity_type_required':              return '販売者区分 (法人 / 個人) を選択してください。'
+    case 'legal_name_required':                     return '販売事業者名 (法人名 / 販売者氏名) を入力してください。'
+    case 'legal_representative_name_required':      return '代表者 / 通信販売責任者を入力してください (法人の場合は必須)。'
+    case 'legal_postal_code_required':              return '郵便番号を入力してください。'
+    case 'legal_prefecture_required':               return '都道府県を入力してください。'
+    case 'legal_city_required':                     return '市区町村を入力してください。'
+    case 'legal_address_line1_required':            return '番地を入力してください。'
+    case 'legal_phone_required':                    return '電話番号を入力してください。'
+    case 'legal_email_required':                    return 'メールアドレスを入力してください。'
     default:                       return `保存に失敗しました (${code})`
   }
 }

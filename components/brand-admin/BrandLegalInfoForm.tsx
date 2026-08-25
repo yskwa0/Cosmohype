@@ -7,12 +7,21 @@ import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 /**
  * ブランドの「特定商取引法に基づく表記」用 販売事業者法定情報フォーム (Migration 163 / 166)。
  *
- * 10 field (9 + 販売者区分) を一括で更新する。 保存は shop_brand_update_legal_info RPC
- * (owner/admin gate + server 側 validation + 空文字 → NULL 正規化)。
+ * 【保存ルール — Phase 4 更新】
+ *   販売者区分 + 区分別必須項目がすべて揃っていないと保存不可 (「途中保存」は廃止)。
+ *   従来の「途中保存 → 公開 gate でだけ強制」から「保存時に強制 + 公開 gate で再チェック」の
+ *   二重防御に変更。
  *
- * Migration 166: 販売者区分 (legal_entity_type = 'corporation' | 'individual') を
- * 追加。 選択によって入力ラベルと商品公開 gate 上の必須項目が切り替わる。
- * 途中保存は常に可能 (「設定を保存できない」と「販売開始できない」を分離する方針)。
+ *   必須:
+ *     ・legal_entity_type
+ *     ・legal_name / legal_postal_code / legal_prefecture / legal_city / legal_address_line1
+ *       / legal_phone / legal_email  (両区分共通、7 項目)
+ *     ・legal_representative_name    (法人時のみ)
+ *   任意:
+ *     ・legal_address_line2 (建物名等)
+ *
+ *   client の canSubmit + Server Action updateBrandLegalInfoAction 側でも同じ必須検証を実施
+ *   (client 側 disable の bypass に耐える二重防波堤)。
  *
  * このフォームは他の Brand Admin セクション (returnAddress / shippingRules /
  * profile / policy / social) とは責務が完全に別。 独立セクション化して blast radius を
@@ -67,10 +76,12 @@ const EMAIL_RE  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function trimOrEmpty(v: string): string { return v.trim() }
 
+/** 必須マーク (赤字) — 各 field label の脇に付ける。 */
+function RequiredMark() {
+  return <span className="ml-1 text-red-600 text-[11px] font-bold">必須</span>
+}
+
 export default function BrandLegalInfoForm({ initial, action, disabled, disabledReason }: Props) {
-  // Migration 166: 販売者区分。 途中保存は空 (''), 保存時は '' → NULL に落ちる。
-  // 「未選択」も途中保存としては許容する (商品公開 gate は Web 側 assertPublishable
-  // OrRedirect で別途強制する = 「設定を保存できない」と「販売開始できない」を分離)。
   const [entityType, setEntityType] = useState<LegalEntityType | ''>(initial.legalEntityType ?? '')
 
   const [name,    setName]    = useState(initial.legalName ?? '')
@@ -83,9 +94,10 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
   const [phone,   setPhone]   = useState(initial.legalPhone ?? '')
   const [email,   setEmail]   = useState(initial.legalEmail ?? '')
 
-  // 販売者区分に応じたラベル切替。 未選択のときは「(未選択)」表示のプレースホルダ的振舞い。
-  const isIndividual = entityType === 'individual'
+  // 販売者区分に応じたラベル切替
+  const isIndividual  = entityType === 'individual'
   const isCorporation = entityType === 'corporation'
+  const entitySelected = isIndividual || isCorporation
   const nameLabel = isCorporation ? '法人名' : (isIndividual ? '販売者氏名' : '販売事業者名')
   const nameHint  = isCorporation
     ? '法人の正式名称 (登記上の名称)。 屋号やサービス名ではありません。'
@@ -93,29 +105,64 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
         ? '販売者本人の氏名。 屋号やペンネームではなく本人確認できる氏名を入力してください。'
         : '販売者区分を選ぶと入力ラベルが切り替わります。')
 
-  // 各 field OK 判定 (空欄は OK = 未入力に戻せる、入力ありなら形式チェック)
-  const nameOk    = trimOrEmpty(name).length    <= 100
-  const repOk     = trimOrEmpty(rep).length     <= 100
-  const postalRaw = trimOrEmpty(postal)
-  const postalOk  = postalRaw.length === 0 || POSTAL_RE.test(postalRaw)
-  const prefOk    = trimOrEmpty(pref).length    <= 20
-  const cityOk    = trimOrEmpty(city).length    <= 100
-  const a1Ok      = trimOrEmpty(a1).length      <= 200
-  const a2Ok      = trimOrEmpty(a2).length      <= 200
-  const phoneRaw  = trimOrEmpty(phone)
-  const phoneOk   = phoneRaw.length === 0 || (phoneRaw.length <= 30 && PHONE_RE.test(phoneRaw))
-  const emailRaw  = trimOrEmpty(email)
-  const emailOk   = emailRaw.length === 0 || (emailRaw.length <= 200 && EMAIL_RE.test(emailRaw))
+  // trim 済み値
+  const nameV   = trimOrEmpty(name)
+  const repV    = trimOrEmpty(rep)
+  const postalV = trimOrEmpty(postal)
+  const prefV   = trimOrEmpty(pref)
+  const cityV   = trimOrEmpty(city)
+  const a1V     = trimOrEmpty(a1)
+  const a2V     = trimOrEmpty(a2)
+  const phoneV  = trimOrEmpty(phone)
+  const emailV  = trimOrEmpty(email)
 
-  const canSubmit = !disabled
-                 && nameOk && repOk && postalOk && prefOk && cityOk
-                 && a1Ok && a2Ok && phoneOk && emailOk
+  // 各 field の形式チェック (長さ / regex)。 必須判定と分離。
+  const nameFmtOk   = nameV.length <= 100
+  const repFmtOk    = repV.length <= 100
+  const postalFmtOk = postalV.length === 0 || POSTAL_RE.test(postalV)
+  const prefFmtOk   = prefV.length <= 20
+  const cityFmtOk   = cityV.length <= 100
+  const a1FmtOk     = a1V.length <= 200
+  const a2FmtOk     = a2V.length <= 200
+  const phoneFmtOk  = phoneV.length === 0 || (phoneV.length <= 30 && PHONE_RE.test(phoneV))
+  const emailFmtOk  = emailV.length === 0 || (emailV.length <= 200 && EMAIL_RE.test(emailV))
 
-  function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  // 必須判定 (両区分共通 + 法人時のみ rep 追加)
+  const nameFilled   = nameV.length > 0
+  const repFilled    = repV.length > 0
+  const postalFilled = postalV.length > 0
+  const prefFilled   = prefV.length > 0
+  const cityFilled   = cityV.length > 0
+  const a1Filled     = a1V.length > 0
+  const phoneFilled  = phoneV.length > 0
+  const emailFilled  = emailV.length > 0
+
+  const commonRequiredOk = nameFilled && postalFilled && prefFilled && cityFilled
+                        && a1Filled && phoneFilled && emailFilled
+  const repRequiredOk = isCorporation ? repFilled : true
+
+  const allFormatsOk = nameFmtOk && repFmtOk && postalFmtOk && prefFmtOk && cityFmtOk
+                    && a1FmtOk && a2FmtOk && phoneFmtOk && emailFmtOk
+
+  const canSubmit = !disabled && entitySelected && commonRequiredOk && repRequiredOk && allFormatsOk
+
+  // 保存 disabled 時の理由テキスト (「なぜ押せないか」を明示)
+  const missingItems: string[] = []
+  if (!entitySelected)  missingItems.push('販売者区分')
+  if (!nameFilled)      missingItems.push(nameLabel)
+  if (isCorporation && !repFilled) missingItems.push('代表者 / 通信販売責任者')
+  if (!postalFilled)    missingItems.push('郵便番号')
+  if (!prefFilled)      missingItems.push('都道府県')
+  if (!cityFilled)      missingItems.push('市区町村')
+  if (!a1Filled)        missingItems.push('番地')
+  if (!phoneFilled)     missingItems.push('電話番号')
+  if (!emailFilled)     missingItems.push('メールアドレス')
+
+  function Row({ label, required, hint, children }: { label: React.ReactNode; required?: boolean; hint?: string; children: React.ReactNode }) {
     return (
       <div>
         <label className="block text-[12px] font-semibold text-neutral-700 mb-1">
-          {label}
+          {label}{required && <RequiredMark />}
         </label>
         {children}
         {hint && <div className="mt-1 text-[11px] text-neutral-500">{hint}</div>}
@@ -128,8 +175,8 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
 
   return (
     <form action={action} className="space-y-4">
-      {/* Migration 166: 販売者区分。 選択によりラベル / 必須項目 (公開 gate) が切替わる。 */}
-      <Row label="販売者区分（販売開始時は必須）" hint="商品を販売するには「法人」または「個人」の選択が必要です。 未選択のままでも設定の途中保存は可能ですが、商品を公開することはできません。">
+      {/* Migration 166 / Phase 4: 販売者区分は保存時必須。 未選択 → canSubmit=false で保存ボタン disable。 */}
+      <Row label="販売者区分" required hint="商品を販売するには「法人」または「個人」の選択が必要です。">
         <div className="flex items-center gap-4 text-[13px]">
           <label className="inline-flex items-center gap-1.5 cursor-pointer">
             <input type="radio" name="legal_entity_type" value="corporation"
@@ -145,28 +192,24 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
                    disabled={disabled} />
             <span>個人</span>
           </label>
-          {entityType === '' && (
-            <span className="text-[11px] text-neutral-500">(未選択 — 途中保存は可能ですが公開できません)</span>
-          )}
         </div>
       </Row>
 
-      <Row label={`${nameLabel} (任意)`} hint={nameHint}>
+      <Row label={nameLabel} required hint={nameHint}>
         <input name="legal_name" type="text" value={name} onChange={(e) => setName(e.target.value)}
                maxLength={100} placeholder={isCorporation ? '株式会社サンプル' : (isIndividual ? '山田 太郎' : '株式会社サンプル / 山田 太郎')}
                disabled={disabled} className={inputClass} />
-        {!nameOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
+        {!nameFmtOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
       </Row>
 
-      {/* 代表責任者: 法人のみ表示。 個人選択時は非表示 (「個人に代表責任者」概念を要求しない方針)。
-          未選択時は下位互換で表示 (途中保存中の状態を破壊しないため)。 個人保存で
-          既存 rep を消したい場合は先に個人にして保存 (server 側で空文字は NULL 化)。 */}
+      {/* 代表責任者: 法人のみ表示 + 必須。 個人選択時は非表示 (概念自体を要求しない方針)。
+          未選択時は下位互換で表示 (途中で法人 / 個人を切替できる余地を残すため)。 */}
       {!isIndividual && (
-        <Row label="代表者 / 通信販売責任者（販売開始時は必須）" hint="法人の場合は代表取締役名または通信販売業務責任者名を入力してください。 未入力のままでも設定の途中保存は可能ですが、商品を公開することはできません。">
+        <Row label="代表者 / 通信販売責任者" required={isCorporation} hint="法人の場合は代表取締役名または通信販売業務責任者名を入力してください。">
           <input name="legal_representative_name" type="text" value={rep} onChange={(e) => setRep(e.target.value)}
                  maxLength={100} placeholder="山田 太郎"
                  disabled={disabled} className={inputClass} />
-          {!repOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
+          {!repFmtOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
         </Row>
       )}
       {/* 個人選択時、既存 rep が残っている場合は明示的に「保存時に消去」する hidden input を送出。
@@ -175,59 +218,67 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
         <input type="hidden" name="legal_representative_name" value="" />
       )}
 
-      <Row label="所在地: 郵便番号 (任意)" hint="7 桁数字。 ハイフンあり ('273-0002') / なし ('2730002') どちらでも可、保存時に数字のみに正規化されます。">
+      <Row label="郵便番号" required hint="7 桁数字。 ハイフンあり ('273-0002') / なし ('2730002') どちらでも可、保存時に数字のみに正規化されます。">
         <input name="legal_postal_code" type="text" inputMode="numeric" value={postal} onChange={(e) => setPostal(e.target.value)}
                maxLength={20} placeholder="273-0002"
                disabled={disabled} className={inputClass + ' font-mono max-w-[180px]'} />
-        {!postalOk && <div className="mt-1 text-[11px] text-red-600">郵便番号は 7 桁 (例: 273-0002 / 2730002) で入力してください。</div>}
+        {!postalFmtOk && <div className="mt-1 text-[11px] text-red-600">郵便番号は 7 桁 (例: 273-0002 / 2730002) で入力してください。</div>}
       </Row>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Row label="都道府県 (任意)">
+        <Row label="都道府県" required>
           <input name="legal_prefecture" type="text" value={pref} onChange={(e) => setPref(e.target.value)}
                  maxLength={20} placeholder="千葉県"
                  disabled={disabled} className={inputClass} />
-          {!prefOk && <div className="mt-1 text-[11px] text-red-600">20 文字以内で入力してください。</div>}
+          {!prefFmtOk && <div className="mt-1 text-[11px] text-red-600">20 文字以内で入力してください。</div>}
         </Row>
-        <Row label="市区町村 (任意)">
+        <Row label="市区町村" required>
           <input name="legal_city" type="text" value={city} onChange={(e) => setCity(e.target.value)}
                  maxLength={100} placeholder="船橋市"
                  disabled={disabled} className={inputClass} />
-          {!cityOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
+          {!cityFmtOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
         </Row>
       </div>
 
-      <Row label="番地 (任意)">
+      <Row label="番地" required>
         <input name="legal_address_line1" type="text" value={a1} onChange={(e) => setA1(e.target.value)}
                maxLength={200} placeholder="海神 1-1-1"
                disabled={disabled} className={inputClass} />
-        {!a1Ok && <div className="mt-1 text-[11px] text-red-600">200 文字以内で入力してください。</div>}
+        {!a1FmtOk && <div className="mt-1 text-[11px] text-red-600">200 文字以内で入力してください。</div>}
       </Row>
 
-      <Row label="建物名・部屋番号 (任意)">
+      <Row label="建物名等（任意）">
         <input name="legal_address_line2" type="text" value={a2} onChange={(e) => setA2(e.target.value)}
                maxLength={200} placeholder="サンプルビル 101"
                disabled={disabled} className={inputClass} />
-        {!a2Ok && <div className="mt-1 text-[11px] text-red-600">200 文字以内で入力してください。</div>}
+        {!a2FmtOk && <div className="mt-1 text-[11px] text-red-600">200 文字以内で入力してください。</div>}
       </Row>
 
-      <Row label="連絡先電話番号 (任意)" hint="数字 / ハイフン / 空白 / () のみ許容。 消費者からの問合せに応答できる番号。">
+      <Row label="電話番号" required hint="数字 / ハイフン / 空白 / () のみ許容。 消費者からの問合せに応答できる番号。">
         <input name="legal_phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                maxLength={30} placeholder="03-1234-5678"
                disabled={disabled} className={inputClass + ' font-mono max-w-[260px]'} />
-        {!phoneOk && <div className="mt-1 text-[11px] text-red-600">数字 / - / 空白 / () で 30 文字以内で入力してください。</div>}
+        {!phoneFmtOk && <div className="mt-1 text-[11px] text-red-600">数字 / - / 空白 / () で 30 文字以内で入力してください。</div>}
       </Row>
 
-      <Row label="連絡先メール (任意)" hint="消費者から問合せを受け取れるメールアドレス。">
+      <Row label="メールアドレス" required hint="消費者から問合せを受け取れるメールアドレス。">
         <input name="legal_email" type="email" inputMode="email" autoComplete="off"
                value={email} onChange={(e) => setEmail(e.target.value)}
                maxLength={200} placeholder="contact@example.com"
                disabled={disabled} className={inputClass + ' max-w-[380px]'} />
-        {!emailOk && <div className="mt-1 text-[11px] text-red-600">正しいメールアドレス形式で入力してください。</div>}
+        {!emailFmtOk && <div className="mt-1 text-[11px] text-red-600">正しいメールアドレス形式で入力してください。</div>}
       </Row>
 
       {disabled && disabledReason && (
         <div className="text-[11px] text-neutral-500">{disabledReason}</div>
+      )}
+
+      {/* 保存 disabled 理由の明示 (どの必須項目が不足しているか) */}
+      {!disabled && !canSubmit && missingItems.length > 0 && (
+        <div className="text-[12px] text-orange-800 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+          未入力または不正な形式の項目があるため保存できません。<br />
+          <span className="font-semibold">不足項目:</span> {missingItems.join(' / ')}
+        </div>
       )}
 
       <div>
