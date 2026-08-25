@@ -75,6 +75,8 @@ function errorLabel(code: string): string {
     case 'invalid_legal_postal_code':               return '郵便番号は 7 桁 (例: 273-0002 / 2730002) で入力してください。'
     case 'invalid_legal_phone':                     return '電話番号は数字 / - / 空白 / () で入力してください。'
     case 'invalid_legal_email':                     return '正しいメールアドレス形式で入力してください。'
+    // Migration 166: 販売者区分
+    case 'invalid_legal_entity_type':               return '販売者区分は「法人」または「個人」を選択してください。'
     case 'legal_name_too_long':                     return '販売事業者名は 100 文字以内で入力してください。'
     case 'legal_representative_name_too_long':      return '代表責任者名は 100 文字以内で入力してください。'
     case 'legal_prefecture_too_long':               return '都道府県は 20 文字以内で入力してください。'
@@ -117,7 +119,7 @@ interface SocialLinksRow {
   instagram_url: string | null
 }
 
-// Migration 163: 特商法表記 販売事業者法定情報 (9 列)。
+// Migration 163 / 166: 特商法表記 販売事業者法定情報 (9 列) + 販売者区分 (1 列)。
 // Migration 未 apply 環境では列不在エラーで返るが、UI 側で空値扱いにフォールバック。
 interface LegalInfoRow {
   legal_name:                 string | null
@@ -129,6 +131,7 @@ interface LegalInfoRow {
   legal_address_line2:        string | null
   legal_phone:                string | null
   legal_email:                string | null
+  legal_entity_type:          string | null   // Migration 166: 'corporation' | 'individual' | null
 }
 
 export default async function BrandAdminSettingsPage({
@@ -250,7 +253,7 @@ export default async function BrandAdminSettingsPage({
       }
     })
       .from('shop_brands')
-      .select('legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_address_line2, legal_phone, legal_email')
+      .select('legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_address_line2, legal_phone, legal_email, legal_entity_type')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
   ])
@@ -351,7 +354,16 @@ export default async function BrandAdminSettingsPage({
   const migration163NotApplied =
     legalProbe.error !== null &&
     /column .*(legal_name|legal_representative_name|legal_postal_code|legal_prefecture|legal_city|legal_address_line1|legal_address_line2|legal_phone|legal_email).* does not exist/i.test(legalProbe.error.message)
+  // Migration 166: legal_entity_type 未 apply 環境の判定 (163 が済んでも 166 未済み時のケース)
+  const migration166NotApplied =
+    !migration163NotApplied
+    && legalProbe.error !== null
+    && /column .*legal_entity_type.* does not exist/i.test(legalProbe.error.message)
+  const rawEntityType = legalProbe.data?.legal_entity_type ?? null
+  const legalEntityType: 'corporation' | 'individual' | null =
+    rawEntityType === 'corporation' || rawEntityType === 'individual' ? rawEntityType : null
   const legalInitial: BrandLegalInfoInitial = {
+    legalEntityType,
     legalName:               legalProbe.data?.legal_name                ?? null,
     legalRepresentativeName: legalProbe.data?.legal_representative_name ?? null,
     legalPostalCode:         legalProbe.data?.legal_postal_code         ?? null,
@@ -479,6 +491,12 @@ export default async function BrandAdminSettingsPage({
           {migration163NotApplied && (
             <div className="mt-2 text-[12px] text-orange-800 bg-orange-50 border border-orange-200 rounded px-3 py-2">
               販売事業者情報の準備が完了していません (DB 側の準備待ち)。設定完了までしばらくお待ちください。
+            </div>
+          )}
+          {/* Migration 166: entity_type 列だけが未 apply の稀ケース (163 済 / 166 未済) */}
+          {migration166NotApplied && (
+            <div className="mt-2 text-[12px] text-orange-800 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+              販売者区分 (法人 / 個人) の準備が完了していません (DB 側の準備待ち)。 選択項目のみ一時的に無効化されます。
             </div>
           )}
           {legalReadError && !migration163NotApplied && (

@@ -5,17 +5,24 @@ import { useFormStatus } from 'react-dom'
 import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 /**
- * ブランドの「特定商取引法に基づく表記」用 販売事業者法定情報フォーム (Migration 163)。
+ * ブランドの「特定商取引法に基づく表記」用 販売事業者法定情報フォーム (Migration 163 / 166)。
  *
- * 9 field を一括で更新する。 保存は shop_brand_update_legal_info RPC
+ * 10 field (9 + 販売者区分) を一括で更新する。 保存は shop_brand_update_legal_info RPC
  * (owner/admin gate + server 側 validation + 空文字 → NULL 正規化)。
+ *
+ * Migration 166: 販売者区分 (legal_entity_type = 'corporation' | 'individual') を
+ * 追加。 選択によって入力ラベルと商品公開 gate 上の必須項目が切り替わる。
+ * 途中保存は常に可能 (「設定を保存できない」と「販売開始できない」を分離する方針)。
  *
  * このフォームは他の Brand Admin セクション (returnAddress / shippingRules /
  * profile / policy / social) とは責務が完全に別。 独立セクション化して blast radius を
  * 抑える (BrandSocialLinksForm と同じ設計方針)。
  */
 
+export type LegalEntityType = 'corporation' | 'individual'
+
 export interface BrandLegalInfoInitial {
+  legalEntityType:           LegalEntityType | null
   legalName:                 string | null
   legalRepresentativeName:   string | null
   legalPostalCode:           string | null
@@ -61,6 +68,11 @@ const EMAIL_RE  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 function trimOrEmpty(v: string): string { return v.trim() }
 
 export default function BrandLegalInfoForm({ initial, action, disabled, disabledReason }: Props) {
+  // Migration 166: 販売者区分。 途中保存は空 (''), 保存時は '' → NULL に落ちる。
+  // 「未選択」も途中保存としては許容する (商品公開 gate は Web 側 assertPublishable
+  // OrRedirect で別途強制する = 「設定を保存できない」と「販売開始できない」を分離)。
+  const [entityType, setEntityType] = useState<LegalEntityType | ''>(initial.legalEntityType ?? '')
+
   const [name,    setName]    = useState(initial.legalName ?? '')
   const [rep,     setRep]     = useState(initial.legalRepresentativeName ?? '')
   const [postal,  setPostal]  = useState(initial.legalPostalCode ?? '')
@@ -70,6 +82,16 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
   const [a2,      setA2]      = useState(initial.legalAddressLine2 ?? '')
   const [phone,   setPhone]   = useState(initial.legalPhone ?? '')
   const [email,   setEmail]   = useState(initial.legalEmail ?? '')
+
+  // 販売者区分に応じたラベル切替。 未選択のときは「(未選択)」表示のプレースホルダ的振舞い。
+  const isIndividual = entityType === 'individual'
+  const isCorporation = entityType === 'corporation'
+  const nameLabel = isCorporation ? '法人名' : (isIndividual ? '販売者氏名' : '販売事業者名')
+  const nameHint  = isCorporation
+    ? '法人の正式名称 (登記上の名称)。 屋号やサービス名ではありません。'
+    : (isIndividual
+        ? '販売者本人の氏名。 屋号やペンネームではなく本人確認できる氏名を入力してください。'
+        : '販売者区分を選ぶと入力ラベルが切り替わります。')
 
   // 各 field OK 判定 (空欄は OK = 未入力に戻せる、入力ありなら形式チェック)
   const nameOk    = trimOrEmpty(name).length    <= 100
@@ -106,19 +128,52 @@ export default function BrandLegalInfoForm({ initial, action, disabled, disabled
 
   return (
     <form action={action} className="space-y-4">
-      <Row label="法人名 / 個人事業者氏名 (任意)" hint="実際に販売する法人名 または 個人事業者の氏名。 屋号ではなく法定表記に使う正式名称。">
+      {/* Migration 166: 販売者区分。 選択によりラベル / 必須項目 (公開 gate) が切替わる。 */}
+      <Row label="販売者区分（販売開始時は必須）" hint="商品を販売するには「法人」または「個人」の選択が必要です。 未選択のままでも設定の途中保存は可能ですが、商品を公開することはできません。">
+        <div className="flex items-center gap-4 text-[13px]">
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="legal_entity_type" value="corporation"
+                   checked={isCorporation}
+                   onChange={() => setEntityType('corporation')}
+                   disabled={disabled} />
+            <span>法人</span>
+          </label>
+          <label className="inline-flex items-center gap-1.5 cursor-pointer">
+            <input type="radio" name="legal_entity_type" value="individual"
+                   checked={isIndividual}
+                   onChange={() => setEntityType('individual')}
+                   disabled={disabled} />
+            <span>個人</span>
+          </label>
+          {entityType === '' && (
+            <span className="text-[11px] text-neutral-500">(未選択 — 途中保存は可能ですが公開できません)</span>
+          )}
+        </div>
+      </Row>
+
+      <Row label={`${nameLabel} (任意)`} hint={nameHint}>
         <input name="legal_name" type="text" value={name} onChange={(e) => setName(e.target.value)}
-               maxLength={100} placeholder="株式会社サンプル / 山田 太郎"
+               maxLength={100} placeholder={isCorporation ? '株式会社サンプル' : (isIndividual ? '山田 太郎' : '株式会社サンプル / 山田 太郎')}
                disabled={disabled} className={inputClass} />
         {!nameOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
       </Row>
 
-      <Row label="代表責任者名 (任意)" hint="代表取締役名 / 事業運営責任者名。">
-        <input name="legal_representative_name" type="text" value={rep} onChange={(e) => setRep(e.target.value)}
-               maxLength={100} placeholder="山田 太郎"
-               disabled={disabled} className={inputClass} />
-        {!repOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
-      </Row>
+      {/* 代表責任者: 法人のみ表示。 個人選択時は非表示 (「個人に代表責任者」概念を要求しない方針)。
+          未選択時は下位互換で表示 (途中保存中の状態を破壊しないため)。 個人保存で
+          既存 rep を消したい場合は先に個人にして保存 (server 側で空文字は NULL 化)。 */}
+      {!isIndividual && (
+        <Row label="代表者 / 通信販売責任者（販売開始時は必須）" hint="法人の場合は代表取締役名または通信販売業務責任者名を入力してください。 未入力のままでも設定の途中保存は可能ですが、商品を公開することはできません。">
+          <input name="legal_representative_name" type="text" value={rep} onChange={(e) => setRep(e.target.value)}
+                 maxLength={100} placeholder="山田 太郎"
+                 disabled={disabled} className={inputClass} />
+          {!repOk && <div className="mt-1 text-[11px] text-red-600">100 文字以内で入力してください。</div>}
+        </Row>
+      )}
+      {/* 個人選択時、既存 rep が残っている場合は明示的に「保存時に消去」する hidden input を送出。
+          これで RPC 側の nullif btrim で NULL 化される (代表者概念を持たせない設計)。 */}
+      {isIndividual && (
+        <input type="hidden" name="legal_representative_name" value="" />
+      )}
 
       <Row label="所在地: 郵便番号 (任意)" hint="7 桁数字。 ハイフンあり ('273-0002') / なし ('2730002') どちらでも可、保存時に数字のみに正規化されます。">
         <input name="legal_postal_code" type="text" inputMode="numeric" value={postal} onChange={(e) => setPostal(e.target.value)}

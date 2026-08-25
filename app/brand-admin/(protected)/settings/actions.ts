@@ -442,6 +442,11 @@ export async function updateBrandLegalInfoAction(formData: FormData): Promise<vo
   const legalA2      = trimOrEmpty(formData.get('legal_address_line2'), 200)
   const legalPhone   = trimOrEmpty(formData.get('legal_phone'), 30)
   const legalEmail   = trimOrEmpty(formData.get('legal_email'), 200)
+  // Migration 166: 販売者区分 (未選択 = '' → 保存時 NULL、選択済み = whitelist)
+  const legalEntityRaw = trimOrEmpty(formData.get('legal_entity_type'), 20)
+  if (legalEntityRaw.length > 0 && legalEntityRaw !== 'corporation' && legalEntityRaw !== 'individual') {
+    redirect(`${returnUrl}?err=invalid_legal_entity_type`)
+  }
 
   // 郵便番号: 空欄なら null、非空なら - を除いて 7 桁 数字必須
   let postalForRpc: string | null = null
@@ -480,6 +485,7 @@ export async function updateBrandLegalInfoAction(formData: FormData): Promise<vo
     p_legal_address_line2:         legalA2.length > 0 ? legalA2 : null,
     p_legal_phone:                 legalPhone.length > 0 ? legalPhone : null,
     p_legal_email:                 legalEmail.length > 0 ? legalEmail : null,
+    p_legal_entity_type:           legalEntityRaw.length > 0 ? legalEntityRaw : null,
   })
   if (error) {
     const msg = error.message.toLowerCase()
@@ -489,6 +495,7 @@ export async function updateBrandLegalInfoAction(formData: FormData): Promise<vo
     else if (msg.includes('invalid_legal_postal_code'))           code = 'invalid_legal_postal_code'
     else if (msg.includes('invalid_legal_phone'))                 code = 'invalid_legal_phone'
     else if (msg.includes('invalid_legal_email'))                 code = 'invalid_legal_email'
+    else if (msg.includes('invalid_legal_entity_type'))           code = 'invalid_legal_entity_type'
     else if (msg.includes('legal_name_too_long'))                 code = 'legal_name_too_long'
     else if (msg.includes('legal_representative_name_too_long'))  code = 'legal_representative_name_too_long'
     else if (msg.includes('legal_prefecture_too_long'))           code = 'legal_prefecture_too_long'

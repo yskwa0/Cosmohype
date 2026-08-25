@@ -95,7 +95,8 @@ function errorLabel(code: string): string {
     case 'publish_requires_image':      return '公開するには商品画像を 1 枚以上登録してください。'
     case 'publish_requires_variant':    return '公開するにはサイズ・カラー・在庫を持つ「販売中」バリエーションを 1 件以上登録してください。'
     // Phase 2 (Migration 163): 商品公開 gate 強化
-    case 'publish_requires_legal_info':      return '公開するには「販売事業者情報 (特定商取引法に基づく表記)」の必須項目 (法人名 / 代表責任者 / 郵便番号 / 都道府県 / 市区町村 / 番地 / 電話 / メール) をブランド設定で入力してください。 → /brand-admin/settings'
+    case 'publish_requires_entity_type':     return '公開するには「販売事業者情報」の販売者区分 (法人 / 個人) を選択してください。 → /brand-admin/settings'
+    case 'publish_requires_legal_info':      return '公開するには「販売事業者情報 (特定商取引法に基づく表記)」の販売者区分に応じた必須項目をブランド設定で入力してください (法人: 法人名 / 代表者 / 郵便番号 / 都道府県 / 市区町村 / 番地 / 電話 / メール、個人: 販売者氏名 / 郵便番号 / 都道府県 / 市区町村 / 番地 / 電話 / メール)。 → /brand-admin/settings'
     case 'publish_requires_delivery_policy': return '公開するには「配送・返品ポリシー」(発送目安 / 返品受付 / 交換受付) をブランド設定で入力してください。 返品を受付する場合は受付期間の日数も必要です。 → /brand-admin/settings'
     case 'publish_requires_shipping':        return '公開するには有効な「配送・送料設定」を 1 件以上ブランド設定で登録してください。 → /brand-admin/settings'
     case 'too_many_images':             return `画像は最大 ${MAX_IMAGES_PER_PRODUCT} 枚まで登録できます。既存を削除してから追加してください。`

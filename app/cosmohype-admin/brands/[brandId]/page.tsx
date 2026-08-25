@@ -20,7 +20,8 @@ interface BrandDetailRow {
   name: string
   slug: string
   status: string
-  // Migration 163: 特商法表記 販売事業者情報
+  // Migration 163 / 166: 特商法表記 販売事業者情報 + 販売者区分
+  legal_entity_type:          string | null   // 'corporation' | 'individual' | null
   legal_name:                 string | null
   legal_representative_name:  string | null
   legal_postal_code:          string | null
@@ -30,6 +31,12 @@ interface BrandDetailRow {
   legal_address_line2:        string | null
   legal_phone:                string | null
   legal_email:                string | null
+}
+
+function entityTypeLabel(t: string | null): string {
+  if (t === 'corporation') return '法人'
+  if (t === 'individual')  return '個人'
+  return '未登録'
 }
 
 function formatPostal(p: string | null): string {
@@ -77,7 +84,7 @@ export default async function CosmohypeAdminBrandDetailPage({
 
   const { data, error } = await loose
     .from('shop_brands')
-    .select('id, name, slug, status, legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_address_line2, legal_phone, legal_email')
+    .select('id, name, slug, status, legal_entity_type, legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_address_line2, legal_phone, legal_email')
     .eq('id', brandId)
     .maybeSingle()
 
@@ -104,9 +111,11 @@ export default async function CosmohypeAdminBrandDetailPage({
 
   const b = data
   const hasAnyLegalField = [
+    b.legal_entity_type,
     b.legal_name, b.legal_representative_name, b.legal_postal_code, b.legal_prefecture,
     b.legal_city, b.legal_address_line1, b.legal_address_line2, b.legal_phone, b.legal_email,
   ].some((v) => v !== null && v.length > 0)
+  const isIndividual = b.legal_entity_type === 'individual'
 
   return (
     <div className="space-y-6">
@@ -136,8 +145,14 @@ export default async function CosmohypeAdminBrandDetailPage({
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[13px]">
-            <Kv label="法人名 / 個人事業者氏名" value={b.legal_name ?? '-'} />
-            <Kv label="代表責任者名" value={b.legal_representative_name ?? '-'} />
+            <Kv label="販売者区分" value={entityTypeLabel(b.legal_entity_type)} />
+            <Kv label={isIndividual ? '販売者氏名' : '法人名 / 販売事業者名'} value={b.legal_name ?? '-'} />
+            {/* Migration 166: 代表者行は法人時のみ表示。 個人時は表示自体を省略
+                (「個人には代表責任者概念なし」の運用方針 = brand.name / 屋号を代替に使わない)。
+                entity_type が未設定 (null) のときは念のため表示 (途中登録中の判別を可能に)。 */}
+            {!isIndividual && (
+              <Kv label="代表者 / 通信販売責任者" value={b.legal_representative_name ?? '-'} />
+            )}
             <Kv label="郵便番号" value={formatPostal(b.legal_postal_code)} mono />
             <Kv label="所在地" value={fullAddress(b)} />
             <Kv label="電話番号" value={b.legal_phone ?? '-'} mono />

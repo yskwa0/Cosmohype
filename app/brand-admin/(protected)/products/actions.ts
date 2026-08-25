@@ -190,13 +190,14 @@ async function assertPublishableOrRedirect(
 
   const brandId = priceRow!.brand_id
 
-  // Phase 2 (Migration 163): 販売事業者情報 + 配送・返品ポリシー を brand row から確認
+  // Phase 2 / Migration 166: 販売事業者情報 + 販売者区分 + 配送・返品ポリシー を brand row から確認
   const brandRes = await supabase
     .from('shop_brands')
-    .select('legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_phone, legal_email, dispatch_lead_days, return_accepted, return_days, exchange_accepted')
+    .select('legal_entity_type, legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_phone, legal_email, dispatch_lead_days, return_accepted, return_days, exchange_accepted')
     .eq('id', brandId)
     .maybeSingle()
   const brandRow = brandRes.data as {
+    legal_entity_type: string | null;
     legal_name: string | null; legal_representative_name: string | null;
     legal_postal_code: string | null; legal_prefecture: string | null; legal_city: string | null;
     legal_address_line1: string | null; legal_phone: string | null; legal_email: string | null;
@@ -205,10 +206,22 @@ async function assertPublishableOrRedirect(
   } | null
   if (!brandRow) redirect(`${back}?err=publish_requires_legal_info`)
 
-  // 販売事業者情報: line2 以外の 8 項目必須 (Phase 1 で shop_brands に追加した legal_*)
-  const legalRequired = brandRow!.legal_name && brandRow!.legal_representative_name
+  // Migration 166: 販売者区分が必須 (未設定なら「法人 / 個人 未選択」として拒否)
+  const entityType = brandRow!.legal_entity_type
+  if (entityType !== 'corporation' && entityType !== 'individual') {
+    redirect(`${back}?err=publish_requires_entity_type`)
+  }
+
+  // 販売事業者情報: 区分別に必須項目を判定
+  //   法人 (corporation): 8 項目必須 (legal_representative_name を含む)
+  //   個人 (individual):  7 項目必須 (legal_representative_name は不問)
+  //   line2 (建物名) は両区分で任意
+  const commonRequired = brandRow!.legal_name
     && brandRow!.legal_postal_code && brandRow!.legal_prefecture && brandRow!.legal_city
     && brandRow!.legal_address_line1 && brandRow!.legal_phone && brandRow!.legal_email
+  const legalRequired = entityType === 'corporation'
+    ? (commonRequired && brandRow!.legal_representative_name)
+    : commonRequired
   if (!legalRequired) redirect(`${back}?err=publish_requires_legal_info`)
 
   // 配送・返品ポリシー: 発送目安 + 返品受付判定 (accepted=true なら日数必須) + 交換受付
