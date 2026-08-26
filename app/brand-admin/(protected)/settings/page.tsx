@@ -9,6 +9,7 @@ import BrandSocialLinksForm, { type BrandSocialLinksInitial } from '@/components
 import BrandLegalInfoForm, { type BrandLegalInfoInitial } from '@/components/brand-admin/BrandLegalInfoForm'
 import { type DeliveryReturnPolicyInitial } from '@/components/brand-admin/DeliveryReturnPolicyForm'
 import DeliveryReturnPolicySection from '@/components/brand-admin/DeliveryReturnPolicySection'
+import StripeConnectSection, { type StripeConnectStatus } from '@/components/brand-admin/StripeConnectSection'
 import {
   updateReturnAddressAction,
   updateShippingRulesAction,
@@ -17,6 +18,10 @@ import {
   updateBrandLegalInfoAction,
   updateDeliveryReturnPolicyAction,
 } from './actions'
+import {
+  startStripeConnectOnboardingAction,
+  syncStripeConnectStatusAction,
+} from './stripeConnectActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +78,24 @@ function errorLabel(code: string): string {
     case 'invalid_return_shipping_cost_bearer':          return '返品送料の負担 (購入者都合返品) は「購入者負担」または「販売事業者負担」を選択してください。'
     case 'return_shipping_cost_bearer_required':         return '返品を「受付する」に設定した場合は、返品送料の負担 (購入者都合返品) を選択してください。'
     case 'return_shipping_cost_bearer_only_when_accepted': return '返品を「受付する」以外に設定した場合は、返品送料の負担 (購入者都合返品) を選択しないでください。'
+    // Phase 4-B (Migration 168): ブランド出店規約 同意
+    case 'merchant_agreement_owner_only':          return 'ブランド出店規約への同意は、このブランドの owner のみが行えます。 owner にログインしていただき、Brand Admin 上の同意画面から同意してください。'
+    case 'merchant_agreement_version_mismatch':    return 'ブランド出店規約の現行バージョンが更新されました。 画面を再読み込みして最新の規約に同意してください。'
+    case 'merchant_agreement_hash_mismatch':       return 'ブランド出店規約の内容整合性を検証できませんでした。 時間をおいて再度お試しください (継続する場合は運営までお知らせください)。'
+    case 'merchant_agreement_unknown_version':     return 'ブランド出店規約のバージョン情報を DB から取得できませんでした。 時間をおいて再度お試しください。'
+    case 'merchant_agreement_accept_failed':       return 'ブランド出店規約への同意記録に失敗しました。 時間をおいて再度お試しください。'
+    // Phase 4-C.3 (Migration 170-171): Stripe Connect 接続
+    case 'stripe_connect_owner_only':              return 'Stripe Connect の接続・再登録操作は、このブランドの owner のみが行えます。'
+    case 'stripe_connect_forbidden':               return 'Stripe Connect 情報へのアクセス権がありません (ブランドメンバーとしてログインしてください)。'
+    case 'stripe_connect_onboarding_failed':       return 'Stripe Connect への接続処理に失敗しました。 時間をおいて再度お試しください。'
+    case 'stripe_connect_link_url_missing':        return 'Stripe から登録画面 URL を取得できませんでした。 時間をおいて再度お試しください。'
+    case 'stripe_connect_urls_not_configured':     return 'Stripe Connect の戻り URL 設定が完了していません (運営に連絡してください)。'
+    case 'stripe_connect_sync_failed':             return 'Stripe から最新情報を取得できませんでした。 時間をおいて再度お試しください。'
+    case 'stripe_connect_sync_stripe_error':       return 'Stripe API エラーにより最新情報を取得できませんでした。 時間をおいて再度お試しください。'
+    case 'stripe_connect_not_started':             return 'Stripe Connect への接続がまだ開始されていません。'
+    case 'stripe_account_create_failed':           return 'Stripe Connect アカウントの作成に失敗しました。 時間をおいて再度お試しください。'
+    case 'stripe_account_link_create_failed':      return 'Stripe 登録画面リンクの作成に失敗しました。 時間をおいて再度お試しください。'
+    case 'stripe_key_env_mismatch':                return 'Stripe API の環境設定に問題があります (運営に連絡してください)。'
     case 'return_policy_note_too_long':     return '返品・交換の補足条件は 1000 文字以内で入力してください。'
     case 'brand_not_found':                 return 'ブランド情報が見つかりませんでした。ページを再読み込みしてお試しください。'
     // Migration 163: 特商法表記 販売事業者情報
@@ -150,6 +173,16 @@ interface LegalInfoRow {
   legal_entity_type:          string | null   // Migration 166: 'corporation' | 'individual' | null
 }
 
+// Phase 4-C.3 (Migration 170-171): Stripe Connect account state cache probe。
+// 未 apply 環境では列不在エラー → UI は 'none' 状態にフォールバック。
+interface StripeConnectRow {
+  stripe_connect_account_id:    string  | null
+  stripe_connect_state:         string  | null
+  stripe_connect_onboarded_at:  string  | null
+  stripe_connect_livemode:      boolean | null
+  stripe_connect_last_synced_at: string | null
+}
+
 export default async function BrandAdminSettingsPage({
   searchParams,
 }: {
@@ -165,6 +198,10 @@ export default async function BrandAdminSettingsPage({
   const savedSocial = sp.saved === 'social'
   // Migration 163: 特商法表記 販売事業者情報保存後の success banner。
   const savedLegal = sp.saved === 'legal'
+  // Phase 4-B / Migration 168: Merchant Agreement 同意記録後の success banner。
+  const savedMerchantAgreement = sp.saved === 'merchant_agreement'
+  // Phase 4-C.3 / Migration 170-171: Stripe Connect 同期成功 banner。
+  const savedStripeConnectSync = sp.saved === 'stripe_connect_sync'
   const errCode = sp.err ?? null
 
   const ctx = await getBrandAdminContext()
@@ -187,8 +224,8 @@ export default async function BrandAdminSettingsPage({
     ? `${supaUrlBase}/storage/v1/object/public/shop-brand-assets/`
     : ''
 
-  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー + SNS リンク + 法定事業者情報 を Promise.all で並列化
-  const [res, shipProbe, profileProbe, policyProbe, socialProbe, legalProbe] = await Promise.all([
+  // 高速化: 返品先住所 + 送料ルール + brand profile + 配送・返品ポリシー + SNS リンク + 法定事業者情報 + Stripe Connect 状態 を Promise.all で並列化
+  const [res, shipProbe, profileProbe, policyProbe, socialProbe, legalProbe, stripeConnectProbe] = await Promise.all([
     loose
       .from('shop_brands')
       .select(
@@ -270,6 +307,21 @@ export default async function BrandAdminSettingsPage({
     })
       .from('shop_brands')
       .select('legal_name, legal_representative_name, legal_postal_code, legal_prefecture, legal_city, legal_address_line1, legal_address_line2, legal_phone, legal_email, legal_entity_type')
+      .eq('id', ctx.currentBrand.brandId)
+      .maybeSingle(),
+    // Phase 4-C.3 (Migration 170-171): Stripe Connect probe。
+    //   未 apply 環境では列不在エラーで返るが、UI 側で 'none' 状態にフォールバック。
+    (loose as unknown as {
+      from: (t: string) => {
+        select: (s: string) => {
+          eq: (col: string, val: string) => {
+            maybeSingle: () => Promise<{ data: StripeConnectRow | null; error: { message: string } | null }>
+          }
+        }
+      }
+    })
+      .from('shop_brands')
+      .select('stripe_connect_account_id, stripe_connect_state, stripe_connect_onboarded_at, stripe_connect_livemode, stripe_connect_last_synced_at')
       .eq('id', ctx.currentBrand.brandId)
       .maybeSingle(),
   ])
@@ -397,6 +449,24 @@ export default async function BrandAdminSettingsPage({
   const legalReadError =
     (!migration163NotApplied && legalProbe.error) ? legalProbe.error.message : null
 
+  // Phase 4-C.3 (Migration 170-171): Stripe Connect 状態 hydrate。
+  //   Migration 170 未 apply 環境では stripe_connect_* 列不在で error → 'none' 扱い。
+  //   state 値が whitelist 外の場合も 'none' に落とす (defensive)。
+  const rawConnectState = stripeConnectProbe.data?.stripe_connect_state ?? null
+  const narrowedConnectState: 'none' | 'pending' | 'active' | 'restricted' | 'disabled' =
+    rawConnectState === 'pending'    ? 'pending'
+    : rawConnectState === 'active'   ? 'active'
+    : rawConnectState === 'restricted' ? 'restricted'
+    : rawConnectState === 'disabled' ? 'disabled'
+    : 'none'
+  const stripeConnectStatus: StripeConnectStatus = {
+    state:         narrowedConnectState,
+    accountId:     stripeConnectProbe.data?.stripe_connect_account_id ?? null,
+    livemode:      stripeConnectProbe.data?.stripe_connect_livemode ?? null,
+    onboardedAt:   stripeConnectProbe.data?.stripe_connect_onboarded_at ?? null,
+    lastSyncedAt:  stripeConnectProbe.data?.stripe_connect_last_synced_at ?? null,
+  }
+
   // staff は編集不可 (owner / admin のみ)。Dev Bypass は admin なので編集可。
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
   const disabledReason = canEdit
@@ -445,7 +515,17 @@ export default async function BrandAdminSettingsPage({
           特商法表記 販売事業者情報を保存しました。
         </div>
       )}
-      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && !savedLegal && (
+      {savedMerchantAgreement && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          ブランド出店規約への同意を記録しました。
+        </div>
+      )}
+      {savedStripeConnectSync && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          Stripe Connect の最新情報を取得しました。
+        </div>
+      )}
+      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && !savedLegal && !savedMerchantAgreement && !savedStripeConnectSync && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorLabel(errCode)}
         </div>
@@ -608,6 +688,26 @@ export default async function BrandAdminSettingsPage({
             disabledReason={disabledReason}
           />
         )}
+      </section>
+
+      {/* Phase 4-C.3 (Migration 170-171): Stripe Connect 接続 (販売代金の受取設定)。
+          owner のみ接続操作可、admin/staff は状態閲覧 + sync のみ。
+          このセクションが「接続済み」でも本 Phase では実 settlement は platform_manual を維持 (料金・精算条件と Merchant Agreement v1 正式版が確定するまで)。 */}
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold">Stripe Connect (販売代金の受取設定)</h2>
+          <div className="mt-1 text-[11px] text-neutral-500">
+            HYPE で商品を販売した代金を受取るための Stripe Connect 接続設定です。
+            Stripe が運営する登録画面 (ホスティング登録) で事業者情報 (法人 / 個人)、代表者、住所、銀行口座等を入力します。
+            接続完了後も、Cosmohype 全体で料金・精算条件が確定するまでは、実際の代金受取は従来方式のまま継続します。
+          </div>
+        </div>
+        <StripeConnectSection
+          status={stripeConnectStatus}
+          role={ctx.currentBrand.role}
+          onboardingAction={startStripeConnectOnboardingAction}
+          syncAction={syncStripeConnectStatusAction}
+        />
       </section>
     </div>
   )
