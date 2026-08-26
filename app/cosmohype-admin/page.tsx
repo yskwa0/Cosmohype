@@ -65,6 +65,19 @@ export default function CosmohypeAdminDashboardPage() {
             対応が必要な商品は「商品管理へ」から Phase C の販売停止に遷移できます。
           </div>
         </Link>
+
+        <Link
+          href="/cosmohype-admin/transfers"
+          className="block rounded-xl border border-neutral-200 bg-white p-5 hover:border-neutral-400 hover:shadow-sm transition"
+        >
+          <div className="text-[10px] font-bold tracking-widest text-neutral-500">TRANSFERS</div>
+          <div className="mt-1 text-base font-semibold text-neutral-900">Transfer / Reversal 監視</div>
+          <div className="mt-2 text-[12px] text-neutral-600">
+            Stripe Connect の Transfer 発行と返金時 Reversal を監視します。
+            failed_persistent は default で Needs attention に表示。
+            reversal_status=failed_persistent の group では manual reconciliation (retry / abandon) が可能です。
+          </div>
+        </Link>
       </div>
 
       <div className="rounded-xl border border-neutral-200 bg-white p-5">
