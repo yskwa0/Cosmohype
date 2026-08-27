@@ -16,12 +16,12 @@
 // =============================================================================
 
 import 'server-only'
-import { FEE_SETTLEMENT_TERMS_V1, type FeeTermsDocument } from './content'
+import { FEE_SETTLEMENT_TERMS_V2, type FeeTermsDocument } from './content'
 import { computeFeeSettlementTermsHash } from './hash'
 
-export const FEE_SETTLEMENT_TERMS_CURRENT_DOC: FeeTermsDocument = FEE_SETTLEMENT_TERMS_V1
-export const FEE_SETTLEMENT_TERMS_CURRENT_VERSION: string = FEE_SETTLEMENT_TERMS_V1.version
-export const FEE_SETTLEMENT_TERMS_CURRENT_HASH:    string = computeFeeSettlementTermsHash(FEE_SETTLEMENT_TERMS_V1)
+export const FEE_SETTLEMENT_TERMS_CURRENT_DOC: FeeTermsDocument = FEE_SETTLEMENT_TERMS_V2
+export const FEE_SETTLEMENT_TERMS_CURRENT_VERSION: string = FEE_SETTLEMENT_TERMS_V2.version
+export const FEE_SETTLEMENT_TERMS_CURRENT_HASH:    string = computeFeeSettlementTermsHash(FEE_SETTLEMENT_TERMS_V2)
 
 /**
  * Fee Terms における正式 platform fee rate (basis points)。

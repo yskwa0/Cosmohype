@@ -137,6 +137,18 @@ function transferTone(s: string): 'ok' | 'warn' | 'danger' | 'neutral' | 'info' 
   }
 }
 
+function transferLabel(s: string): string {
+  switch (s) {
+    case 'created':           return '送金済み'
+    case 'pending':           return '処理待ち'
+    case 'processing':        return '処理中'
+    case 'failed_persistent': return '要確認'
+    case 'cancelled':         return '取り消し'
+    case 'not_applicable':    return '対象外'
+    default:                  return s
+  }
+}
+
 function reversalTone(s: string): 'ok' | 'warn' | 'danger' | 'neutral' | 'info' {
   switch (s) {
     case 'completed':         return 'ok'
@@ -149,6 +161,18 @@ function reversalTone(s: string): 'ok' | 'warn' | 'danger' | 'neutral' | 'info' 
   }
 }
 
+function reversalLabel(s: string): string {
+  switch (s) {
+    case 'completed':         return '取消完了'
+    case 'pending':           return '処理待ち'
+    case 'processing':        return '処理中'
+    case 'failed_persistent': return '要確認'
+    case 'abandoned':         return '対応終了'
+    case 'not_applicable':    return '対象外'
+    default:                  return s
+  }
+}
+
 function refundTone(s: string | null): 'ok' | 'warn' | 'danger' | 'neutral' {
   switch (s) {
     case 'succeeded': return 'ok'
@@ -157,6 +181,53 @@ function refundTone(s: string | null): 'ok' | 'warn' | 'danger' | 'neutral' {
     case 'canceled':  return 'neutral'
     case 'none':      return 'neutral'
     default:          return 'neutral'
+  }
+}
+
+function refundLabel(s: string | null): string {
+  switch (s) {
+    case 'succeeded': return '完了'
+    case 'pending':   return '処理待ち'
+    case 'failed':    return '失敗'
+    case 'canceled':  return '取り消し'
+    case 'none':      return 'なし'
+    default:          return s ?? ''
+  }
+}
+
+function orderStatusLabel(s: string): string {
+  switch (s) {
+    case 'draft':            return '下書き'
+    case 'placed':           return '確定'
+    case 'paid':             return '入金済み'
+    case 'cancelled':        return 'キャンセル済み'
+    case 'refunded':         return '返金済み'
+    case 'failed':           return '失敗'
+    case 'refund_required':  return '返金対応中'
+    case 'cancel_requested': return 'キャンセル依頼中'
+    default:                 return s
+  }
+}
+
+function paymentStatusLabel(s: string): string {
+  switch (s) {
+    case 'awaiting_payment': return '入金待ち'
+    case 'processing':       return '処理中'
+    case 'succeeded':        return '入金済み'
+    case 'failed':           return '失敗'
+    case 'cancelled':        return 'キャンセル済み'
+    case 'refunded':         return '返金済み'
+    default:                 return s
+  }
+}
+
+function fulfillmentStatusLabel(s: string): string {
+  switch (s) {
+    case 'unfulfilled': return '未発送'
+    case 'partial':     return '一部発送済み'
+    case 'fulfilled':   return '発送済み'
+    case 'cancelled':   return 'キャンセル済み'
+    default:            return s
   }
 }
 
@@ -251,7 +322,7 @@ export default async function CosmohypeAdminTransferDetailPage({
     g.reversal_status === 'failed_persistent'
 
   const modeLabel = g.snapshot_settlement_mode === 'connect_separate_charges_transfers'
-    ? 'connect (Separate Charges & Transfers)' : g.snapshot_settlement_mode
+    ? '自動精算 (Stripe Connect)' : g.snapshot_settlement_mode === 'platform_manual' ? '手動精算' : g.snapshot_settlement_mode
 
   return (
     <div className="space-y-6">
@@ -260,7 +331,7 @@ export default async function CosmohypeAdminTransferDetailPage({
           ← 一覧へ戻る
         </Link>
         <div className="text-[12px] text-neutral-400 font-mono">
-          order_group: {g.order_group_id}
+          案件 ID: {g.order_group_id}
         </div>
       </div>
 
@@ -276,73 +347,73 @@ export default async function CosmohypeAdminTransferDetailPage({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className={badge(g.transfer_status, transferTone(g.transfer_status))}>
-          Transfer: {g.transfer_status}
+        <span className={badge('t', transferTone(g.transfer_status))}>
+          送金: {transferLabel(g.transfer_status)}
         </span>
-        <span className={badge(g.reversal_status, reversalTone(g.reversal_status))}>
-          Reversal: {g.reversal_status}
+        <span className={badge('r', reversalTone(g.reversal_status))}>
+          送金取消: {reversalLabel(g.reversal_status)}
         </span>
         {o.refund_status && (
-          <span className={badge(`refund: ${o.refund_status}`, refundTone(o.refund_status))}>
-            refund: {o.refund_status}
+          <span className={badge('refund', refundTone(o.refund_status))}>
+            返金: {refundLabel(o.refund_status)}
           </span>
         )}
-        <span className={badge(modeLabel, g.snapshot_settlement_mode === 'connect_separate_charges_transfers' ? 'info' : 'neutral')}>
-          mode: {modeLabel}
+        <span className={badge('mode', g.snapshot_settlement_mode === 'connect_separate_charges_transfers' ? 'info' : 'neutral')}>
+          精算方法: {modeLabel}
         </span>
       </div>
 
       {/* Group / Order 基本情報 */}
       <section className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-neutral-900">Group / Order</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">ブランド別注文と注文の情報</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
-          <Kv label="brand" value={`${g.brand_name} (${g.brand_id.slice(0, 8)}…)`} />
+          <Kv label="ブランド" value={`${g.brand_name} (${g.brand_id.slice(0, 8)}…)`} />
           <Kv
-            label="buyer"
-            value={o.buyer_username ? `@${o.buyer_username}` : '(no username)'}
+            label="購入者"
+            value={o.buyer_username ? `@${o.buyer_username}` : '(ユーザー名未設定)'}
           />
-          <Kv label="buyer user_id" value={o.user_id} mono />
-          <Kv label="order status" value={o.status} />
-          <Kv label="payment status" value={o.payment_status} />
-          <Kv label="fulfillment status" value={o.fulfillment_status} />
-          <Kv label="order total" value={formatYen(o.total_amount, o.currency)} />
-          <Kv label="subtotal" value={formatYen(g.subtotal_amount)} />
-          <Kv label="shipping" value={formatYen(g.shipping_amount)} />
-          <Kv label="discount" value={formatYen(g.discount_amount)} />
-          <Kv label="platform fee" value={formatYen(g.platform_fee_amount)} />
+          <Kv label="購入者 ID" value={o.user_id} mono />
+          <Kv label="注文の状態" value={orderStatusLabel(o.status)} />
+          <Kv label="入金の状態" value={paymentStatusLabel(o.payment_status)} />
+          <Kv label="発送の状態" value={fulfillmentStatusLabel(o.fulfillment_status)} />
+          <Kv label="注文合計" value={formatYen(o.total_amount, o.currency)} />
+          <Kv label="商品小計" value={formatYen(g.subtotal_amount)} />
+          <Kv label="送料" value={formatYen(g.shipping_amount)} />
+          <Kv label="割引" value={formatYen(g.discount_amount)} />
+          <Kv label="プラットフォーム手数料" value={formatYen(g.platform_fee_amount)} />
           <Kv
-            label="fee rate (bps)"
-            value={g.snapshot_platform_fee_rate_bps == null ? '-' : String(g.snapshot_platform_fee_rate_bps)}
+            label="手数料率"
+            value={g.snapshot_platform_fee_rate_bps == null ? '-' : `${(g.snapshot_platform_fee_rate_bps / 100).toFixed(0)}%`}
           />
-          <Kv label="fee term id" value={g.snapshot_fee_settlement_term_id ?? '-'} mono />
-          <Kv label="group created" value={formatDT(g.created_at)} />
-          <Kv label="group updated" value={formatDT(g.updated_at)} />
+          <Kv label="料金・精算条件書 ID" value={g.snapshot_fee_settlement_term_id ?? '-'} mono />
+          <Kv label="ブランド別注文の作成日時" value={formatDT(g.created_at)} />
+          <Kv label="ブランド別注文の更新日時" value={formatDT(g.updated_at)} />
         </div>
       </section>
 
       {/* Stripe id (Dashboard 照合用) */}
       <section className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-neutral-900">Stripe ID (Dashboard 照合用)</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">Stripe 上の照合用 ID</h2>
         <div className="grid grid-cols-1 gap-2 text-[12px]">
-          <Kv label="payment_intent" value={o.stripe_payment_intent_id ?? '-'} mono selectAll />
-          <Kv label="charge" value={o.stripe_charge_id ?? '-'} mono selectAll />
-          <Kv label="transfer_group" value={o.stripe_transfer_group ?? '-'} mono selectAll />
-          <Kv label="transfer" value={g.stripe_transfer_id ?? '-'} mono selectAll />
-          <Kv label="destination account" value={g.snapshot_stripe_connect_account_id ?? '-'} mono selectAll />
-          <Kv label="refund" value={o.stripe_refund_id ?? '-'} mono selectAll />
+          <Kv label="Stripe 決済 ID (PaymentIntent)" value={o.stripe_payment_intent_id ?? '-'} mono selectAll />
+          <Kv label="Stripe 課金 ID (Charge)" value={o.stripe_charge_id ?? '-'} mono selectAll />
+          <Kv label="Stripe 送金グループ ID" value={o.stripe_transfer_group ?? '-'} mono selectAll />
+          <Kv label="Stripe 送金 ID (Transfer)" value={g.stripe_transfer_id ?? '-'} mono selectAll />
+          <Kv label="Stripe 受取アカウント ID (送金先)" value={g.snapshot_stripe_connect_account_id ?? '-'} mono selectAll />
+          <Kv label="Stripe 返金 ID (Refund)" value={o.stripe_refund_id ?? '-'} mono selectAll />
         </div>
       </section>
 
-      {/* Transfer state */}
+      {/* 送金 (Transfer) の状態 */}
       <section className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-neutral-900">Transfer state</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">ブランドへの送金の状態</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
-          <Kv label="status" value={g.transfer_status} />
-          <Kv label="attempt count" value={String(g.transfer_attempt_count)} />
-          <Kv label="last attempt" value={formatDT(g.transfer_last_attempt_at)} />
-          <Kv label="next retry" value={formatDT(g.transfer_next_retry_at)} />
-          <Kv label="processing since" value={formatDT(g.transfer_processing_started_at)} />
-          <Kv label="transfer amount" value={formatYen(g.transfer_amount)} />
+          <Kv label="状態" value={transferLabel(g.transfer_status)} />
+          <Kv label="試行回数" value={String(g.transfer_attempt_count)} />
+          <Kv label="最終試行日時" value={formatDT(g.transfer_last_attempt_at)} />
+          <Kv label="次回再試行予定" value={formatDT(g.transfer_next_retry_at)} />
+          <Kv label="処理開始日時" value={formatDT(g.transfer_processing_started_at)} />
+          <Kv label="送金予定額" value={formatYen(g.transfer_amount)} />
         </div>
         {g.transfer_last_error && (
           <div className="rounded border border-amber-200 bg-amber-50 p-3 text-[11px] font-mono text-amber-900 whitespace-pre-wrap break-all">
@@ -351,16 +422,16 @@ export default async function CosmohypeAdminTransferDetailPage({
         )}
       </section>
 
-      {/* Reversal state + reconciliation form */}
+      {/* 送金取消 (Reversal) の状態 + 運営対応 */}
       <section className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
-        <h2 className="text-sm font-semibold text-neutral-900">Reversal state</h2>
+        <h2 className="text-sm font-semibold text-neutral-900">返金にともなう送金取消の状態</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
-          <Kv label="status" value={g.reversal_status} />
-          <Kv label="amount" value={formatYen(g.reversal_amount)} />
-          <Kv label="attempt count" value={String(g.reversal_attempt_count)} />
-          <Kv label="last attempt" value={formatDT(g.reversal_last_attempt_at)} />
-          <Kv label="next retry" value={formatDT(g.reversal_next_retry_at)} />
-          <Kv label="processing since" value={formatDT(g.reversal_processing_started_at)} />
+          <Kv label="状態" value={reversalLabel(g.reversal_status)} />
+          <Kv label="取消予定額" value={formatYen(g.reversal_amount)} />
+          <Kv label="試行回数" value={String(g.reversal_attempt_count)} />
+          <Kv label="最終試行日時" value={formatDT(g.reversal_last_attempt_at)} />
+          <Kv label="次回再試行予定" value={formatDT(g.reversal_next_retry_at)} />
+          <Kv label="処理開始日時" value={formatDT(g.reversal_processing_started_at)} />
         </div>
         {g.reversal_last_error && (
           <div className="rounded border border-amber-200 bg-amber-50 p-3 text-[11px] font-mono text-amber-900 whitespace-pre-wrap break-all">
@@ -371,31 +442,30 @@ export default async function CosmohypeAdminTransferDetailPage({
         {canRetryOrAbandon ? (
           <div className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-4 mt-4">
             <div className="text-[12px] font-semibold text-red-900">
-              ⚠ Manual reconciliation (reversal_status = failed_persistent)
+              ⚠ 運営による対応が必要 (送金取消が 5 回連続で失敗しています)
             </div>
             <div className="text-[11px] text-red-800 leading-relaxed">
-              5 回の attempt すべてに失敗しました。 Cosmohype 運営として以下いずれかを選択してください。
-              いずれも <span className="font-mono">shop_admin_resolve_transfer_reversal_failed</span> RPC を呼び出します。
-              理由 (reason) は監査目的で <span className="font-mono">reversal_last_error</span> に prefix 付きで保存されます (200 文字以内)。
+              5 回の再試行がすべて失敗しました。 Cosmohype 運営として以下のいずれかを選択してください。
+              入力した理由は監査目的で最新エラー欄に保存されます (200 文字以内)。
             </div>
 
             <form action={retryReversalAction} className="space-y-2">
               <input type="hidden" name="order_group_id" value={g.order_group_id} />
               <label className="block text-[11px] font-semibold text-neutral-800">
-                Retry 理由 (必須、200 文字以内)
+                再試行の理由 (必須、200 文字以内)
               </label>
               <textarea
                 name="reason"
                 required
                 maxLength={200}
                 rows={2}
-                placeholder="例: Stripe 側で connect account の restrictions が解除されたことを確認"
+                placeholder="例: Stripe 側でブランドの受取アカウントの制限が解除されたことを確認"
                 className="w-full text-[12px] rounded border border-neutral-300 bg-white px-3 py-2"
               />
               <div className="flex items-center gap-2">
                 <ConfirmRetryReversalButton />
                 <span className="text-[11px] text-neutral-600">
-                  Retry: attempt_count=0 で pending に戻し、worker が次 tick で発行を再試行します。
+                  再試行: 試行回数を 0 に戻し、次回の自動処理時に送金取消の発行を再試行します。
                 </span>
               </div>
             </form>
@@ -403,48 +473,48 @@ export default async function CosmohypeAdminTransferDetailPage({
             <form action={abandonReversalAction} className="space-y-2 border-t border-red-200 pt-4">
               <input type="hidden" name="order_group_id" value={g.order_group_id} />
               <label className="block text-[11px] font-semibold text-neutral-800">
-                Abandon 理由 (必須、200 文字以内)
+                対応終了の理由 (必須、200 文字以内)
               </label>
               <textarea
                 name="reason"
                 required
                 maxLength={200}
                 rows={2}
-                placeholder="例: brand と個別合意により手動精算で対応"
+                placeholder="例: ブランドとの個別合意により、手動精算で対応する"
                 className="w-full text-[12px] rounded border border-neutral-300 bg-white px-3 py-2"
               />
               <div className="flex items-center gap-2">
                 <ConfirmAbandonReversalButton />
                 <span className="text-[11px] text-red-800 font-semibold">
-                  Abandon: Stripe API を呼びません。 Cosmohype 側の損失として確定させる操作です。
+                  対応終了: Stripe への送金取消は発行せず、Cosmohype 側の損失として確定させる操作です。
                 </span>
               </div>
             </form>
           </div>
         ) : (
           <div className="text-[11px] text-neutral-500">
-            Manual reconciliation は reversal_status = failed_persistent の group でのみ可能です。
+            運営による対応 (再試行・対応終了) は、送金取消が 5 回連続で失敗した案件でのみ行えます。
           </div>
         )}
       </section>
 
-      {/* Stripe transfer 履歴 */}
+      {/* Stripe 送金履歴 */}
       <section className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-semibold text-neutral-900">
-          Stripe Transfer 履歴 ({transfers.length})
+          Stripe への送金履歴 ({transfers.length} 件)
         </h2>
         {transfers.length === 0 ? (
-          <div className="text-[12px] text-neutral-500">Transfer 発行なし</div>
+          <div className="text-[12px] text-neutral-500">送金の発行はまだありません</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead className="bg-neutral-50 text-[10px] uppercase tracking-wider text-neutral-500">
                 <tr>
-                  <th className="px-3 py-2 text-left">created</th>
-                  <th className="px-3 py-2 text-left">stripe_transfer_id</th>
-                  <th className="px-3 py-2 text-left">destination</th>
-                  <th className="px-3 py-2 text-right">amount</th>
-                  <th className="px-3 py-2 text-left">source_transaction</th>
+                  <th className="px-3 py-2 text-left">作成日時</th>
+                  <th className="px-3 py-2 text-left">Stripe 送金 ID</th>
+                  <th className="px-3 py-2 text-left">送金先アカウント</th>
+                  <th className="px-3 py-2 text-right">金額</th>
+                  <th className="px-3 py-2 text-left">元となる Stripe 課金 ID</th>
                 </tr>
               </thead>
               <tbody>
@@ -468,19 +538,19 @@ export default async function CosmohypeAdminTransferDetailPage({
       {/* Stripe reversal 履歴 */}
       <section className="rounded-xl border border-neutral-200 bg-white p-5 space-y-3">
         <h2 className="text-sm font-semibold text-neutral-900">
-          Stripe Reversal 履歴 ({reversals.length})
+          Stripe への送金取消履歴 ({reversals.length} 件)
         </h2>
         {reversals.length === 0 ? (
-          <div className="text-[12px] text-neutral-500">Reversal 発行なし</div>
+          <div className="text-[12px] text-neutral-500">送金取消の発行はまだありません</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead className="bg-neutral-50 text-[10px] uppercase tracking-wider text-neutral-500">
                 <tr>
-                  <th className="px-3 py-2 text-left">created</th>
-                  <th className="px-3 py-2 text-left">stripe_reversal_id</th>
-                  <th className="px-3 py-2 text-right">amount</th>
-                  <th className="px-3 py-2 text-left">reason</th>
+                  <th className="px-3 py-2 text-left">作成日時</th>
+                  <th className="px-3 py-2 text-left">Stripe 送金取消 ID</th>
+                  <th className="px-3 py-2 text-right">金額</th>
+                  <th className="px-3 py-2 text-left">理由</th>
                 </tr>
               </thead>
               <tbody>

@@ -29,6 +29,12 @@ interface Props {
   acceptAction: (formData: FormData) => Promise<void>
 }
 
+/** "v1" → "第1版" のように表示する。 */
+function versionLabel(v: string): string {
+  const m = v.match(/^v(\d+)$/i)
+  return m ? `第${m[1]}版` : v
+}
+
 function AcceptButton({ enabled }: { enabled: boolean }) {
   const { pending } = useFormStatus()
   return (
@@ -64,21 +70,21 @@ export default function MerchantAgreementModal({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[12px] font-semibold">
-              ブランド出店規約 (版 {version}) への同意が未記録です
+              ブランド出店規約 {versionLabel(version)}への同意が記録されていません
             </div>
             <div className="mt-1 text-[11px] leading-relaxed">
               {mode === 'owner' ? (
                 <>
-                  ブランド {brandName} の owner として、現行のブランド出店規約への同意がまだ記録されていません。
-                  新規商品の公開など「新規販売開始」操作は同意が完了するまでブロックされます。
-                  既存の販売中商品や既存注文の発送・返品・トラブル対応・返金は引き続き利用いただけます。
+                  対象ブランド「{brandName}」のブランドオーナーとして、現行のブランド出店規約への同意がまだ記録されていません。
+                  新規商品の公開など「新しく販売を開始する」操作は、同意が完了するまで行えません。
+                  既に販売中の商品や、既存の注文に対する発送・返品・トラブル対応・返金は引き続きご利用いただけます。
                 </>
               ) : (
                 <>
-                  このブランド ({brandName}) では、owner による現行のブランド出店規約への同意がまだ記録されていません。
-                  owner が Brand Admin にログインして同意するまで、新規商品の公開など「新規販売開始」操作は制限されます。
-                  既存の販売中商品や既存注文の発送・返品・トラブル対応・返金はブロックされません。
-                  admin / staff の権限で同意を行うことはできません。
+                  対象ブランド「{brandName}」では、ブランドオーナーによる現行のブランド出店規約への同意がまだ記録されていません。
+                  ブランドオーナーが管理画面にログインして同意するまで、新規商品の公開など「新しく販売を開始する」操作は制限されます。
+                  既に販売中の商品や、既存の注文に対する発送・返品・トラブル対応・返金は制限されません。
+                  管理者・スタッフの権限では同意操作を行うことはできません。
                 </>
               )}
             </div>
@@ -94,7 +100,7 @@ export default function MerchantAgreementModal({
                   pressableClass
                 }
               >
-                ブランド出店規約を確認して同意
+                ブランド出店規約を確認して同意する
               </button>
             </div>
           )}
@@ -115,12 +121,12 @@ export default function MerchantAgreementModal({
             {/* Header: 固定高さ、shrink 禁止 */}
             <div className="shrink-0 px-5 py-4 border-b border-neutral-200 flex items-start justify-between gap-3">
               <div>
-                <div className="text-[10px] tracking-widest text-neutral-500">HYPE / MERCHANT AGREEMENT</div>
+                <div className="text-[10px] tracking-widest text-neutral-500">HYPE ブランド出店規約</div>
                 <div className="mt-1 text-sm font-semibold text-neutral-900">
-                  ブランド出店規約 (版 {version}) への同意
+                  ブランド出店規約 {versionLabel(version)}への同意
                 </div>
                 <div className="mt-1 text-[11px] text-neutral-600">
-                  ブランド {brandName} の owner として、以下の規約全文を確認し、同意する場合はチェックのうえ「同意する」を押してください。 閉じても既存注文対応など他の機能はご利用いただけます。
+                  対象ブランド「{brandName}」のブランドオーナーとして、以下の規約全文を確認し、同意する場合はチェックのうえ「同意する」を押してください。 閉じても、既存注文への対応など他の機能は引き続きご利用いただけます。
                 </div>
               </div>
               <button
@@ -161,8 +167,8 @@ export default function MerchantAgreementModal({
                   className="mt-0.5"
                 />
                 <span>
-                  上記「ブランド出店規約 (版 {version})」の全文を確認し、内容に同意します。
-                  ブランド {brandName} を代表する owner として、この同意を電子的に記録することに合意します。
+                  上記「ブランド出店規約 {versionLabel(version)}」の全文を確認し、内容に同意します。
+                  対象ブランド「{brandName}」を代表するブランドオーナーとして、この同意を電子的に記録することに合意します。
                 </span>
               </label>
               <div className="mt-3 flex items-center gap-3">

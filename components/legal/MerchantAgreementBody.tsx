@@ -24,6 +24,12 @@ interface Props {
   showHash?: string
 }
 
+/** "v1" → "第1版" のように表示する。 */
+function versionLabel(v: string): string {
+  const m = v.match(/^v(\d+)$/i)
+  return m ? `第${m[1]}版` : v
+}
+
 function ParagraphView({ p }: { p: Paragraph }) {
   if (p.kind === 'text') {
     return <p className="text-sm leading-relaxed text-neutral-800">{p.text}</p>
@@ -68,7 +74,7 @@ export default function MerchantAgreementBody({ doc, showHash }: Props) {
         <h1 className="text-lg font-semibold text-neutral-900">{doc.title}</h1>
         <div className="mt-2 text-xs text-neutral-600">
           <div>制定日: {doc.createdAt}</div>
-          <div>版: <span className="font-semibold">{doc.version}</span></div>
+          <div>版: <span className="font-semibold">{versionLabel(doc.version)}</span></div>
           <div className="mt-1">運営者: {doc.operatorLine}</div>
           <div>管轄: {doc.jurisdictionLine}</div>
         </div>
@@ -86,8 +92,8 @@ export default function MerchantAgreementBody({ doc, showHash }: Props) {
 
       {showHash && (
         <footer className="mt-10 pt-4 border-t border-neutral-200 text-[10px] text-neutral-500 break-all">
-          <div>agreement version: {doc.version}</div>
-          <div>agreement hash (SHA-256): {showHash}</div>
+          <div>規約の版: {versionLabel(doc.version)}</div>
+          <div>本文の SHA-256: {showHash}</div>
         </footer>
       )}
     </article>

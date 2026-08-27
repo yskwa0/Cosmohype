@@ -64,7 +64,7 @@ export default async function CosmohypeAdminLayout({
               商品通報
             </Link>
             <Link href="/cosmohype-admin/transfers" className="text-neutral-700 hover:text-neutral-900">
-              Transfer / Reversal
+              送金・送金取消
             </Link>
           </nav>
           <div className="ml-auto text-[11px] text-neutral-500">

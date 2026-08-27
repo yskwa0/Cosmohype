@@ -18,9 +18,9 @@
 // =============================================================================
 
 import 'server-only'
-import { MERCHANT_AGREEMENT_V1, type AgreementDocument } from './content'
+import { MERCHANT_AGREEMENT_V2, type AgreementDocument } from './content'
 import { computeAgreementHash } from './hash'
 
-export const MERCHANT_AGREEMENT_CURRENT_DOC: AgreementDocument = MERCHANT_AGREEMENT_V1
-export const MERCHANT_AGREEMENT_CURRENT_VERSION: string = MERCHANT_AGREEMENT_V1.version
-export const MERCHANT_AGREEMENT_CURRENT_HASH:    string = computeAgreementHash(MERCHANT_AGREEMENT_V1)
+export const MERCHANT_AGREEMENT_CURRENT_DOC: AgreementDocument = MERCHANT_AGREEMENT_V2
+export const MERCHANT_AGREEMENT_CURRENT_VERSION: string = MERCHANT_AGREEMENT_V2.version
+export const MERCHANT_AGREEMENT_CURRENT_HASH:    string = computeAgreementHash(MERCHANT_AGREEMENT_V2)

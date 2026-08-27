@@ -87,13 +87,13 @@ function errorLabel(code: string): string {
     case 'return_shipping_cost_bearer_required':         return '返品を「受付する」に設定した場合は、返品送料の負担 (購入者都合返品) を選択してください。'
     case 'return_shipping_cost_bearer_only_when_accepted': return '返品を「受付する」以外に設定した場合は、返品送料の負担 (購入者都合返品) を選択しないでください。'
     // Phase 4-B (Migration 168): ブランド出店規約 同意
-    case 'merchant_agreement_owner_only':          return 'ブランド出店規約への同意は、このブランドの owner のみが行えます。 owner にログインしていただき、Brand Admin 上の同意画面から同意してください。'
+    case 'merchant_agreement_owner_only':          return 'ブランド出店規約への同意は、対象ブランドのブランドオーナーのみが行えます。 ブランドオーナーでログインし直し、管理画面の同意画面から同意してください。'
     case 'merchant_agreement_version_mismatch':    return 'ブランド出店規約の現行バージョンが更新されました。 画面を再読み込みして最新の規約に同意してください。'
     case 'merchant_agreement_hash_mismatch':       return 'ブランド出店規約の内容整合性を検証できませんでした。 時間をおいて再度お試しください (継続する場合は運営までお知らせください)。'
     case 'merchant_agreement_unknown_version':     return 'ブランド出店規約のバージョン情報を DB から取得できませんでした。 時間をおいて再度お試しください。'
     case 'merchant_agreement_accept_failed':       return 'ブランド出店規約への同意記録に失敗しました。 時間をおいて再度お試しください。'
     // Phase 4-C.7 (Migration 175): 料金・精算条件書 同意
-    case 'fee_terms_owner_only':                   return '料金・精算条件書への同意は、このブランドの owner のみが行えます。 owner にログインしていただき、設定画面から同意してください。'
+    case 'fee_terms_owner_only':                   return '料金・精算条件書への同意は、対象ブランドのブランドオーナーのみが行えます。 ブランドオーナーでログインし直し、設定画面から同意してください。'
     case 'fee_terms_version_mismatch':             return '料金・精算条件書の現行バージョンが更新されました。 画面を再読み込みして最新版に同意してください。'
     case 'fee_terms_hash_mismatch':                return '料金・精算条件書の内容整合性を検証できませんでした。 運営が新版を準備中の可能性があります (継続する場合は運営までお知らせください)。'
     case 'fee_terms_hash_invalid_length':          return '料金・精算条件書の hash 情報に問題があります。 画面を再読み込みしてもう一度お試しください。'

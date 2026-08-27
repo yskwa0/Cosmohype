@@ -47,4 +47,4 @@ export interface AgreementDocument {
   sections:         AgreementSection[]
 }
 
-export const MERCHANT_AGREEMENT_V1: AgreementDocument = contentJson as AgreementDocument
+export const MERCHANT_AGREEMENT_V2: AgreementDocument = contentJson as AgreementDocument

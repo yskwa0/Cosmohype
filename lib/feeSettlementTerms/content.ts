@@ -47,4 +47,4 @@ export interface FeeTermsDocument {
   sections:     FeeTermsSection[]
 }
 
-export const FEE_SETTLEMENT_TERMS_V1: FeeTermsDocument = contentJson as FeeTermsDocument
+export const FEE_SETTLEMENT_TERMS_V2: FeeTermsDocument = contentJson as FeeTermsDocument

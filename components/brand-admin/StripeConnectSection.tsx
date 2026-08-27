@@ -104,10 +104,10 @@ export default function StripeConnectSection({ status, role, onboardingAction, s
   const isOwner = role === 'owner'
   const ownerActionLabel = (() => {
     switch (status.state) {
-      case 'none':       return 'Stripe Connect に接続する'
-      case 'pending':    return '登録を続ける'
+      case 'none':       return 'Stripe Connect で受取設定を行う'
+      case 'pending':    return '受取設定の入力を続ける'
       case 'active':     return null                        // 接続済み時は sync ボタンのみ
-      case 'restricted': return '追加情報を入力する'
+      case 'restricted': return '必要な確認事項を入力する'
       case 'disabled':   return null                        // 停止時は接続操作を出さない
     }
   })()
@@ -146,10 +146,10 @@ export default function StripeConnectSection({ status, role, onboardingAction, s
       </div>
 
       <dl className="text-[11px] text-neutral-600 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-        <div><dt className="inline font-semibold">接続 ID:</dt> <dd className="inline font-mono break-all">{status.accountId ?? '(未接続)'}</dd></div>
-        <div><dt className="inline font-semibold">環境:</dt> <dd className="inline">{status.livemode === true ? 'Live' : status.livemode === false ? 'Test' : '(不明)'}</dd></div>
-        <div><dt className="inline font-semibold">初回接続日時:</dt> <dd className="inline">{status.onboardedAt ?? '(未接続)'}</dd></div>
-        <div><dt className="inline font-semibold">最終同期:</dt> <dd className="inline">{status.lastSyncedAt ?? '(未同期)'}</dd></div>
+        <div><dt className="inline font-semibold">Stripe 受取アカウント ID:</dt> <dd className="inline font-mono break-all">{status.accountId ?? '(未接続)'}</dd></div>
+        <div><dt className="inline font-semibold">動作モード:</dt> <dd className="inline">{status.livemode === true ? '本番モード' : status.livemode === false ? 'テストモード' : '(不明)'}</dd></div>
+        <div><dt className="inline font-semibold">受取設定の完了日時:</dt> <dd className="inline">{status.onboardedAt ?? '(未接続)'}</dd></div>
+        <div><dt className="inline font-semibold">最終同期日時:</dt> <dd className="inline">{status.lastSyncedAt ?? '(未同期)'}</dd></div>
       </dl>
 
       <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -159,11 +159,11 @@ export default function StripeConnectSection({ status, role, onboardingAction, s
           </form>
         )}
         <form action={syncAction}>
-          <SecondaryButton label="Stripe から最新情報を取得" />
+          <SecondaryButton label="Stripe から最新の状態を取得" />
         </form>
         {!isOwner && (
           <div className="text-[11px] text-neutral-500">
-            接続・再登録操作は owner のみが実行できます。 admin / staff は状態確認と同期のみ可能です。
+            受取設定の開始・再登録の操作はブランドオーナーのみ実行できます。 管理者・スタッフは状態の確認と最新情報の取得のみ行えます。
           </div>
         )}
       </div>

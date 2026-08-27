@@ -70,13 +70,19 @@ function AcceptButton({ enabled }: { enabled: boolean }) {
   )
 }
 
+/** "v1" → "第1版" のように表示する。 未知形式は文字列そのまま返却。 */
+function versionLabel(v: string): string {
+  const m = v.match(/^v(\d+)$/i)
+  return m ? `第${m[1]}版` : v
+}
+
 function StateBadge({ state }: { state: FeeSettlementTermsStatus['state'] }) {
   const map: Record<FeeSettlementTermsStatus['state'], { label: string; classes: string }> = {
-    deployment_mismatch: { label: '利用条件更新中', classes: 'bg-neutral-100 text-neutral-700 border-neutral-300' },
-    not_provisioned:     { label: '運営提示待ち',   classes: 'bg-neutral-100 text-neutral-700 border-neutral-300' },
-    stale_hash:          { label: '新版準備中',     classes: 'bg-amber-50 text-amber-800 border-amber-200' },
-    needs_acceptance:    { label: '未同意',         classes: 'bg-orange-50 text-orange-800 border-orange-200' },
-    accepted:            { label: '同意済',         classes: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    deployment_mismatch: { label: '利用条件更新中',       classes: 'bg-neutral-100 text-neutral-700 border-neutral-300' },
+    not_provisioned:     { label: '運営からの提示待ち',   classes: 'bg-neutral-100 text-neutral-700 border-neutral-300' },
+    stale_hash:          { label: '新しい内容を準備中',   classes: 'bg-amber-50 text-amber-800 border-amber-200' },
+    needs_acceptance:    { label: '同意が必要',           classes: 'bg-orange-50 text-orange-800 border-orange-200' },
+    accepted:            { label: '同意済',               classes: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
   }
   const { label, classes } = map[state]
   return (
@@ -92,31 +98,31 @@ function FeeTermsSummary({ status }: { status: FeeSettlementTermsStatus }) {
       <div>
         <dt className="text-[10px] uppercase tracking-wider text-neutral-500">プラットフォーム手数料</dt>
         <dd className="text-neutral-900">
-          {(status.currentRateBps / 100).toFixed(0)}% (basis points: {status.currentRateBps})
+          {(status.currentRateBps / 100).toFixed(0)}%
         </dd>
       </div>
       <div>
-        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">手数料の課金対象</dt>
-        <dd className="text-neutral-900">商品小計 (subtotal_amount) のみ</dd>
+        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">手数料の対象</dt>
+        <dd className="text-neutral-900">商品小計のみ</dd>
       </div>
       <div>
         <dt className="text-[10px] uppercase tracking-wider text-neutral-500">送料</dt>
         <dd className="text-neutral-900">手数料の対象外</dd>
       </div>
       <div>
-        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">Stripe 決済処理手数料</dt>
-        <dd className="text-neutral-900">Cosmohype 負担 (Seller に転嫁しない)</dd>
+        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">決済手数料</dt>
+        <dd className="text-neutral-900">Cosmohypeが負担</dd>
       </div>
       <div className="md:col-span-2">
-        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">個別注文の brand へのお支払額 (transfer_amount)</dt>
-        <dd className="text-neutral-900 font-mono">
-          subtotal_amount + shipping_amount − discount_amount − platform_fee_amount
+        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">ブランドへのお支払い額</dt>
+        <dd className="text-neutral-900">
+          商品小計 ＋ 送料 − 割引 − プラットフォーム手数料
         </dd>
       </div>
       <div className="md:col-span-2">
-        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">注文全額返金時の取扱</dt>
+        <dt className="text-[10px] uppercase tracking-wider text-neutral-500">注文の全額返金があったとき</dt>
         <dd className="text-neutral-900">
-          Stripe Transfer が発行済であれば全額を Transfer Reversal で逆送金。 プラットフォーム手数料相当額は Cosmohype が吸収し、Seller から追加で回収しない。
+          すでにブランドへ送金済みの場合は、送金額を全額返金処理します。 プラットフォーム手数料相当額は Cosmohype が負担し、ブランドから追加で回収しません。
         </dd>
       </div>
     </dl>
@@ -146,7 +152,7 @@ export default function FeeSettlementTermsPanel({
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[10px] font-bold tracking-widest text-neutral-500">
-              FEE SETTLEMENT TERMS
+              料金・精算条件書
             </div>
             <h2 className="mt-1 text-base font-semibold text-neutral-900">
               料金・精算条件書
@@ -171,7 +177,7 @@ export default function FeeSettlementTermsPanel({
             FEE SETTLEMENT TERMS
           </div>
           <h2 className="mt-1 text-base font-semibold text-neutral-900">
-            料金・精算条件書 (版 {status.currentVersion})
+            料金・精算条件書 {versionLabel(status.currentVersion)}
           </h2>
         </div>
         <StateBadge state={status.state} />
@@ -181,30 +187,25 @@ export default function FeeSettlementTermsPanel({
 
       {status.state === 'accepted' && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900">
-          このブランド ({brandName}) の owner は本条件書 (版 {status.termVersion ?? '?'}) を{' '}
-          {status.acceptedAt ? new Date(status.acceptedAt).toLocaleString('ja-JP') : '不明'} に受諾済です。
-          {status.acceptedByUserId && (
-            <span className="ml-2 font-mono text-emerald-700">
-              (owner id: {status.acceptedByUserId.slice(0, 8)}…)
-            </span>
-          )}
+          対象ブランド「{brandName}」のブランドオーナーが、本条件書 {versionLabel(status.termVersion ?? '')} に{' '}
+          {status.acceptedAt ? new Date(status.acceptedAt).toLocaleString('ja-JP') : '不明'} に同意済みです。
         </div>
       )}
 
       {status.state === 'not_provisioned' && (
         <div className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] text-neutral-700">
           現在、運営から本ブランド向けの正式な料金・精算条件書はまだ提示されていません。
-          Stripe Connect 精算を有効化するためには、運営が本ブランド向けに提示した条件書に owner が同意する必要があります。
+          Stripe Connectを利用した自動精算を有効化するためには、運営が本ブランド向けに提示した条件書にブランドオーナーが同意する必要があります。
           提示され次第、この画面から同意ボタンが表示されます。
-          既存注文の発送・返金・返品・トラブル対応その他の履行対応は本条件書の未提示に影響されません。
+          既存注文の発送・返金・返品・トラブル対応その他の履行対応は、本条件書が未提示でも継続して利用できます。
         </div>
       )}
 
       {status.state === 'stale_hash' && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-          運営が本条件書の新しい版を準備中です。 現在の brand 側 row の hash と最新版の hash が一致していません。
-          運営が新版の準備を完了するまで、Connect 精算の実行条件は満たされません。
-          既存注文の履行対応は本状態に影響されません。
+          運営が本条件書の新しい内容を準備中です。 現在ブランドに提示されている条件書と最新の内容が一致していません。
+          運営が新しい内容の準備を完了するまで、Stripe Connectを利用した自動精算は開始されません。
+          既存注文の履行対応は本状態に影響を受けません。
         </div>
       )}
 
@@ -216,15 +217,15 @@ export default function FeeSettlementTermsPanel({
         }`}>
           {isOwner ? (
             <>
-              ブランド {brandName} の owner として、本料金・精算条件書 (版 {status.currentVersion}) への同意が未記録です。
+              対象ブランド「{brandName}」のブランドオーナーとして、本料金・精算条件書 {versionLabel(status.currentVersion)} への同意がまだ記録されていません。
               以下の全文を確認のうえ、チェックボックスに印を付けて「同意する」を押してください。
-              既存注文の発送・返金・返品・トラブル対応は本条件書への未同意に影響されず、引き続きご利用いただけます。
+              既存注文の発送・返金・返品・トラブル対応は、この条件書への未同意によって影響を受けません。
             </>
           ) : (
             <>
-              このブランド ({brandName}) では、owner による本料金・精算条件書 (版 {status.currentVersion}) への同意がまだ記録されていません。
-              owner が Brand Admin にログインして同意するまで、Stripe Connect による自動精算は開始されません。
-              admin / staff の権限で同意を行うことはできません。
+              対象ブランド「{brandName}」では、ブランドオーナーによる本料金・精算条件書 {versionLabel(status.currentVersion)} への同意がまだ記録されていません。
+              ブランドオーナーが管理画面から同意するまで、Stripe Connectを利用した自動精算は開始されません。
+              管理者・スタッフの権限では同意操作は行えません。
             </>
           )}
         </div>
@@ -260,8 +261,8 @@ export default function FeeSettlementTermsPanel({
               className="mt-0.5"
             />
             <span>
-              上記「料金・精算条件書 (版 {status.currentVersion})」の全文を確認し、内容に同意します。
-              ブランド {brandName} を代表する owner として、この同意を電子的に記録することに合意します。
+              上記「料金・精算条件書 {versionLabel(status.currentVersion)}」の全文を確認し、内容に同意します。
+              対象ブランド「{brandName}」を代表するブランドオーナーとして、この同意を電子的に記録することに合意します。
             </span>
           </label>
           <div className="mt-3">

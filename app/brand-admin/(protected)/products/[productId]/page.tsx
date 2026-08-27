@@ -99,6 +99,8 @@ function errorLabel(code: string): string {
     case 'publish_requires_legal_info':      return '公開するには「販売事業者情報 (特定商取引法に基づく表記)」の販売者区分に応じた必須項目をブランド設定で入力してください (法人: 法人名 / 代表者 / 郵便番号 / 都道府県 / 市区町村 / 番地 / 電話 / メール、個人: 販売者氏名 / 郵便番号 / 都道府県 / 市区町村 / 番地 / 電話 / メール)。 → /brand-admin/settings'
     case 'publish_requires_delivery_policy': return '公開するには「配送・返品ポリシー」(発送目安 / 返品受付 / 交換受付) をブランド設定で入力してください。 返品を受付する場合は受付期間の日数も必要です。 → /brand-admin/settings'
     case 'publish_requires_shipping':        return '公開するには有効な「配送・送料設定」を 1 件以上ブランド設定で登録してください。 → /brand-admin/settings'
+    // Phase 4-B (Migration 168): 現行 ブランド出店規約 (Merchant Agreement) への owner 同意が必要
+    case 'publish_requires_merchant_agreement': return '公開するには、このブランドの owner が現行のブランド出店規約に同意する必要があります。 owner が Brand Admin にログインすると同意画面が表示されます。 → /brand-admin'
     case 'too_many_images':             return `画像は最大 ${MAX_IMAGES_PER_PRODUCT} 枚まで登録できます。既存を削除してから追加してください。`
     case 'file_required':               return '画像ファイルを選択してください。'
     case 'file_too_large':              return '画像は 8MB 以下にしてください。'
