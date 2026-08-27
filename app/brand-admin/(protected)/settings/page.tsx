@@ -102,18 +102,18 @@ function errorLabel(code: string): string {
     case 'fee_terms_invalid_term_id':              return '料金・精算条件書の同意対象を識別できませんでした。 画面を再読み込みしてもう一度お試しください。'
     case 'fee_term_not_found':                     return '料金・精算条件書の同意対象が見つかりませんでした。 運営が本ブランド向けの条件書を提示するまでお待ちください。'
     case 'fee_terms_accept_failed':                return '料金・精算条件書への同意記録に失敗しました。 時間をおいて再度お試しください。'
-    // Phase 4-C.3 (Migration 170-171): Stripe Connect 接続
-    case 'stripe_connect_owner_only':              return 'Stripe Connect の接続・再登録操作は、このブランドの owner のみが行えます。'
-    case 'stripe_connect_forbidden':               return 'Stripe Connect 情報へのアクセス権がありません (ブランドメンバーとしてログインしてください)。'
-    case 'stripe_connect_onboarding_failed':       return 'Stripe Connect への接続処理に失敗しました。 時間をおいて再度お試しください。'
-    case 'stripe_connect_link_url_missing':        return 'Stripe から登録画面 URL を取得できませんでした。 時間をおいて再度お試しください。'
-    case 'stripe_connect_urls_not_configured':     return 'Stripe Connect の戻り URL 設定が完了していません (運営に連絡してください)。'
-    case 'stripe_connect_sync_failed':             return 'Stripe から最新情報を取得できませんでした。 時間をおいて再度お試しください。'
-    case 'stripe_connect_sync_stripe_error':       return 'Stripe API エラーにより最新情報を取得できませんでした。 時間をおいて再度お試しください。'
-    case 'stripe_connect_not_started':             return 'Stripe Connect への接続がまだ開始されていません。'
-    case 'stripe_account_create_failed':           return 'Stripe Connect アカウントの作成に失敗しました。 時間をおいて再度お試しください。'
-    case 'stripe_account_link_create_failed':      return 'Stripe 登録画面リンクの作成に失敗しました。 時間をおいて再度お試しください。'
-    case 'stripe_key_env_mismatch':                return 'Stripe API の環境設定に問題があります (運営に連絡してください)。'
+    // Phase 4-C.3 (Migration 170-171): 売上の受け取り設定 (Stripe Connect)
+    case 'stripe_connect_owner_only':              return '受け取り設定の開始・再入力は、このブランドのブランドオーナーのみ行えます。'
+    case 'stripe_connect_forbidden':               return '受け取り設定の情報にアクセスできません (ブランドメンバーとしてログインしてください)。'
+    case 'stripe_connect_onboarding_failed':       return '受け取り設定の開始処理に失敗しました。 時間をおいて再度お試しください。'
+    case 'stripe_connect_link_url_missing':        return '受け取り設定の登録画面を開けませんでした。 時間をおいて再度お試しください。'
+    case 'stripe_connect_urls_not_configured':     return '受け取り設定の戻り URL が構成されていません (運営に連絡してください)。'
+    case 'stripe_connect_sync_failed':             return '最新の設定状況を取得できませんでした。 時間をおいて再度お試しください。'
+    case 'stripe_connect_sync_stripe_error':       return '決済基盤側のエラーにより最新の設定状況を取得できませんでした。 時間をおいて再度お試しください。'
+    case 'stripe_connect_not_started':             return '受け取り設定がまだ開始されていません。'
+    case 'stripe_account_create_failed':           return '受け取りアカウントの作成に失敗しました。 時間をおいて再度お試しください。'
+    case 'stripe_account_link_create_failed':      return '受け取り設定の登録画面リンクの作成に失敗しました。 時間をおいて再度お試しください。'
+    case 'stripe_key_env_mismatch':                return '決済基盤の環境設定に問題があります (運営に連絡してください)。'
     case 'return_policy_note_too_long':     return '返品・交換の補足条件は 1000 文字以内で入力してください。'
     case 'brand_not_found':                 return 'ブランド情報が見つかりませんでした。ページを再読み込みしてお試しください。'
     // Migration 163: 特商法表記 販売事業者情報
@@ -554,7 +554,7 @@ export default async function BrandAdminSettingsPage({
       )}
       {savedStripeConnectSync && (
         <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
-          Stripe Connect の最新情報を取得しました。
+          受け取り設定の状況を更新しました。
         </div>
       )}
       {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && !savedLegal && !savedMerchantAgreement && !savedFeeTerms && !savedStripeConnectSync && (
@@ -737,16 +737,17 @@ export default async function BrandAdminSettingsPage({
         />
       </section>
 
-      {/* Phase 4-C.3 (Migration 170-171): Stripe Connect 接続 (販売代金の受取設定)。
-          owner のみ接続操作可、admin/staff は状態閲覧 + sync のみ。
-          このセクションが「接続済み」でも本 Phase では実 settlement は platform_manual を維持 (料金・精算条件と Merchant Agreement v1 正式版が確定するまで)。 */}
+      {/* Phase 4-C.3 (Migration 170-171): 売上の受け取り設定 (実体は Stripe Connect)。
+          owner のみ開始操作可、admin/staff は状態閲覧 + 更新のみ。
+          このセクションが「設定完了」でも本 Phase では実 settlement は platform_manual を維持 (料金・精算条件と Merchant Agreement v1 正式版が確定するまで)。 */}
       <section className="border border-neutral-200 rounded-xl bg-white p-6">
         <div className="mb-4">
-          <h2 className="text-sm font-semibold">Stripe Connect (販売代金の受取設定)</h2>
+          <h2 className="text-sm font-semibold">売上の受け取り設定</h2>
           <div className="mt-1 text-[11px] text-neutral-500">
-            HYPE で商品を販売した代金を受取るための Stripe Connect 接続設定です。
-            Stripe が運営する登録画面 (ホスティング登録) で事業者情報 (法人 / 個人)、代表者、住所、銀行口座等を入力します。
-            接続完了後も、Cosmohype 全体で料金・精算条件が確定するまでは、実際の代金受取は従来方式のまま継続します。
+            商品が売れたときの売上金を受け取るために、振込先口座と本人確認情報を登録します。
+            登録画面で事業者情報 (法人 / 個人)、代表者、住所、銀行口座等を入力していただきます。
+            設定完了後も、受け取り方法の切り替え時期までは現在の受け取り方法が継続します。
+            切り替え時期は Cosmohype からご案内します。
           </div>
         </div>
         <StripeConnectSection

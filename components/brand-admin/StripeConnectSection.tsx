@@ -43,11 +43,11 @@ interface Props {
 
 function stateLabel(state: ConnectState): { title: string; tone: 'neutral' | 'info' | 'ok' | 'warn' | 'error' } {
   switch (state) {
-    case 'none':       return { title: '未接続',         tone: 'neutral' }
-    case 'pending':    return { title: '登録中',         tone: 'info'    }
-    case 'active':     return { title: '接続済み',       tone: 'ok'      }
-    case 'restricted': return { title: '追加情報が必要', tone: 'warn'    }
-    case 'disabled':   return { title: '利用停止中',     tone: 'error'   }
+    case 'none':       return { title: '未設定',                   tone: 'neutral' }
+    case 'pending':    return { title: '確認中',                   tone: 'info'    }
+    case 'active':     return { title: '設定完了',                 tone: 'ok'      }
+    case 'restricted': return { title: '追加情報が必要です',       tone: 'warn'    }
+    case 'disabled':   return { title: '現在ご利用いただけません', tone: 'error'   }
   }
 }
 
@@ -94,7 +94,7 @@ function SecondaryButton({ label }: { label: string }) {
       }
     >
       {pending && <Spinner />}
-      {pending ? '同期中…' : label}
+      {pending ? '更新中…' : label}
     </button>
   )
 }
@@ -104,11 +104,11 @@ export default function StripeConnectSection({ status, role, onboardingAction, s
   const isOwner = role === 'owner'
   const ownerActionLabel = (() => {
     switch (status.state) {
-      case 'none':       return 'Stripe Connect で受取設定を行う'
-      case 'pending':    return '受取設定の入力を続ける'
-      case 'active':     return null                        // 接続済み時は sync ボタンのみ
-      case 'restricted': return '必要な確認事項を入力する'
-      case 'disabled':   return null                        // 停止時は接続操作を出さない
+      case 'none':       return '売上の受け取り設定を始める'
+      case 'pending':    return '登録の続きを入力する'
+      case 'active':     return null                        // 設定完了時は更新ボタンのみ
+      case 'restricted': return '追加情報を入力する'
+      case 'disabled':   return null                        // 利用不可時は開始操作を出さない
     }
   })()
 
@@ -118,38 +118,40 @@ export default function StripeConnectSection({ status, role, onboardingAction, s
         <div className="font-semibold">状態: {label.title}</div>
         {status.state === 'none' && (
           <div className="mt-1 leading-relaxed">
-            販売代金を受け取るには、Stripe Connect にブランドを接続する必要があります。
-            接続時に事業者情報 (法人 / 個人)、代表者、住所、銀行口座等の確認情報を Stripe が収集します (Stripe が運営する登録画面に移動します)。
+            商品が売れたときの売上金を受け取るために、振込先口座と本人確認情報を登録してください。
           </div>
         )}
         {status.state === 'pending' && (
           <div className="mt-1 leading-relaxed">
-            Stripe 側での登録手続きが完了していません。 登録画面に戻って必要な情報を入力してください。
+            登録内容を確認しています。 確認が完了するまでしばらくお待ちください。
+            追加の入力が必要な場合は、下のボタンから続きを入力できます。
           </div>
         )}
         {status.state === 'active' && (
           <div className="mt-1 leading-relaxed">
-            Stripe Connect への接続が完了しています。 販売代金の受取準備は整っています。
-            なお、実際の販売代金の Stripe Connect 経由での送金開始は、料金・精算条件の正式提示 と Cosmohype 全体の切替 タイミング以降となります (現時点では従来の一括受領方式が継続します)。
+            売上の受け取りに必要な設定は完了しています。
+            受け取り方法の切り替え時期は、Cosmohype からご案内します。
+            それまでは現在の受け取り方法が継続します。
           </div>
         )}
         {status.state === 'restricted' && (
           <div className="mt-1 leading-relaxed">
-            Stripe から追加情報の提供を求められています。 このまま放置すると販売代金の受取が制限される場合があります。 登録画面に戻り、指示に従って情報を入力してください。
+            設定を完了するために追加の情報が必要です。
+            「追加情報を入力する」から続きを入力してください。
+            このまま完了しないと、売上金の受け取りが制限される場合があります。
           </div>
         )}
         {status.state === 'disabled' && (
           <div className="mt-1 leading-relaxed">
-            Stripe 側の判断により本接続は現在利用停止中です。 詳細は Stripe から通知されたメール、または Cosmohype 運営までお問い合わせください。
+            現在この受け取り設定はご利用いただけません。
+            詳細は Cosmohype 運営までお問い合わせください。
           </div>
         )}
       </div>
 
       <dl className="text-[11px] text-neutral-600 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-        <div><dt className="inline font-semibold">Stripe 受取アカウント ID:</dt> <dd className="inline font-mono break-all">{status.accountId ?? '(未接続)'}</dd></div>
-        <div><dt className="inline font-semibold">動作モード:</dt> <dd className="inline">{status.livemode === true ? '本番モード' : status.livemode === false ? 'テストモード' : '(不明)'}</dd></div>
-        <div><dt className="inline font-semibold">受取設定の完了日時:</dt> <dd className="inline">{status.onboardedAt ?? '(未接続)'}</dd></div>
-        <div><dt className="inline font-semibold">最終同期日時:</dt> <dd className="inline">{status.lastSyncedAt ?? '(未同期)'}</dd></div>
+        <div><dt className="inline font-semibold">設定完了日時:</dt> <dd className="inline">{status.onboardedAt ?? '(未完了)'}</dd></div>
+        <div><dt className="inline font-semibold">最終更新日時:</dt> <dd className="inline">{status.lastSyncedAt ?? '(未更新)'}</dd></div>
       </dl>
 
       <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -159,13 +161,17 @@ export default function StripeConnectSection({ status, role, onboardingAction, s
           </form>
         )}
         <form action={syncAction}>
-          <SecondaryButton label="Stripe から最新の状態を取得" />
+          <SecondaryButton label="設定状況を更新する" />
         </form>
         {!isOwner && (
           <div className="text-[11px] text-neutral-500">
-            受取設定の開始・再登録の操作はブランドオーナーのみ実行できます。 管理者・スタッフは状態の確認と最新情報の取得のみ行えます。
+            受け取り設定の開始・再入力はブランドオーナーのみ行えます。 管理者・スタッフは状態の確認と更新のみ行えます。
           </div>
         )}
+      </div>
+
+      <div className="pt-1 text-[10px] text-neutral-400 leading-relaxed">
+        決済・本人確認には Stripe のシステムを利用しています。
       </div>
     </div>
   )
