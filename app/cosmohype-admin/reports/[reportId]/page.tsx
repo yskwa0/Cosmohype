@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getCosmohypeAdminContext } from '@/lib/cosmohypeAdmin'
 import { updateReportStatusAction } from './actions'
+import { ConfirmReportStatusButton } from './_ConfirmReportStatusButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -288,17 +289,7 @@ export default async function CosmohypeAdminReportDetailPage({
             <form key={s} action={updateReportStatusAction}>
               <input type="hidden" name="report_id" value={r.id} />
               <input type="hidden" name="next_status" value={s} />
-              <button
-                type="submit"
-                disabled={s === r.status}
-                className={`text-[12px] px-3 py-1.5 rounded border ${
-                  s === r.status
-                    ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-default'
-                    : 'bg-white text-neutral-800 border-neutral-300 hover:bg-neutral-50'
-                }`}
-              >
-                → {s}
-              </button>
+              <ConfirmReportStatusButton nextStatus={s} disabled={s === r.status} />
             </form>
           ))}
         </div>
