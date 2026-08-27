@@ -102,9 +102,18 @@ export default function MerchantAgreementModal({
       </div>
 
       {mode === 'owner' && modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/60 backdrop-blur-[2px]">
-          <div className="w-full md:max-w-3xl md:my-8 md:rounded-lg bg-white shadow-xl flex flex-col overflow-hidden">
-            <div className="px-5 py-4 border-b border-neutral-200 flex items-start justify-between gap-3">
+        // Overlay: viewport 全体 fixed、自身の overflow は hidden で外にはみ出さない
+        <div className="fixed inset-0 z-50 flex items-stretch md:items-center justify-center bg-black/60 backdrop-blur-[2px] overflow-hidden">
+          {/*
+            Modal container:
+            ・mobile (items-stretch): overlay 高さいっぱいまで stretch (100dvh)
+            ・desktop (items-center + md:my-8): my-8 分の余白を残した max-height (calc)
+            ・flex flex-col + min-h-0 で内部 flex child の scroll 境界を確定
+            ・overflow-hidden で自身は overflow を絶対に許さない = child だけ scroll
+          */}
+          <div className="w-full md:max-w-3xl md:my-8 md:rounded-lg bg-white shadow-xl flex flex-col min-h-0 max-h-[100dvh] md:max-h-[calc(100dvh-4rem)] overflow-hidden">
+            {/* Header: 固定高さ、shrink 禁止 */}
+            <div className="shrink-0 px-5 py-4 border-b border-neutral-200 flex items-start justify-between gap-3">
               <div>
                 <div className="text-[10px] tracking-widest text-neutral-500">HYPE / MERCHANT AGREEMENT</div>
                 <div className="mt-1 text-sm font-semibold text-neutral-900">
@@ -127,11 +136,23 @@ export default function MerchantAgreementModal({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-6">
+            {/*
+              Body scroll area:
+              ・flex-1 で残り高さを占有 + min-h-0 で flex child の default (min-content) を無効化
+                = これがないと desktop で content 高が勝って scroll しない
+              ・overflow-y-auto で本文だけ縦 scroll
+              ・overscroll-contain で背景に scroll chain しない
+              ・-webkit-overflow-scrolling:touch (Safari nested overflow 対策)
+            */}
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-6"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               <MerchantAgreementBody doc={doc} />
             </div>
 
-            <form action={acceptAction} className="px-5 py-4 border-t border-neutral-200 bg-neutral-50">
+            {/* Footer form: shrink 禁止で checkbox + CTA を常に画面下部に確保 */}
+            <form action={acceptAction} className="shrink-0 px-5 py-4 border-t border-neutral-200 bg-neutral-50">
               <label className="flex items-start gap-2 text-[12px] text-neutral-800 cursor-pointer select-none">
                 <input
                   type="checkbox"
