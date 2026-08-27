@@ -1,5 +1,13 @@
-import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { getBrandAdminContext, getCurrentBrandFeeSettlementTermsStatus } from '@/lib/brandAdmin'
 import { createClient } from '@/lib/supabase/server'
+import FeeSettlementTermsPanel from '@/components/brand-admin/FeeSettlementTermsPanel'
+import {
+  FEE_SETTLEMENT_TERMS_CURRENT_DOC,
+  FEE_SETTLEMENT_TERMS_CURRENT_VERSION,
+  FEE_SETTLEMENT_TERMS_CURRENT_HASH,
+  FEE_SETTLEMENT_TERMS_CURRENT_RATE_BPS,
+} from '@/lib/feeSettlementTerms/version'
+import { acceptFeeSettlementTermsAction } from '../feeSettlementTermsActions'
 import { type ReturnAddressInitial } from '@/components/brand-admin/ReturnAddressForm'
 import ReturnAddressSection from '@/components/brand-admin/ReturnAddressSection'
 import { type ShippingRulesInitial } from '@/components/brand-admin/ShippingRulesForm'
@@ -84,6 +92,16 @@ function errorLabel(code: string): string {
     case 'merchant_agreement_hash_mismatch':       return 'ブランド出店規約の内容整合性を検証できませんでした。 時間をおいて再度お試しください (継続する場合は運営までお知らせください)。'
     case 'merchant_agreement_unknown_version':     return 'ブランド出店規約のバージョン情報を DB から取得できませんでした。 時間をおいて再度お試しください。'
     case 'merchant_agreement_accept_failed':       return 'ブランド出店規約への同意記録に失敗しました。 時間をおいて再度お試しください。'
+    // Phase 4-C.7 (Migration 175): 料金・精算条件書 同意
+    case 'fee_terms_owner_only':                   return '料金・精算条件書への同意は、このブランドの owner のみが行えます。 owner にログインしていただき、設定画面から同意してください。'
+    case 'fee_terms_version_mismatch':             return '料金・精算条件書の現行バージョンが更新されました。 画面を再読み込みして最新版に同意してください。'
+    case 'fee_terms_hash_mismatch':                return '料金・精算条件書の内容整合性を検証できませんでした。 運営が新版を準備中の可能性があります (継続する場合は運営までお知らせください)。'
+    case 'fee_terms_hash_invalid_length':          return '料金・精算条件書の hash 情報に問題があります。 画面を再読み込みしてもう一度お試しください。'
+    case 'fee_terms_version_required':             return '料金・精算条件書のバージョン情報が欠落しています。 画面を再読み込みしてもう一度お試しください。'
+    case 'fee_terms_not_current':                  return '料金・精算条件書の現行バージョンが確定していないか、既に更新されています。 運営が新版の準備を完了するまでお待ちいただき、必要に応じて画面を再読み込みしてください。'
+    case 'fee_terms_invalid_term_id':              return '料金・精算条件書の同意対象を識別できませんでした。 画面を再読み込みしてもう一度お試しください。'
+    case 'fee_term_not_found':                     return '料金・精算条件書の同意対象が見つかりませんでした。 運営が本ブランド向けの条件書を提示するまでお待ちください。'
+    case 'fee_terms_accept_failed':                return '料金・精算条件書への同意記録に失敗しました。 時間をおいて再度お試しください。'
     // Phase 4-C.3 (Migration 170-171): Stripe Connect 接続
     case 'stripe_connect_owner_only':              return 'Stripe Connect の接続・再登録操作は、このブランドの owner のみが行えます。'
     case 'stripe_connect_forbidden':               return 'Stripe Connect 情報へのアクセス権がありません (ブランドメンバーとしてログインしてください)。'
@@ -200,6 +218,7 @@ export default async function BrandAdminSettingsPage({
   const savedLegal = sp.saved === 'legal'
   // Phase 4-B / Migration 168: Merchant Agreement 同意記録後の success banner。
   const savedMerchantAgreement = sp.saved === 'merchant_agreement'
+  const savedFeeTerms = sp.saved === 'fee_terms'
   // Phase 4-C.3 / Migration 170-171: Stripe Connect 同期成功 banner。
   const savedStripeConnectSync = sp.saved === 'stripe_connect_sync'
   const errCode = sp.err ?? null
@@ -467,6 +486,14 @@ export default async function BrandAdminSettingsPage({
     lastSyncedAt:  stripeConnectProbe.data?.stripe_connect_last_synced_at ?? null,
   }
 
+  // Phase 4-C.7: Fee Settlement Terms status を取得 (server-side、SoT との突合を含む)
+  const feeTermsStatus = await getCurrentBrandFeeSettlementTermsStatus(
+    ctx.currentBrand.brandId,
+    FEE_SETTLEMENT_TERMS_CURRENT_VERSION,
+    FEE_SETTLEMENT_TERMS_CURRENT_HASH,
+    FEE_SETTLEMENT_TERMS_CURRENT_RATE_BPS,
+  )
+
   // staff は編集不可 (owner / admin のみ)。Dev Bypass は admin なので編集可。
   const canEdit = ctx.currentBrand.role === 'owner' || ctx.currentBrand.role === 'admin'
   const disabledReason = canEdit
@@ -520,12 +547,17 @@ export default async function BrandAdminSettingsPage({
           ブランド出店規約への同意を記録しました。
         </div>
       )}
+      {savedFeeTerms && (
+        <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          料金・精算条件書への同意を記録しました。
+        </div>
+      )}
       {savedStripeConnectSync && (
         <div className="text-[12px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
           Stripe Connect の最新情報を取得しました。
         </div>
       )}
-      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && !savedLegal && !savedMerchantAgreement && !savedStripeConnectSync && (
+      {errCode && !savedOk && !savedShipping && !savedProfile && !savedPolicy && !savedSocial && !savedLegal && !savedMerchantAgreement && !savedFeeTerms && !savedStripeConnectSync && (
         <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {errorLabel(errCode)}
         </div>
@@ -688,6 +720,21 @@ export default async function BrandAdminSettingsPage({
             disabledReason={disabledReason}
           />
         )}
+      </section>
+
+      {/* Phase 4-C.7 (Migration 175): 料金・精算条件書 (Fee Settlement Terms) パネル。
+          Connect 精算の実行条件のうち「owner が最新版の Fee Terms を明示的に受諾していること」を
+          満たすための同意 UI。 not_provisioned / stale_hash / needs_acceptance / accepted の
+          4 state 分岐。 owner のみ accept 可、admin / staff は閲覧のみ。
+          既存注文の履行対応は本パネルの状態に影響されない (contract 第 9 条)。 */}
+      <section className="border border-neutral-200 rounded-xl bg-white p-6">
+        <FeeSettlementTermsPanel
+          status={feeTermsStatus}
+          role={ctx.currentBrand.role}
+          brandName={ctx.currentBrand.brandName}
+          doc={FEE_SETTLEMENT_TERMS_CURRENT_DOC}
+          acceptAction={acceptFeeSettlementTermsAction}
+        />
       </section>
 
       {/* Phase 4-C.3 (Migration 170-171): Stripe Connect 接続 (販売代金の受取設定)。

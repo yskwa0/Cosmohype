@@ -1,8 +1,25 @@
 import type { ReactNode } from 'react'
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getCosmohypeAdminContext } from '@/lib/cosmohypeAdmin'
 
 export const dynamic = 'force-dynamic'
+
+// Phase 4-C.7 privacy: /cosmohype-admin 配下は検索対象外にする。
+// auth gate は getCosmohypeAdminContext() が SoT。 noindex は defense-in-depth。
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noarchive: true,
+      nosnippet: true,
+    },
+  },
+}
 
 /**
  * `/cosmohype-admin` 配下の共通レイアウト。

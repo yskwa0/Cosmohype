@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { getBrandAdminContext, getCurrentBrandMerchantAgreementStatus } from '@/lib/brandAdmin'
+import { MERCHANT_AGREEMENT_CURRENT_VERSION } from '@/lib/merchantAgreement/version'
 
 // Dev Bypass 撤去済 (Production Supabase 一本運用)。
 // createAdminClient は deleteProductAction / deleteVariantAction の DELETE 権限 (RLS で
@@ -248,6 +249,17 @@ async function assertPublishableOrRedirect(
     .limit(1)
   const shipRows = (shipRes.data as Array<{ id: string }> | null) ?? []
   if (shipRows.length === 0) redirect(`${back}?err=publish_requires_shipping`)
+
+  // Phase 4-B / Migration 168: 現行 Merchant Agreement (current version) への
+  //   owner 同意が記録されていない場合、新規 publish をブロック。
+  //   既存 published 商品や既存注文の発送/返品/返金は本 gate と無関係 = 購入者保護優先。
+  const agreementStatus = await getCurrentBrandMerchantAgreementStatus(
+    brandId,
+    MERCHANT_AGREEMENT_CURRENT_VERSION,
+  )
+  if (agreementStatus.needsAcceptance) {
+    redirect(`${back}?err=publish_requires_merchant_agreement`)
+  }
 }
 
 // =============================================================================

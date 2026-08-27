@@ -98,6 +98,8 @@ export default function TermsPage() {
 
         <Section n={15} title="返品・キャンセル">
           本サービスにおける商品購入は通信販売に該当し、訪問販売等におけるクーリング・オフ制度は適用されません。ただし、これは返品ができないという意味ではありません。返品の可否、受付期間、返品条件、返品方法、および返品送料の負担については、各販売事業者が定める返品特約（各商品ページの返品ポリシーおよび特定商取引法に基づく表記）をご購入前に必ずご確認ください。返品受付および返金判定は、法令上購入者に認められる権利を妨げない範囲で、各販売事業者が定める返品特約その他の条件に基づき販売事業者が行います。運営は、必要に応じて返金の技術的処理および手続きの仲介を行います。
+          {'\n\n'}
+          なお、販売事業者の責任による返品・交換（商品不良、破損、誤配送、数量違いその他販売事業者の責任による場合）に必要な返送送料は、Cosmohype の運営ルールとして販売事業者の負担としています。このルールは、Cosmohype と各販売事業者との間のブランド出店規約において販売事業者が合意しているものであり、法令上購入者に認められる権利を制限する趣旨ではありません。
         </Section>
 
         <Section n={16} title="商品不良・トラブル対応">
@@ -117,6 +119,9 @@ export default function TermsPage() {
         </Section>
 
         <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--border)' }}>
+          <p className="text-xs text-center mb-2" style={{ color: 'var(--text-muted)' }}>
+            HYPE に出店する販売事業者向けの「ブランド出店規約」は、Brand Admin 内で提示されます。
+          </p>
           <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
             お問い合わせ：<a href="mailto:support@cosmohype.jp" style={{ color: 'var(--purple)' }}>support@cosmohype.jp</a>
           </p>

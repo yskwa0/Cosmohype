@@ -1,10 +1,16 @@
 import Link from 'next/link'
-import { getBrandAdminContext } from '@/lib/brandAdmin'
+import { getBrandAdminContext, getCurrentBrandMerchantAgreementStatus } from '@/lib/brandAdmin'
 import { brandAdminSignOutAction, switchBrandAction } from '../actions'
 import BrandAdminSidebar from '@/components/brand-admin/BrandAdminSidebar'
 import BrandSwitcher from '@/components/brand-admin/BrandSwitcher'
 import { pressableClass } from '@/lib/brandAdminUi'
 import { NavPendingSpinner } from '@/components/brand-admin/NavPendingSpinner'
+import MerchantAgreementModal from '@/components/brand-admin/MerchantAgreementModal'
+import {
+  MERCHANT_AGREEMENT_CURRENT_DOC,
+  MERCHANT_AGREEMENT_CURRENT_VERSION,
+} from '@/lib/merchantAgreement/version'
+import { acceptMerchantAgreementAction } from './merchantAgreementActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +28,21 @@ export default async function BrandAdminProtectedLayout({
   children: React.ReactNode
 }) {
   const ctx = await getBrandAdminContext()
+  const agreementStatus = await getCurrentBrandMerchantAgreementStatus(
+    ctx.currentBrand.brandId,
+    MERCHANT_AGREEMENT_CURRENT_VERSION,
+  )
+
+  // Phase 4-B: 現在 brand の owner が current Merchant Agreement に未同意
+  //   ・owner       → banner + 「同意」CTA。 CTA から dismiss 可能な modal を開く。
+  //   ・admin/staff → banner のみ (CTA なし)。
+  //   ・同意済 or 判定 skip → 何も出さない
+  //   既存購入者対応 (発送 / 返品 / トラブル / 返金) は本 UI と無関係に常時利用可能。
+  //   新規商品の publish のみが assertPublishableOrRedirect で個別に block される。
+  const agreementBannerMode: 'none' | 'owner' | 'non-owner' = (() => {
+    if (!agreementStatus.needsAcceptance) return 'none'
+    return ctx.currentBrand.role === 'owner' ? 'owner' : 'non-owner'
+  })()
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
@@ -94,7 +115,18 @@ export default async function BrandAdminProtectedLayout({
             <BrandAdminSidebar orientation="horizontal" />
           </div>
 
-          <div className="p-6 md:p-10 max-w-5xl">{children}</div>
+          <div className="p-6 md:p-10 max-w-5xl">
+            {agreementBannerMode !== 'none' && (
+              <MerchantAgreementModal
+                mode={agreementBannerMode}
+                doc={MERCHANT_AGREEMENT_CURRENT_DOC}
+                version={MERCHANT_AGREEMENT_CURRENT_VERSION}
+                brandName={ctx.currentBrand.brandName}
+                acceptAction={acceptMerchantAgreementAction}
+              />
+            )}
+            {children}
+          </div>
         </main>
       </div>
     </div>

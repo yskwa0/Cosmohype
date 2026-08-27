@@ -1,0 +1,116 @@
+{
+  "version": "v1",
+  "createdAt": "2026-08-27",
+  "title": "Cosmohype HYPE 料金・精算条件書 (Fee Terms)",
+  "operatorLine": "本条件書は Cosmohype HYPE ブランド出店規約 (Merchant Agreement) と一体をなす別文書として運営者が定める。 契約主体・所在地・連絡先の情報は Merchant Agreement 冒頭に記載のとおりとする。",
+  "preamble": [
+    { "kind": "text", "text": "本条件書 (以下「Fee Terms」) は、Cosmohype HYPE ブランド出店規約 (以下「Merchant Agreement」) 第 10 条第 5 項および同第 11 条に基づき、Merchant Agreement とは独立して出店ブランドの owner による明示的な同意 (clickwrap) の対象とする料金・精算条件を定めます。" },
+    { "kind": "text", "text": "本 Fee Terms と Merchant Agreement との間に矛盾が生じた場合、料金・精算・返金時の手数料取扱いおよび Connect 精算の実行条件については本 Fee Terms を優先し、その他の事項については Merchant Agreement を優先します。" },
+    { "kind": "text", "text": "本 Fee Terms への同意は Merchant Agreement への同意と別個に記録され、いずれかの同意が欠けている間、当該出店ブランドについての Stripe Connect Transfer による自動精算 (以下「Connect 精算」) は実行されません。" }
+  ],
+  "sections": [
+    {
+      "number": 1,
+      "title": "本条件書の位置付け",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "本 Fee Terms は、HYPE における個別注文単位の販売代金の受領、プラットフォーム手数料の課金、決済処理手数料の負担、および出店ブランドへの精算 (お支払) の各処理について、Merchant Agreement 第 10 条・第 11 条を具体化する条件を定める。",
+          "本 Fee Terms は運営者が別途 定めうる社内的な精算オペレーション上の運用要件 (振込のタイミング、社内締日等) を排除しない。 ただし、本 Fee Terms に明示された料率・課金対象・返金時取扱・実行条件については、当該運用要件に優先する。"
+        ] }
+      ]
+    },
+    {
+      "number": 2,
+      "title": "プラットフォーム手数料の料率および課金対象",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "運営が出店ブランドに対して課すプラットフォーム利用手数料 (以下「プラットフォーム手数料」) の料率は、10 パーセント (basis points 表記で 1000 bps) とする。",
+          "プラットフォーム手数料の課金対象は、注文ごとに、当該注文のうち当該出店ブランドに帰属する商品の商品小計 (subtotal_amount) のみとする。 送料 (shipping_amount) および購入者から受領した消費税相当額は、プラットフォーム手数料の課金対象に含まない。",
+          "個別注文におけるプラットフォーム手数料の額 (platform_fee_amount) は、次の算式により算出する。 platform_fee_amount = subtotal_amount × 1000 ÷ 10000 (単位: 円、算出結果は円単位で四捨五入)。",
+          "プラットフォーム手数料の料率は、運営が第 8 条 (本条件書の変更) に定める手続きに従い変更することができる。 変更後の料率は、変更後の Fee Terms の効力発生後に新規に成立した注文に対してのみ適用され、既存の注文に遡って適用されない。"
+        ] }
+      ]
+    },
+    {
+      "number": 3,
+      "title": "決済処理手数料の負担",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "運営が販売代金の受領のために利用する決済代行事業者 (Stripe) が課すクレジットカード等の決済処理手数料は、運営がこれを負担するものとし、出店ブランドに対して転嫁しない。",
+          "本条は、決済処理手数料以外の Stripe が課しうる手数料 (Stripe Connect 側の payout 手数料、chargeback 手数料等) について、その最終負担者を運営とすることを一律には保証しない。 これらの取扱いは、事案の内容および Stripe の運用条件を踏まえ、運営と出店ブランドとの間で個別に協議する。"
+        ] }
+      ]
+    },
+    {
+      "number": 4,
+      "title": "個別注文の brand へのお支払額 (transfer_amount)",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "個別注文について、当該出店ブランドに対して支払われるべき金額 (transfer_amount) は、次の算式により算出する。 transfer_amount = subtotal_amount + shipping_amount − discount_amount − platform_fee_amount。",
+          "上記の shipping_amount は、当該注文について当該出店ブランドが購入者に対して請求した送料の額とする。 discount_amount は、当該注文について適用された当該出店ブランド負担分の値引額とする (現時点で discount は導入されていないため、原則として 0 とする)。",
+          "上記算式は、正の値である限り、Stripe Connect Transfer による送金額の理論値であり、実際の Stripe API 呼出しにおける金額単位・通貨換算・銀行側の受入条件については、Stripe の運用に従う。"
+        ] }
+      ]
+    },
+    {
+      "number": 5,
+      "title": "全額返金 (Refund) 時のプラットフォーム手数料の取扱",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "注文の全額返金 (Buyer による事前キャンセルまたは Seller 責任事由による返品後の全額 refund を含む) が成立した場合、当該注文に対応する当該出店ブランドへの送金は、既に Stripe Connect Transfer が発行済であれば全額を Stripe Transfer Reversal により逆送金する。 未発行の場合、Transfer の発行そのものを中止する。",
+          "本項に基づき、当該注文について当該出店ブランドが最終的に受領する金額は零 (0 円) となる。",
+          "他方、購入者が返金を受ける総額 (原則として total_amount) と前項の transfer_amount との差額 (プラットフォーム手数料相当額) について、運営はこれを購入者への返金コストとして自己の負担とし、出店ブランドから追加で回収しない。",
+          "本条は、購入者への返金コストの一般的な負担者を運営とする趣旨ではなく、注文単位の全額返金におけるプラットフォーム手数料相当額の取扱いに限る。 部分返金その他のパターンは現行 Fee Terms の対象外であり、必要に応じて別途 定める。"
+        ] }
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Connect 精算の実行条件",
+      "paragraphs": [
+        { "kind": "text", "text": "運営が当該出店ブランドに対して Stripe Connect Transfer による自動精算 (Connect 精算) を実行するのは、当該出店ブランドについて次の各条件がすべて満たされている場合に限る。" },
+        { "kind": "ordered", "items": [
+          "当該出店ブランドの Stripe Connect アカウントが Stripe において active の状態にあること。",
+          "当該出店ブランドの Stripe Connect アカウントに対し、運営が指定する必要な capability (stripe_balance.stripe_transfers 相当を含む) が provisioned されていること。",
+          "運営が当該出店ブランドについて Connect 精算を有効化する運営上の flag (connect_settlement_enabled) を有効に設定していること。",
+          "当該出店ブランドの owner が、当該注文時点で有効な最新版の Merchant Agreement を明示的に受諾していること。",
+          "当該出店ブランドの owner が、当該注文時点で有効な最新版の本 Fee Terms を明示的に受諾していること。"
+        ] },
+        { "kind": "text", "text": "上記各条件のうちいずれかが満たされない期間中に成立した注文については、Connect 精算は実行されず、運営と出店ブランドとの個別合意による手動精算その他の方法により処理する。 いずれの場合においても、購入者と出店ブランドとの間の売買契約の成立、および運営が代金を受領した事実には影響しない。" }
+      ]
+    },
+    {
+      "number": 7,
+      "title": "精算タイミング",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "Connect 精算の実行タイミング (Stripe Connect Transfer の発行タイミング) は、原則として当該注文の決済成功後、運営における一定の技術的検証を経た後にすみやかに実施することを目指す。",
+          "ただし、実際の Connect 精算の到達日時は、Stripe の運用条件、金融機関の営業日、および運営における処理の進行状況に依存し、運営はいかなる特定日時までの到達も保証しない。",
+          "出店ブランドは、Stripe Connect Transfer が発行された時点以降の Stripe Connect アカウント上の残高の管理、および Stripe Connect アカウントから出店ブランド名義の銀行口座への payout の設定・実行について、自らの責任において Stripe に対して行うものとする。 運営は当該 payout について保証を負わない。"
+        ] }
+      ]
+    },
+    {
+      "number": 8,
+      "title": "本条件書の変更",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "運営は必要に応じて本 Fee Terms を変更することができる。",
+          "本 Fee Terms を変更する場合、運営は変更後の Fee Terms の効力発生日を、変更前の合理的な事前通知期間 (原則 30 日) を置いて出店ブランドに通知する。",
+          "効力発生日以降も出店ブランドが HYPE における Connect 精算の対象であり続けるためには、変更後の Fee Terms について owner による再度の明示的同意 (clickwrap) を運営が求めることができる。 owner が再同意しない期間中、Connect 精算は前条第 4 号または第 5 号の条件不充足として実行されない。"
+        ] }
+      ]
+    },
+    {
+      "number": 9,
+      "title": "同意方式・記録",
+      "paragraphs": [
+        { "kind": "ordered", "items": [
+          "本 Fee Terms への同意は、出店ブランドを代表する owner が Brand Admin 上に表示される本 Fee Terms の全文を確認したうえで、「同意する」旨を明示的にクリックすることにより行う。 owner 以外の member (admin / staff) は、ブランドを代表して同意することはできない。",
+          "運営は、前項の同意について、対象ブランド (brand_id)、対応する当該 fee term レコードの識別子 (fee term id)、同意対象の本 Fee Terms のバージョン (terms_version) および内容の完全性を担保するハッシュ (terms_hash)、同意を行った owner (accepted_by_user_id)、および同意日時 (accepted_at) を記録する。",
+          "本 Fee Terms または当該時点における最新版本 Fee Terms への未同意は、当該時点で既に受注済みの注文について、出店ブランドが購入者に対して負う発送、返金、返品受付、消費者からの問い合わせ対応その他の義務の履行を妨げるものではない。 未同意により影響を受けるのは、当該注文以降の新規注文に係る Connect 精算の実行可否のみであり、履行対応 UI の使用は制限しない。"
+        ] }
+      ]
+    }
+  ]
+}

@@ -32,6 +32,22 @@ export async function proxy(request: NextRequest) {
   const isProtected = PROTECTED_PATHS.some(p => pathname.startsWith(p))
   const isAuthPath = AUTH_PATHS.some(p => pathname.startsWith(p))
 
+  // Phase 4-C.7 privacy: /cosmohype-admin と /brand-admin は検索対象外にする。
+  // 認証 gate は各 layout の getCosmohypeAdminContext/getBrandAdminContext が SoT
+  // (layout SSR で未認証は redirect される)。 middleware 側では noindex header の
+  // 付与のみ行い、URL secrecy を security として扱わない (defense-in-depth の 3 段目)。
+  const isAdminPath =
+    pathname === '/cosmohype-admin' ||
+    pathname.startsWith('/cosmohype-admin/') ||
+    pathname === '/brand-admin' ||
+    pathname.startsWith('/brand-admin/')
+  if (isAdminPath) {
+    supabaseResponse.headers.set(
+      'X-Robots-Tag',
+      'noindex, nofollow, noarchive, nosnippet, noimageindex',
+    )
+  }
+
   // Suspension check — only for logged-in users accessing protected paths.
   // Suspended users are redirected to /suspended (which signs them out client-side).
   if (isProtected && user) {
