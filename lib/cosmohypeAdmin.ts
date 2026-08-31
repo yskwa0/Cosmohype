@@ -19,8 +19,12 @@ export interface CosmohypeAdminContext {
 
 /**
  * `/cosmohype-admin` 配下のすべての Server Component / Server Action から呼ぶ。
- * - 未認証 → `/login` に redirect (別途 return URL は付与しない、公開情報の漏洩を避ける)
- * - 認証済みだが `profiles.role != 'admin'` → `/` に silent redirect (存在自体を隠す)
+ * - 未認証 → `/login?redirect=/cosmohype-admin` に redirect
+ *   (login 成功後、AuthForm は `?redirect=` を startsWith('/') validate してから
+ *    採用するため open redirect にならず、Cosmohype Admin に戻る)
+ * - 認証済みだが `profiles.role != 'admin'` → `/` に silent redirect
+ *   (存在自体を隠す。 `app/page.tsx` の「認証済 → /feed 自動 redirect」は撤去済
+ *    のため / は homepage を render し、Feed に二次遷移しない)
  * - 認証済み + admin → context を返す
  *
  * 【禁止事項】
@@ -38,7 +42,7 @@ export const getCosmohypeAdminContext = cache(
     const { data: userData } = await supabase.auth.getUser()
     const user = userData?.user
     if (!user) {
-      redirect('/login')
+      redirect('/login?redirect=/cosmohype-admin')
     }
 
     // types/database.ts には shop_* が未生成なので as any でクエリ (型は下で厳密化)。

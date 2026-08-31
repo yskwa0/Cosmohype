@@ -1,8 +1,10 @@
 // =============================================================================
 // / (公式ホームページ / 公開ランディング) — v4 Fashion meets your universe.
 //
-// Google / SNS 経由の未認証訪問者が最初に見るページ。
-// 認証済ユーザーは従来通り /feed へ redirect (既存挙動を維持)。
+// Google / SNS / bookmark 経由の訪問者が最初に見るページ。
+// 認証状態に依らず常に render (「ログイン済だからとりあえず /feed」の global
+// fallback は禁止 — Cosmohype Admin 経路で /cosmohype-admin → silent redirect('/')
+// → /feed に落ちる事故 & 公式サイト直訪問時に強制 /feed 遷移する事故を防止)。
 //
 // v6 デザイン方針:
 //   ・メインコピー: 「Fashion meets your universe.」を主役 (2 種類の重みで強弱)
@@ -25,8 +27,6 @@
 //   ・Splash 画面はトップに限り無効化 (SplashScreenMount.tsx で pathname === '/')
 // =============================================================================
 
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata, Viewport } from 'next'
@@ -188,11 +188,11 @@ const SCREEN_MAP: Record<(typeof FEATURES)[number]['key'], string | undefined> =
 // =============================================================================
 
 export default async function HomePage() {
-  // 既存挙動を維持: 認証済は /feed へ
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) redirect('/feed')
-
+  // 公式ホームページは認証状態に依らず常に render する。
+  // 「ログイン済だからとりあえず /feed」の global fallback は行わない (SoT):
+  //   ・Cosmohype Admin bookmark 経路で /cosmohype-admin → 非-admin silent redirect('/') → /feed に落ちる事故防止
+  //   ・ホームページを明示的に開いた user 意図を尊重
+  // 認証済 user が Feed を開きたい場合は BottomNav / 明示リンクから遷移する。
   return (
     <>
       {/* 構造化データ */}
