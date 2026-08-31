@@ -57,6 +57,9 @@ export default async function CosmohypeAdminLayout({
             <Link href="/cosmohype-admin/brands" className="text-neutral-700 hover:text-neutral-900">
               ブランド管理
             </Link>
+            <Link href="/cosmohype-admin/hype-applications" className="text-neutral-700 hover:text-neutral-900">
+              出店申請
+            </Link>
             <Link href="/cosmohype-admin/orders" className="text-neutral-700 hover:text-neutral-900">
               注文管理
             </Link>
