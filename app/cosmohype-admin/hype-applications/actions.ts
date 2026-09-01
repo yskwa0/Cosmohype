@@ -136,8 +136,22 @@ export async function resendOwnerInvitationAction(formData: FormData): Promise<v
   const expiresAt = new Date(Date.now() + INVITATION_TTL_MS).toISOString()
 
   const supabase = await createClient()
+  // Zero-downtime rollout 対応の互換 shape:
+  //   ・ Migration 181 (旧): { invitation_id, email, brand_name }
+  //   ・ Migration 184 (新): { out_invitation_id, out_email, out_brand_name }
+  // Web を先 deploy → Migration 適用の順のため、Prod 上で両 signature が短時間共存する。
+  // どちらの shape でも安全に read できるように optional 型 + nullish coalesce で吸収する。
+  // Prod smoke 完走後、別 cleanup commit で旧 field fallback を除去可能。
+  type ResendRpcRow = {
+    out_invitation_id?: string
+    out_email?:         string
+    out_brand_name?:    string
+    invitation_id?:     string
+    email?:             string
+    brand_name?:        string
+  }
   const rpcRes = await (supabase as unknown as {
-    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: Array<{ invitation_id: string; email: string; brand_name: string }> | null; error: { message: string } | null }>
+    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: ResendRpcRow[] | null; error: { message: string } | null }>
   }).rpc('shop_hype_admin_resend_owner_invitation', {
     p_brand_id:       brandId,
     p_new_token_hash: tokenHash,
@@ -157,14 +171,23 @@ export async function resendOwnerInvitationAction(formData: FormData): Promise<v
 
   const row = rpcRes.data?.[0]
   if (!row) {
+    console.error('[cosmohype-admin/hype-applications] resend rpc returned empty row')
+    redirect(backTo(appId, { err: 'resend_failed' }))
+  }
+
+  // 両 schema 対応 fallback
+  const invitedEmail = row!.out_email     ?? row!.email
+  const brandName    = row!.out_brand_name ?? row!.brand_name
+  if (typeof invitedEmail !== 'string' || typeof brandName !== 'string') {
+    console.error('[cosmohype-admin/hype-applications] resend rpc row missing required fields')
     redirect(backTo(appId, { err: 'resend_failed' }))
   }
 
   try {
     const res = await issueOwnerInvitation({
-      email:     row!.email,
+      email:     invitedEmail!,
       rawToken:  rawToken,
-      brandName: row!.brand_name,
+      brandName: brandName!,
     })
     console.info('[cosmohype-admin/hype-applications] invite resent path=' + res.path)
   } catch (e) {
