@@ -113,7 +113,7 @@ export default async function HypeApplicationDetailPage({
 
       <section className="border border-neutral-200 rounded-lg bg-white p-5 mb-4">
         <h2 className="text-sm font-semibold mb-3">申請内容</h2>
-        <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-[13px]">
+        <dl className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-1 sm:gap-y-2 text-[13px] break-words">
           <dt className="text-neutral-500">担当者</dt><dd>{app.contact_name}</dd>
           <dt className="text-neutral-500">メール</dt><dd>{app.contact_email}</dd>
           <dt className="text-neutral-500">公式サイト</dt><dd>{app.website_url ?? '—'}</dd>
@@ -161,7 +161,7 @@ export default async function HypeApplicationDetailPage({
       {app.status === 'approved' && (
         <section className="border border-neutral-200 rounded-lg bg-white p-5 mb-4">
           <h2 className="text-sm font-semibold mb-3">承認情報</h2>
-          <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-[13px]">
+          <dl className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 sm:gap-y-2 text-[13px] break-words">
             <dt className="text-neutral-500">承認日時</dt><dd>{fmt(app.approved_at)}</dd>
             <dt className="text-neutral-500">作成 brand_id</dt><dd className="font-mono text-[11px] break-all">{app.approved_brand_id}</dd>
           </dl>
@@ -170,7 +170,7 @@ export default async function HypeApplicationDetailPage({
             <>
               <hr className="my-4" />
               <h2 className="text-sm font-semibold mb-3">Owner 招待</h2>
-              <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-[13px]">
+              <dl className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-x-4 gap-y-1 sm:gap-y-2 text-[13px] break-words">
                 <dt className="text-neutral-500">状態</dt>
                 <dd><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${invStatus.cls}`}>{invStatus.label}</span></dd>
                 <dt className="text-neutral-500">送信先</dt><dd>{app.invitation_email}</dd>
@@ -199,7 +199,7 @@ export default async function HypeApplicationDetailPage({
       {app.status === 'rejected' && (
         <section className="border border-neutral-200 rounded-lg bg-white p-5 mb-4">
           <h2 className="text-sm font-semibold mb-3">却下情報</h2>
-          <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-[13px]">
+          <dl className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] gap-x-4 gap-y-1 sm:gap-y-2 text-[13px] break-words">
             <dt className="text-neutral-500">却下日時</dt><dd>{fmt(app.rejected_at)}</dd>
             <dt className="text-neutral-500">理由</dt><dd className="whitespace-pre-wrap">{app.rejection_reason ?? '—'}</dd>
           </dl>

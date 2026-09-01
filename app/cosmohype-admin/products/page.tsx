@@ -128,8 +128,8 @@ export default async function CosmohypeAdminProductsPage({
         </div>
       )}
 
-      <div className="rounded-xl border border-neutral-200 bg-white overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="rounded-xl border border-neutral-200 bg-white overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-500">
             <tr>
               <th className="px-4 py-2 text-left">商品名</th>

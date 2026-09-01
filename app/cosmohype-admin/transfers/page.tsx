@@ -272,7 +272,7 @@ export default async function CosmohypeAdminTransfersPage({
       )}
 
       <div className="rounded-xl border border-neutral-200 bg-white overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-500">
             <tr>
               <th className="px-3 py-2 text-left">更新日時</th>

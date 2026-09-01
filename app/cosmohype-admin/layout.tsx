@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { getCosmohypeAdminContext } from '@/lib/cosmohypeAdmin'
+import AdminHeader from './AdminHeader'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +27,11 @@ export const metadata: Metadata = {
  * SSR で `getCosmohypeAdminContext()` を呼び、非 admin は redirect される
  * (URL 直打ちでも layout の render 前に auth gate が発火するため、非 admin は
  * page.tsx の中身を一切見られない)。 client hide だけの防御は使わない。
+ *
+ * ヘッダー / ナビは AdminHeader (client) に切り出し、
+ *   ・PC (md+): 横並び nav + email 右端
+ *   ・Mobile:   ハンバーガーで右 drawer 展開、email は drawer 下部
+ * の responsive 表示に対応する。
  */
 export default async function CosmohypeAdminLayout({
   children,
@@ -37,46 +42,9 @@ export default async function CosmohypeAdminLayout({
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center gap-6">
-          <div>
-            <div className="text-[10px] font-bold tracking-[0.3em] text-neutral-500">
-              COSMOHYPE OPERATIONS
-            </div>
-            <Link
-              href="/cosmohype-admin"
-              className="text-lg font-semibold text-neutral-900 hover:text-neutral-700"
-            >
-              運営者ダッシュボード
-            </Link>
-          </div>
-          <nav className="ml-8 flex items-center gap-4 text-sm">
-            <Link href="/cosmohype-admin/products" className="text-neutral-700 hover:text-neutral-900">
-              商品管理
-            </Link>
-            <Link href="/cosmohype-admin/brands" className="text-neutral-700 hover:text-neutral-900">
-              ブランド管理
-            </Link>
-            <Link href="/cosmohype-admin/hype-applications" className="text-neutral-700 hover:text-neutral-900">
-              出店申請
-            </Link>
-            <Link href="/cosmohype-admin/orders" className="text-neutral-700 hover:text-neutral-900">
-              注文管理
-            </Link>
-            <Link href="/cosmohype-admin/reports" className="text-neutral-700 hover:text-neutral-900">
-              商品通報
-            </Link>
-            <Link href="/cosmohype-admin/transfers" className="text-neutral-700 hover:text-neutral-900">
-              送金・送金取消
-            </Link>
-          </nav>
-          <div className="ml-auto text-[11px] text-neutral-500">
-            {ctx.user.email ?? ctx.user.id}
-          </div>
-        </div>
-      </header>
+      <AdminHeader email={ctx.user.email ?? ctx.user.id ?? null} />
 
-      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8">{children}</main>
     </div>
   )
 }
