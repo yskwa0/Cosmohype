@@ -73,12 +73,15 @@ export async function approveHypeApplicationAction(formData: FormData): Promise<
   }
 
   // Supabase Auth invite 発行 (raw token は redirectTo に埋め込むためだけに使用)
+  // 新規 email → inviteUserByEmail、既存 auth.users → signInWithOtp に自動 dispatch。
   try {
-    await issueOwnerInvitation({
+    const res = await issueOwnerInvitation({
       email:     row!.email,
       rawToken:  rawToken,
       brandName: row!.brand_name,
     })
+    // audit ログ (raw token / email 全体は出さない、経路のみ)
+    console.info('[cosmohype-admin/hype-applications] invite issued path=' + res.path)
   } catch (e) {
     // 発行失敗時は application を pending に戻せない (RPC 側で既に approved)。
     // 運営は "再送" ボタンで新 invitation を発行できる。
@@ -158,11 +161,12 @@ export async function resendOwnerInvitationAction(formData: FormData): Promise<v
   }
 
   try {
-    await issueOwnerInvitation({
+    const res = await issueOwnerInvitation({
       email:     row!.email,
       rawToken:  rawToken,
       brandName: row!.brand_name,
     })
+    console.info('[cosmohype-admin/hype-applications] invite resent path=' + res.path)
   } catch (e) {
     console.error('[cosmohype-admin/hype-applications] auth invite resend failed', e)
     redirect(backTo(appId, { err: 'invite_send_failed' }))

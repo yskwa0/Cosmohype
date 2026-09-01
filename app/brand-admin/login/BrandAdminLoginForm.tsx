@@ -7,15 +7,21 @@ import { pressableClass, Spinner } from '@/lib/brandAdminUi'
 
 interface Props {
   initialError?: string | null
+  /** login 成功後の遷移先 (safeRedirect 済、default: /brand-admin) */
+  redirectPath?: string
 }
 
 /**
  * Brand Admin ログインフォーム。
  * 通常 Web と同一 Supabase Auth session を使う (二重 session 管理はしない)。
- * ログイン成功 → /brand-admin に飛ぶ。protected layout 側で
- * shop_brand_members active を再検証し、無ければ /brand-admin/login?err=no_membership に戻る。
+ * ログイン成功 → redirectPath (未指定なら /brand-admin) に飛ぶ。
+ * protected layout 側で shop_brand_members active を再検証し、
+ * 無ければ /brand-admin/login?err=no_membership に戻る。
  */
-export default function BrandAdminLoginForm({ initialError = null }: Props) {
+export default function BrandAdminLoginForm({
+  initialError = null,
+  redirectPath = '/brand-admin',
+}: Props) {
   const router = useRouter()
   const supabase = createClient()
 
@@ -38,7 +44,7 @@ export default function BrandAdminLoginForm({ initialError = null }: Props) {
         setError('メールまたはパスワードが正しくありません。')
         return
       }
-      router.replace('/brand-admin')
+      router.replace(redirectPath)
       router.refresh()
     } finally {
       setSubmitting(false)

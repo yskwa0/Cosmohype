@@ -11,6 +11,16 @@ export function createAdminClient() {
   )
 }
 
+// anon key を使う fresh Supabase client (cookie 分離、session 副作用なし)。
+// HYPE 既存 user 向け signInWithOtp を、admin session 中に安全に呼ぶために使用。
+export function createAnonServerClient() {
+  return createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
 export async function createClient() {
   const cookieStore = await cookies()
 
