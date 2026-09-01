@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { hashOpaqueToken } from '@/lib/hype/tokens'
 import { acceptExistingUserInvitationAction } from './actions'
+import AcceptButton from './AcceptButton'
 
 /**
  * /brand-admin/invite/accept
@@ -14,11 +15,13 @@ import { acceptExistingUserInvitationAction } from './actions'
  * 到達経路:
  *   1. Magic Link email → /api/auth/hype-invite-confirm → session 確立 → 本 page
  *   2. session 切れで再 access → /brand-admin/login?redirect=... → login 後戻る
+ *   3. 受諾成功直後: `?saved=accepted` (token なし) → 完了確認画面
  *
- * 表示:
- *   preview RPC で status を判定 (ready / accepted / expired / revoked / email_mismatch)
- *   ready → 「HYPE Owner として参加する」ボタン
- *   その他 → status 別の説明カード
+ * 表示分岐:
+ *   ・ ?saved=accepted   → 「参加が完了しました」 + Brand Admin CTA (受諾直後専用)
+ *   ・ token 有 + preview status='ready' → 「HYPE Owner として参加する」button
+ *   ・ token 有 + preview status='accepted' → 「既に受諾済みです」 + Brand Admin CTA
+ *   ・ その他 preview status                → status 別エラー
  */
 export const metadata: Metadata = {
   title: 'HYPE へようこそ',
@@ -46,12 +49,27 @@ const STATUS_HINT: Record<Preview['out_status'], string> = {
 export default async function HypeInviteAcceptPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ token?: string; err?: string }>
+  searchParams?: Promise<{ token?: string; err?: string; saved?: string }>
 }) {
   const sp = (await searchParams) ?? {}
   const rawToken = sp.token ?? ''
   const errCode = sp.err ?? null
+  const savedAccepted = sp.saved === 'accepted'
 
+  // 1) 受諾直後 (Server Action からの redirect) → 完了確認画面
+  //    token は URL に載せない設計。 メッセージだけ表示 + Brand Admin CTA。
+  if (savedAccepted) {
+    return (
+      <FullScreen>
+        <SuccessCard
+          title="参加が完了しました"
+          body="このブランドの Owner として登録されました。"
+        />
+      </FullScreen>
+    )
+  }
+
+  // 2) token 無し → 案内
   if (!rawToken) {
     return (
       <FullScreen>
@@ -97,23 +115,26 @@ export default async function HypeInviteAcceptPage({
   }
 
   if (preview.out_status !== 'ready') {
+    // accepted の場合は Brand Admin CTA も出す (受諾済 URL を後日再訪した user 向け)
     return (
       <FullScreen>
-        <ErrorCard title={
-          preview.out_status === 'accepted' ? '既に受諾済みです'
-          : preview.out_status === 'expired' ? '招待の有効期限が切れています'
-          : preview.out_status === 'revoked' ? '招待は無効化されています'
-          : 'メールアドレスが一致しません'
-        }>
-          {STATUS_HINT[preview.out_status]}
-          {preview.out_status === 'accepted' && (
-            <div className="mt-4">
-              <Link href="/brand-admin" className="inline-block px-4 py-2 bg-neutral-900 text-white text-sm font-semibold rounded">
-                Brand Admin へ
-              </Link>
-            </div>
-          )}
-        </ErrorCard>
+        <div className="max-w-md mx-auto px-6 py-14">
+          <div className="text-[10px] tracking-[0.35em] text-neutral-500 mb-3">HYPE</div>
+          <h1 className="text-2xl font-semibold tracking-wide mb-4">{
+            preview.out_status === 'accepted' ? '既に受諾済みです'
+            : preview.out_status === 'expired' ? '招待の有効期限が切れています'
+            : preview.out_status === 'revoked' ? '招待は無効化されています'
+            : 'メールアドレスが一致しません'
+          }</h1>
+          <div className="text-sm text-neutral-400 leading-relaxed">
+            {STATUS_HINT[preview.out_status]}
+            {preview.out_status === 'accepted' && (
+              <div className="mt-6">
+                <BrandAdminCTA />
+              </div>
+            )}
+          </div>
+        </div>
       </FullScreen>
     )
   }
@@ -143,12 +164,7 @@ export default async function HypeInviteAcceptPage({
 
         <form action={acceptExistingUserInvitationAction} className="space-y-4">
           <input type="hidden" name="token" value={rawToken} />
-          <button
-            type="submit"
-            className="w-full h-11 bg-white text-neutral-900 rounded-md text-sm font-semibold hover:bg-neutral-200"
-          >
-            HYPE Owner として参加する
-          </button>
+          <AcceptButton />
         </form>
 
         <p className="mt-8 text-[11px] text-neutral-500 leading-relaxed">
@@ -175,6 +191,38 @@ function ErrorCard({ title, children }: { title: string; children: React.ReactNo
       <h1 className="text-2xl font-semibold tracking-wide mb-4">{title}</h1>
       <div className="text-sm text-neutral-400 leading-relaxed">{children}</div>
     </div>
+  )
+}
+
+function SuccessCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="max-w-md mx-auto px-6 py-14">
+      <div className="text-[10px] tracking-[0.35em] text-neutral-500 mb-3">HYPE</div>
+      <h1 className="text-2xl font-semibold tracking-wide mb-4">{title}</h1>
+      <p className="text-sm text-neutral-400 leading-relaxed">{body}</p>
+      <div className="mt-6">
+        <BrandAdminCTA />
+      </div>
+    </div>
+  )
+}
+
+function BrandAdminCTA() {
+  return (
+    <Link
+      href="/brand-admin"
+      className={
+        'inline-flex items-center justify-center h-11 px-6 rounded-md text-sm font-semibold ' +
+        'bg-white text-neutral-900 ' +
+        'transition-[transform,opacity,filter] duration-150 ease-out ' +
+        'origin-center will-change-transform ' +
+        'active:scale-[0.97] active:opacity-90 ' +
+        'cursor-pointer select-none touch-manipulation ' +
+        '[-webkit-tap-highlight-color:transparent]'
+      }
+    >
+      Brand Admin へ
+    </Link>
   )
 }
 

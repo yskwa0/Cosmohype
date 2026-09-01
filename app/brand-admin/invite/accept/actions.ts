@@ -58,5 +58,8 @@ export async function acceptExistingUserInvitationAction(formData: FormData): Pr
     return err(code)
   }
 
-  redirect('/brand-admin')
+  // 受諾直後: 完了確認画面を挟んで CTA から /brand-admin へ手動遷移させる。
+  // ここで raw token は URL に載せない (受諾済 → token は無効化されているが、
+  // 表示側で不要かつ URL 履歴を短くする狙い)。
+  redirect('/brand-admin/invite/accept?saved=accepted')
 }
