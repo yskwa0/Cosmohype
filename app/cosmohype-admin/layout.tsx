@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 import { getCosmohypeAdminContext } from '@/lib/cosmohypeAdmin'
 import AdminHeader from './AdminHeader'
 
@@ -21,23 +22,37 @@ export const metadata: Metadata = {
   },
 }
 
+// /cosmohype-admin/access-denied は「Admin 権限がない authenticated user 向け」
+// の専用 page (getCosmohypeAdminContext を呼ぶと再度 access-denied に redirect され
+// loop する)。 その pathname だけ auth check + AdminHeader を skip する。
+const ACCESS_DENIED_PATH = '/cosmohype-admin/access-denied'
+
 /**
  * `/cosmohype-admin` 配下の共通レイアウト。
  *
- * SSR で `getCosmohypeAdminContext()` を呼び、非 admin は redirect される
- * (URL 直打ちでも layout の render 前に auth gate が発火するため、非 admin は
- * page.tsx の中身を一切見られない)。 client hide だけの防御は使わない。
+ * 通常 route (hype-applications / products / orders / brands / reports / transfers 等):
+ *   SSR で `getCosmohypeAdminContext()` を呼び、
+ *     ・ 未認証 → /login?redirect=<現 pathname> (deep path 保持)
+ *     ・ 認証済みだが非-admin → /cosmohype-admin/access-denied?next=<現 pathname>
+ *     ・ admin → context 返却 + AdminHeader 描画
  *
- * ヘッダー / ナビは AdminHeader (client) に切り出し、
- *   ・PC (md+): 横並び nav + email 右端
- *   ・Mobile:   ハンバーガーで右 drawer 展開、email は drawer 下部
- * の responsive 表示に対応する。
+ * `/cosmohype-admin/access-denied` route のみ:
+ *   auth check を skip し、AdminHeader も描画しない (loop 防止 + 権限のない user
+ *   に管理 nav を見せない)。 body 全画面を access-denied カードに委ねる。
  */
 export default async function CosmohypeAdminLayout({
   children,
 }: {
   children: ReactNode
 }) {
+  const h = await headers()
+  const pathname = h.get('x-pathname') ?? ''
+
+  if (pathname === ACCESS_DENIED_PATH) {
+    // access-denied は auth check せず、そのまま render (背景色のみ揃える)。
+    return <div className="min-h-screen bg-neutral-50">{children}</div>
+  }
+
   const ctx = await getCosmohypeAdminContext()
 
   return (

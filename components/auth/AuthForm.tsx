@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { safeInternalPath } from '@/lib/safeInternalPath'
 
 type Mode = 'login' | 'register'
 
@@ -38,9 +39,12 @@ export function AuthForm({ mode }: { mode: Mode }) {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password })
         if (error) throw error
+        // Safe redirect: 内部 path のみ (/、//、\ を validate)。 外部 URL や不正 path は
+        // /feed fallback。 proxy.ts の isAuthPath && user 分岐と同じ policy を採用する
+        // ため lib/safeInternalPath.ts の共通 helper を利用。
         const params = new URLSearchParams(window.location.search)
         const redirectTo = params.get('redirect')
-        const dest = redirectTo && redirectTo.startsWith('/') ? redirectTo : '/feed'
+        const dest = safeInternalPath(redirectTo) ?? '/feed'
         window.location.href = dest
       }
     } catch (err: unknown) {
