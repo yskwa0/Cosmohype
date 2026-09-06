@@ -1,19 +1,34 @@
 // =============================================================================
-// app/marketplace/connect/complete/page.tsx   (PHASE 4 Marketplace)
+// app/marketplace/connect/complete/page.tsx   (PHASE 4 Marketplace, v2)
 //
-// Stripe hosted onboarding return_url handler (`/api/stripe-connect/marketplace/return`)
-// からリダイレクトされる landing page。
-// - onboarding UI から戻ったユーザーへ、アプリに戻る導線を提示
-// - state (active / pending / restricted) と err (あれば) をクエリで受け取り表示切替
-// - iOS app は universal link (applinks:cosmohype.jp) で本 path を開くと自動起動する
-//   ため、Safari 上での操作は最小限
+// Stripe hosted onboarding の return_url / refresh_url がここに直接来る (Web API 経由なし)。
+// Cosmohype iOS アプリの Supabase session は Safari / SFSafariViewController の cookie
+// と分離しているため、Web 側で auth 依存の同期処理を行うと通常ユーザーが必ず
+// unauthorized になる。 したがって:
+//
+//   ・return_url / refresh_url は Web 認証を一切要求しない静的 landing
+//   ・Stripe 状態の同期は iOS 側 (SFSafariViewController の onDismiss →
+//     marketplace-connect-status Edge Function を iOS 自身の JWT で呼ぶ) が SoT
+//   ・本 page は「iOS アプリに戻ってください」の安全な誘導だけを担当
+//
+// URL 設計:
+//   RETURN:  https://www.cosmohype.jp/marketplace/connect/complete?flow=return
+//   REFRESH: https://www.cosmohype.jp/marketplace/connect/complete?flow=refresh
+//
+// - Stripe secret / account id / user id 等の PII / secret は URL に一切入れない
+// - 本 page 自体もクエリの flow 値以外は何も参照しない
+// - open redirect / server-side redirect なし (常に 200 レンダリング)
+// - Shop brand-admin への遷移は一切なし
+// - 検索エンジン index させない (private landing)
 // =============================================================================
 
+export const metadata = {
+  title: '売上金の受け取り設定 - Cosmohype',
+  robots: { index: false, follow: false },
+}
+
 type SearchParams = {
-  saved?: string
-  state?: string
-  reason?: string
-  err?: string
+  flow?: string
 }
 
 export default async function MarketplaceConnectCompletePage({
@@ -22,27 +37,25 @@ export default async function MarketplaceConnectCompletePage({
   searchParams: Promise<SearchParams>
 }) {
   const sp = await searchParams
-  const err = typeof sp.err === 'string' ? sp.err : null
-  const state = typeof sp.state === 'string' ? sp.state : null
-  const reason = typeof sp.reason === 'string' ? sp.reason : null
+  const flow = typeof sp.flow === 'string' ? sp.flow : null
 
   let title: string
   let message: string
-  if (err) {
-    title = '設定を完了できませんでした'
+  if (flow === 'refresh') {
+    // Stripe Account Link が期限切れ/無効化されて Stripe から refresh_url に飛ばされた
+    title = 'セッションが切れました'
     message =
-      err === 'unauthorized'
-        ? 'ログイン状態を確認できませんでした。 アプリからもう一度お試しください。'
-        : `${err} が発生しました。 アプリから再度お試しください。`
-  } else if (state === 'active') {
-    title = '売上金の受け取り設定が完了しました'
-    message = 'Cosmohype アプリに戻ってください。'
-  } else if (state === 'restricted' && reason) {
-    title = 'まだ追加情報の入力が必要です'
-    message = `Stripe から次の要件が返されています: ${reason}。 アプリからもう一度「設定を続ける」を実行してください。`
-  } else {
+      'Cosmohype アプリに戻り、もう一度「設定を続ける」をお試しください。'
+  } else if (flow === 'return') {
+    // Stripe onboarding UI から通常退出、iOS 側が SFSafariViewController.onDismiss で
+    // marketplace-connect-status を呼び直し、最新状態を DB cache に反映してくれる
     title = '設定情報を反映しています'
-    message = 'アプリに戻り、少し時間をおいて状態をご確認ください。'
+    message =
+      'Cosmohype アプリに戻ってください。 最新の受け取り設定はアプリ内でご確認いただけます。'
+  } else {
+    // flow 指定なし = 直接 URL を叩かれた / bookmark 経由 / 予期しないアクセス
+    title = '売上金の受け取り設定ページ'
+    message = 'Cosmohype アプリからお進みください。'
   }
 
   return (
