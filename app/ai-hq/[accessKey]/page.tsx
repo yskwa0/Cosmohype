@@ -32,11 +32,11 @@ export default async function AiHqSecretPage() {
     .limit(20)
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100">
-      <div className="max-w-6xl mx-auto p-6">
-        <header className="mb-6">
-          <h1 className="text-2xl font-bold tracking-wide">COSMOHYPE AI HQ</h1>
-          <p className="text-sm text-neutral-400 mt-1">
+    <main className="min-h-[100dvh] bg-neutral-950 text-neutral-100">
+      <div className="max-w-6xl mx-auto px-3 py-4 md:p-6">
+        <header className="mb-3 md:mb-6">
+          <h1 className="text-xl md:text-2xl font-bold tracking-wide">COSMOHYPE AI HQ</h1>
+          <p className="text-xs md:text-sm text-neutral-400 mt-1">
             Phase 1 — READ / DRAFT only. EXECUTE は人間承認が必要です。
           </p>
         </header>
