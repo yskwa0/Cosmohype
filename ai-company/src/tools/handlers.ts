@@ -78,6 +78,8 @@ export async function handleDraftDecision(
 }
 
 /// draft_task: agent_tasks に INSERT (requires_approval=true default)。
+/// Phase 2C: deliverable_type が指定された場合、metadata に deliverable_required=true を書き、
+/// meeting 終了後の post-meeting hook で対応 agent が draft 生成する。
 export async function handleDraftTask(
   ctx: HandlerContext,
   args: Record<string, unknown>,
@@ -88,6 +90,13 @@ export async function handleDraftTask(
   const assignedTo = args.assigned_to as AgentId | undefined
   const priority =
     typeof args.priority === 'number' ? Math.max(1, Math.min(5, args.priority)) : 3
+  const deliverableType = args.deliverable_type as string | undefined
+  const metadata: Record<string, unknown> = {}
+  if (deliverableType && typeof deliverableType === 'string') {
+    metadata.deliverable_required = true
+    metadata.deliverable_type = deliverableType
+    metadata.revision_count = 0
+  }
 
   const { data, error } = await ctx.admin
     .from('agent_tasks')
@@ -99,6 +108,7 @@ export async function handleDraftTask(
       status: 'open',
       priority,
       requires_approval: true,
+      metadata,
     })
     .select('id')
     .single()

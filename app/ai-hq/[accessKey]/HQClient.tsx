@@ -67,6 +67,71 @@ const CHANNELS: Channel[] = [
   'business',
 ]
 
+// Phase 2C: deliverable pretty-render labels (server-side schemas.ts と揃える)
+type DeliverableType =
+  | 'social_content_draft'
+  | 'growth_experiment'
+  | 'ux_proposal'
+  | 'engineering_plan'
+  | 'research_brief'
+  | 'business_case'
+  | 'executive_brief'
+
+const DELIVERABLE_UI: Record<DeliverableType, { fields: string[]; labels: Record<string, string>; short: string }> = {
+  social_content_draft: {
+    short: 'Social Content Draft',
+    fields: ['concept', 'hook', 'body', 'caption', 'target_audience', 'objective', 'suggested_kpi', 'brand_notes'],
+    labels: { concept: 'CONCEPT', hook: 'HOOK', body: 'STRUCTURE', caption: 'CAPTION', target_audience: 'TARGET', objective: 'OBJECTIVE', suggested_kpi: 'SUGGESTED KPI', brand_notes: 'BRAND NOTES' },
+  },
+  growth_experiment: {
+    short: 'Growth Experiment',
+    fields: ['hypothesis', 'target_segment', 'experiment', 'success_metric', 'duration', 'stop_condition', 'expected_learning'],
+    labels: { hypothesis: 'HYPOTHESIS', target_segment: 'TARGET', experiment: 'EXPERIMENT', success_metric: 'SUCCESS METRIC', duration: 'DURATION', stop_condition: 'STOP CONDITION', expected_learning: 'EXPECTED LEARNING' },
+  },
+  ux_proposal: {
+    short: 'UX Proposal',
+    fields: ['problem', 'evidence', 'proposed_change', 'user_flow', 'edge_cases', 'acceptance_criteria'],
+    labels: { problem: 'PROBLEM', evidence: 'EVIDENCE', proposed_change: 'PROPOSED CHANGE', user_flow: 'USER FLOW', edge_cases: 'EDGE CASES', acceptance_criteria: 'ACCEPTANCE CRITERIA' },
+  },
+  engineering_plan: {
+    short: 'Engineering Plan',
+    fields: ['problem', 'suspected_cause', 'affected_areas', 'proposed_changes', 'risks', 'test_plan', 'rollback_plan'],
+    labels: { problem: 'PROBLEM', suspected_cause: 'SUSPECTED CAUSE', affected_areas: 'AFFECTED AREAS', proposed_changes: 'PROPOSED CHANGES', risks: 'RISKS', test_plan: 'TEST PLAN', rollback_plan: 'ROLLBACK PLAN' },
+  },
+  research_brief: {
+    short: 'Research Brief',
+    fields: ['signal', 'evidence', 'why_now', 'relevance_to_cosmohype', 'confidence', 'recommended_action'],
+    labels: { signal: 'SIGNAL', evidence: 'EVIDENCE', why_now: 'WHY NOW', relevance_to_cosmohype: 'COSMOHYPE RELEVANCE', confidence: 'CONFIDENCE', recommended_action: 'RECOMMENDED ACTION' },
+  },
+  business_case: {
+    short: 'Business Case',
+    fields: ['opportunity', 'assumptions', 'estimated_cost', 'expected_value', 'roi_logic', 'risks', 'recommendation'],
+    labels: { opportunity: 'OPPORTUNITY', assumptions: 'ASSUMPTIONS', estimated_cost: 'ESTIMATED COST', expected_value: 'EXPECTED VALUE', roi_logic: 'ROI', risks: 'RISKS', recommendation: 'RECOMMENDATION' },
+  },
+  executive_brief: {
+    short: 'Executive Brief',
+    fields: ['situation', 'findings', 'options', 'recommendation', 'priority', 'owner', 'next_action'],
+    labels: { situation: 'SITUATION', findings: 'FINDINGS', options: 'OPTIONS', recommendation: 'RECOMMENDATION', priority: 'PRIORITY', owner: 'OWNER', next_action: 'NEXT ACTION' },
+  },
+}
+
+interface DeliverableRow {
+  id: string
+  task_id: string | null
+  thread_id: string | null
+  agent_id: AgentId
+  deliverable_type: DeliverableType
+  title: string
+  summary: string
+  content?: Record<string, unknown>
+  status: 'draft' | 'submitted' | 'approved' | 'revision_requested' | 'rejected' | 'superseded'
+  version: number
+  submitted_at: string | null
+  reviewed_at: string | null
+  created_at: string
+  review_notes?: string | null
+}
+
 function senderLabel(m: MessageRow): { name: string; color: string } {
   if (m.sender_type === 'human') return { name: 'CEO', color: 'bg-white text-black' }
   if (m.sender_type === 'system')
@@ -105,6 +170,16 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
     research_sources: Array<{ name: string; enabled: boolean; last_checked_at: string | null; last_success_at: string | null; consecutive_failures: number; last_error: string | null }>
     github_state: Array<{ key: string; value: Record<string, unknown>; updated_at: string }>
   }>({ research_sources: [], github_state: [] })
+  // Phase 2C: CEO INBOX state
+  const [deliverables, setDeliverables] = useState<DeliverableRow[]>([])
+  const [selectedDeliverable, setSelectedDeliverable] = useState<DeliverableRow | null>(null)
+  const [detailContent, setDetailContent] = useState<Record<string, unknown> | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [reviewAction, setReviewAction] = useState<'idle' | 'approving' | 'revising' | 'rejecting'>('idle')
+  const [reviewFeedback, setReviewFeedback] = useState('')
+  const [reviewMode, setReviewMode] = useState<null | 'revise' | 'reject'>(null)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const [inboxOpen, setInboxOpen] = useState(true)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
@@ -186,10 +261,11 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
     let alive = true
     ;(async () => {
       try {
-        const [evR, acR, whR] = await Promise.all([
+        const [evR, acR, whR, dlR] = await Promise.all([
           fetch('/api/ai-hq/hq-events', { credentials: 'same-origin' }),
           fetch('/api/ai-hq/activity', { credentials: 'same-origin' }),
           fetch('/api/ai-hq/watch/health', { credentials: 'same-origin' }),
+          fetch('/api/ai-hq/deliverables', { credentials: 'same-origin' }),
         ])
         if (!alive) return
         if (evR.ok) {
@@ -203,6 +279,10 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
         if (whR.ok) {
           const j = await whR.json()
           setWatchHealth({ research_sources: j.research_sources ?? [], github_state: j.github_state ?? [] })
+        }
+        if (dlR.ok) {
+          const j = await dlR.json()
+          setDeliverables(j.deliverables ?? [])
         }
       } catch {
         /* best-effort */
@@ -234,6 +314,19 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
         /* ignore */
       }
     })
+    // Phase 2C: deliverable Realtime → CEO INBOX を live 更新
+    es.addEventListener('deliverable_insert', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data) as DeliverableRow
+        setDeliverables((prev) => (prev.some((d) => d.id === row.id) ? prev : [row, ...prev]))
+      } catch { /* ignore */ }
+    })
+    es.addEventListener('deliverable_update', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data) as DeliverableRow
+        setDeliverables((prev) => prev.map((d) => (d.id === row.id ? { ...d, ...row } : d)))
+      } catch { /* ignore */ }
+    })
     es.onerror = () => {
       // EventSource は自動再接続する。
     }
@@ -242,6 +335,103 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
       es.close()
     }
   }, [])
+
+  // Phase 2C: CEO INBOX の絞り込み。
+  const pendingDeliverables = useMemo(
+    () => deliverables.filter((d) => d.status === 'submitted').sort((a, b) => (a.submitted_at ?? '') < (b.submitted_at ?? '') ? 1 : -1),
+    [deliverables],
+  )
+  const recentlyApproved = useMemo(
+    () => deliverables.filter((d) => d.status === 'approved').sort((a, b) => (a.reviewed_at ?? '') < (b.reviewed_at ?? '') ? 1 : -1).slice(0, 5),
+    [deliverables],
+  )
+
+  async function openDeliverable(d: DeliverableRow) {
+    setSelectedDeliverable(d)
+    setDetailContent(null)
+    setReviewError(null)
+    setReviewMode(null)
+    setReviewFeedback('')
+    setDetailLoading(true)
+    try {
+      const res = await fetch(`/api/ai-hq/deliverables/${d.id}`, { credentials: 'same-origin' })
+      if (res.ok) {
+        const j = await res.json()
+        setDetailContent((j.deliverable?.content ?? null) as Record<string, unknown> | null)
+        // task metadata prefetch for revision cap display
+        if (j.deliverable?.task_id) {
+          try {
+            const tRes = await fetch(`/api/ai-hq/threads`, { credentials: 'same-origin' })
+            // task metadata は上位で握っていないため簡易 fetch (無ければ 0 扱い)
+            void tRes
+          } catch { /* ignore */ }
+        }
+      } else if (res.status === 404) {
+        setReviewError('deliverable not found')
+      }
+    } catch (err) {
+      setReviewError((err as Error).message)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+  function closeDetail() {
+    if (reviewAction !== 'idle') return // block during in-flight action
+    setSelectedDeliverable(null)
+    setDetailContent(null)
+    setReviewMode(null)
+    setReviewFeedback('')
+    setReviewError(null)
+  }
+
+  async function doReview(id: string, action: 'approve' | 'revise' | 'reject', feedback?: string) {
+    setReviewError(null)
+    setReviewAction(action === 'approve' ? 'approving' : action === 'revise' ? 'revising' : 'rejecting')
+    try {
+      const res = await fetch(`/api/ai-hq/deliverables/${id}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ action, feedback }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (res.status === 409 && j?.reason === 'revision_limit_reached') {
+          setReviewError('Revision limit reached (max 3)')
+        } else if (res.status === 409) {
+          setReviewError(`Already ${j?.reason ?? 'processed'}`)
+        } else {
+          setReviewError(j?.reason ?? `HTTP ${res.status}`)
+        }
+        return
+      }
+      // Success — close detail after short delay so Realtime UPDATE is reflected first
+      if (action === 'approve' || action === 'reject') {
+        setTimeout(() => closeDetail(), 200)
+      } else if (action === 'revise') {
+        setTimeout(() => {
+          // Fetch updated deliverable for v_next
+          if (j?.new_deliverable_id) {
+            fetch(`/api/ai-hq/deliverables/${j.new_deliverable_id}`, { credentials: 'same-origin' })
+              .then((r) => r.ok ? r.json() : null)
+              .then((jj) => {
+                if (jj?.deliverable) {
+                  setSelectedDeliverable(jj.deliverable as DeliverableRow)
+                  setDetailContent(jj.deliverable.content ?? null)
+                  setReviewMode(null)
+                  setReviewFeedback('')
+                }
+              })
+              .catch(() => {})
+          }
+        }, 300)
+      }
+    } catch (err) {
+      setReviewError((err as Error).message)
+    } finally {
+      setReviewAction('idle')
+    }
+  }
 
   async function refreshThreads() {
     try {
@@ -285,7 +475,254 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
   }
 
   return (
-    <div className="flex flex-col md:flex-row md:gap-4 h-[calc(100dvh-140px)] md:h-[calc(100vh-160px)] min-h-0 overflow-hidden">
+    <>
+      {/* Phase 2C: CEO INBOX — 承認待ちの仕事を最優先で表示 (mobile 上部固定) */}
+      <section className="mb-3">
+        <button
+          type="button"
+          onClick={() => setInboxOpen((v) => !v)}
+          aria-expanded={inboxOpen}
+          className="w-full flex items-center justify-between px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 hover:bg-neutral-850"
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-neutral-300 font-semibold">CEO INBOX</span>
+            {pendingDeliverables.length > 0 && (
+              <span className="text-xs bg-white text-neutral-900 rounded-full px-2 py-0.5 font-bold">{pendingDeliverables.length} pending</span>
+            )}
+            {pendingDeliverables.length === 0 && (
+              <span className="text-xs text-neutral-500">no pending</span>
+            )}
+          </span>
+          <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 text-neutral-400 transition-transform ${inboxOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {inboxOpen && (
+          <div className="mt-2 space-y-2">
+            {pendingDeliverables.length === 0 && (
+              <div className="text-xs text-neutral-500 px-2 py-3 border border-neutral-800 rounded-lg bg-neutral-900">
+                承認待ちの成果物はありません。 社員から仕事が上がってくるとここに表示されます。
+              </div>
+            )}
+            {pendingDeliverables.map((d) => {
+              const ag = AGENTS.find((a) => a.id === d.agent_id)
+              const typeShort = DELIVERABLE_UI[d.deliverable_type]?.short ?? d.deliverable_type
+              return (
+                <button
+                  key={d.id}
+                  onClick={() => openDeliverable(d)}
+                  className="w-full text-left p-3 border border-neutral-700 rounded-lg bg-neutral-900 hover:bg-neutral-850"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`shrink-0 w-8 h-8 rounded-full ${ag?.color ?? 'bg-neutral-500'} text-xs font-bold flex items-center justify-center`}>
+                      {(ag?.name ?? d.agent_id).slice(0, 1)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-neutral-100 font-semibold">{ag?.name ?? d.agent_id}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">{typeShort}</span>
+                        <span className="text-[10px] text-neutral-500">v{d.version}</span>
+                        {d.review_notes && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300">JURIN reviewed</span>
+                        )}
+                      </div>
+                      <div className="text-sm text-neutral-200 mt-0.5 break-words">{d.title}</div>
+                      <div className="text-xs text-neutral-500 mt-1 line-clamp-2">{d.summary}</div>
+                      <div className="text-[10px] text-neutral-600 mt-1">
+                        {d.submitted_at ? new Date(d.submitted_at).toLocaleString('ja-JP') : '—'}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs text-neutral-400 self-center">Review →</span>
+                  </div>
+                </button>
+              )
+            })}
+            {recentlyApproved.length > 0 && (
+              <div className="mt-3">
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 px-1">RECENTLY APPROVED</div>
+                <div className="space-y-1">
+                  {recentlyApproved.map((d) => {
+                    const ag = AGENTS.find((a) => a.id === d.agent_id)
+                    const typeShort = DELIVERABLE_UI[d.deliverable_type]?.short ?? d.deliverable_type
+                    return (
+                      <button
+                        key={d.id}
+                        onClick={() => openDeliverable(d)}
+                        className="w-full text-left px-2 py-1.5 border border-neutral-800 rounded bg-neutral-950 hover:bg-neutral-900 text-xs"
+                      >
+                        <span className={`inline-block w-4 h-4 rounded-full ${ag?.color ?? 'bg-neutral-500'} align-middle mr-2`} />
+                        <span className="text-neutral-300">{ag?.name ?? d.agent_id}</span>
+                        <span className="text-neutral-500 mx-2">/</span>
+                        <span className="text-neutral-400">{typeShort}</span>
+                        <span className="text-neutral-500 mx-2">/</span>
+                        <span className="text-neutral-500">{d.title.slice(0, 60)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Deliverable detail modal (mobile-friendly full-screen sheet on <md, centered on md+) */}
+      {selectedDeliverable && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4" role="dialog" aria-modal="true">
+          <div className="w-full md:max-w-2xl md:rounded-lg bg-neutral-950 border border-neutral-700 flex flex-col max-h-[100dvh] md:max-h-[90vh]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div className="flex items-start justify-between p-4 border-b border-neutral-800 sticky top-0 bg-neutral-950">
+              <div className="flex-1 min-w-0 pr-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">
+                    {DELIVERABLE_UI[selectedDeliverable.deliverable_type]?.short ?? selectedDeliverable.deliverable_type}
+                  </span>
+                  <span className="text-[10px] text-neutral-500">v{selectedDeliverable.version}</span>
+                  <span className="text-[10px] text-neutral-500">
+                    by {AGENTS.find((a) => a.id === selectedDeliverable.agent_id)?.name ?? selectedDeliverable.agent_id}
+                  </span>
+                </div>
+                <div className="text-base font-semibold text-neutral-100 mt-1 break-words">{selectedDeliverable.title}</div>
+              </div>
+              <button
+                onClick={closeDetail}
+                disabled={reviewAction !== 'idle'}
+                aria-label="Close"
+                className="shrink-0 h-10 w-10 flex items-center justify-center text-neutral-400 hover:text-neutral-200 disabled:opacity-40"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {detailLoading && <div className="text-sm text-neutral-500">Loading…</div>}
+              {!detailLoading && detailContent && (
+                <>
+                  {DELIVERABLE_UI[selectedDeliverable.deliverable_type]?.fields.map((f) => (
+                    <div key={f}>
+                      <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">
+                        {DELIVERABLE_UI[selectedDeliverable.deliverable_type].labels[f] ?? f}
+                      </div>
+                      <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words leading-relaxed">
+                        {String(detailContent[f] ?? '—')}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+              {selectedDeliverable.review_notes && (
+                <div className="mt-2 p-2 rounded border border-emerald-900 bg-emerald-950/30">
+                  <div className="text-[10px] uppercase tracking-widest text-emerald-400 mb-1">JURIN INTERNAL REVIEW</div>
+                  <div className="text-xs text-neutral-200 whitespace-pre-wrap">{selectedDeliverable.review_notes}</div>
+                </div>
+              )}
+            </div>
+            {/* Review controls */}
+            <div className="border-t border-neutral-800 p-3 space-y-2 sticky bottom-0 bg-neutral-950">
+              {reviewError && (
+                <div className="text-xs text-red-400 px-1">{reviewError}</div>
+              )}
+              {selectedDeliverable.status !== 'submitted' && (
+                <div className="text-xs text-neutral-500 px-1">
+                  status: <span className="text-neutral-300">{selectedDeliverable.status}</span>
+                  {selectedDeliverable.status === 'approved' || selectedDeliverable.status === 'rejected' ? ' — review closed' : ''}
+                </div>
+              )}
+              {selectedDeliverable.status === 'submitted' && reviewMode === null && (
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => {
+                      if (confirm('Approve this deliverable? (external execution is NOT triggered)')) {
+                        doReview(selectedDeliverable.id, 'approve')
+                      }
+                    }}
+                    disabled={reviewAction !== 'idle'}
+                    className="min-h-[44px] bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded disabled:bg-neutral-700"
+                  >
+                    {reviewAction === 'approving' ? 'Approving…' : 'Approve'}
+                  </button>
+                  <button
+                    onClick={() => { setReviewMode('revise'); setReviewFeedback('') }}
+                    disabled={reviewAction !== 'idle'}
+                    className="min-h-[44px] bg-neutral-100 hover:bg-white text-neutral-900 text-sm font-medium rounded disabled:bg-neutral-700 disabled:text-neutral-400"
+                  >
+                    Revise
+                  </button>
+                  <button
+                    onClick={() => { setReviewMode('reject'); setReviewFeedback('') }}
+                    disabled={reviewAction !== 'idle'}
+                    className="min-h-[44px] bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded disabled:bg-neutral-700"
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
+              {reviewMode === 'revise' && (
+                <div className="space-y-2">
+                  <label className="text-xs text-neutral-400">Revision feedback (required)</label>
+                  <textarea
+                    value={reviewFeedback}
+                    onChange={(e) => setReviewFeedback(e.target.value)}
+                    rows={3}
+                    placeholder="どこをどう直してほしいか短く。EXECUTE 系の依頼 (push, merge, 課金操作) は反映されません。"
+                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-base md:text-sm text-neutral-100 resize-none focus:outline-none focus:border-neutral-500"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setReviewMode(null)}
+                      disabled={reviewAction !== 'idle'}
+                      className="min-h-[44px] bg-neutral-800 text-neutral-200 text-sm rounded disabled:bg-neutral-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => reviewFeedback.trim().length > 0 && doReview(selectedDeliverable.id, 'revise', reviewFeedback.trim())}
+                      disabled={reviewAction !== 'idle' || reviewFeedback.trim().length === 0}
+                      className="min-h-[44px] bg-neutral-100 text-neutral-900 text-sm font-medium rounded disabled:bg-neutral-700 disabled:text-neutral-400"
+                    >
+                      {reviewAction === 'revising' ? 'Creating revision…' : 'Submit revision'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {reviewMode === 'reject' && (
+                <div className="space-y-2">
+                  <label className="text-xs text-neutral-400">Reject reason (optional)</label>
+                  <textarea
+                    value={reviewFeedback}
+                    onChange={(e) => setReviewFeedback(e.target.value)}
+                    rows={2}
+                    placeholder="却下理由 (任意)"
+                    className="w-full bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-base md:text-sm text-neutral-100 resize-none focus:outline-none focus:border-neutral-500"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setReviewMode(null)}
+                      disabled={reviewAction !== 'idle'}
+                      className="min-h-[44px] bg-neutral-800 text-neutral-200 text-sm rounded disabled:bg-neutral-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm('Reject this deliverable? Task will be cancelled.')) {
+                          doReview(selectedDeliverable.id, 'reject', reviewFeedback.trim())
+                        }
+                      }}
+                      disabled={reviewAction !== 'idle'}
+                      className="min-h-[44px] bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded disabled:bg-neutral-700"
+                    >
+                      {reviewAction === 'rejecting' ? 'Rejecting…' : 'Confirm reject'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+    <div className="flex flex-col md:flex-row md:gap-4 h-[calc(100dvh-220px)] md:h-[calc(100vh-240px)] min-h-0 overflow-hidden">
       {/* AI TEAM — Desktop: 左固定カラム / Mobile: 上部の折りたたみパネル */}
       <aside className="md:w-56 md:shrink-0 md:h-full md:overflow-y-auto md:border md:border-neutral-800 md:rounded-lg md:p-3 mb-2 md:mb-0">
         {/* Mobile 折りたたみ toggle */}
@@ -608,5 +1045,6 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
         </div>
       </section>
     </div>
+    </>
   )
 }

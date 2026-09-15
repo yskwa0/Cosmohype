@@ -93,12 +93,14 @@ export const DRAFT_DECISION: ToolDef = {
 
 /// draft_task — actionable task を agent_tasks に DRAFT として保存する。
 /// requires_approval = true default = 実行には人間承認が必要 (Phase 2 で実行 handler 追加)。
+/// Phase 2C: deliverable_type を任意指定すると、meeting 終了後に担当 agent が
+/// 対応する Draft 成果物を生成し、CEO Inbox へ提出する。
 export const DRAFT_TASK: ToolDef = {
   type: 'function',
   function: {
     name: 'draft_task',
     description:
-      'JURIN が Decision の結果として actionable task を agent_tasks に DRAFT する。 実行 (EXECUTE) は人間承認が必要。',
+      'JURIN が Decision の結果として actionable task を agent_tasks に DRAFT する。 実行 (EXECUTE) は人間承認が必要。 deliverable_type を指定すると、後段で担当 agent が対応する Draft 成果物 (企画/UX案/技術方針/etc) を作成する。',
     parameters: {
       type: 'object',
       properties: {
@@ -109,6 +111,20 @@ export const DRAFT_TASK: ToolDef = {
           enum: ['jurin', 'chisa', 'hinata', 'harvey', 'juria', 'maya', 'cocona'],
         },
         priority: { type: 'integer', minimum: 1, maximum: 5, default: 3 },
+        deliverable_type: {
+          type: 'string',
+          enum: [
+            'social_content_draft',
+            'growth_experiment',
+            'ux_proposal',
+            'engineering_plan',
+            'research_brief',
+            'business_case',
+            'executive_brief',
+          ],
+          description:
+            'Task の成果物として担当 agent が Draft を作る場合に指定。 未指定なら Task のみ (「様子を見る」「次回確認」等)。 agent と type の整合性は server-side で検証される (例: HINATA は engineering_plan のみ)。',
+        },
       },
       required: ['title'],
       additionalProperties: false,

@@ -76,7 +76,26 @@ export async function GET(req: NextRequest) {
         )
         .subscribe()
 
-      channels = [ev, ac]
+      // Phase 2C: deliverables channel (CEO INBOX live 反映)
+      const dl = admin
+        .channel('aihq-deliverables')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'agent_deliverables' },
+          (payload) => {
+            write(`event: deliverable_insert\ndata: ${JSON.stringify(payload.new)}\n\n`)
+          },
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'agent_deliverables' },
+          (payload) => {
+            write(`event: deliverable_update\ndata: ${JSON.stringify(payload.new)}\n\n`)
+          },
+        )
+        .subscribe()
+
+      channels = [ev, ac, dl]
       heartbeat = setInterval(() => write(`: hb\n\n`), 15_000)
 
       const signal = req.signal

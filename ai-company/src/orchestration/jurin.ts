@@ -23,6 +23,7 @@ import { longTermMemory, formatMemoryForPrompt } from '../memory/longterm'
 import { runManagerTurn } from './turn'
 import type { ChatMessage } from '../providers/openai'
 import { setAgentStatus, resetToIdle } from '../activity'
+import { generateDeliverablesForRecentTasks } from '../deliverables/post-meeting'
 
 export interface RunJurinParams {
   admin: AiHqSupabase
@@ -143,11 +144,22 @@ ${formatMemoryForPrompt(memory)}
     .update({ updated_at: new Date().toISOString() })
     .eq('id', params.threadId)
 
+  // Phase 2C: 会議中に deliverable_required=true で作られた Task に対して Draft を生成。
+  // Failure isolation: Deliverable 生成失敗が meeting/Decision/Task を巻き戻さない。
+  let deliverableSummary: { tasks_considered: number; deliverables_generated: number; deliverables_failed: number; jurin_reviewed: number } | null = null
+  try {
+    deliverableSummary = await generateDeliverablesForRecentTasks(params.admin, params.threadId)
+  } catch (err) {
+    console.error('[ai-company/jurin] deliverable post-hook error', err)
+  }
+
   return {
     ok: true,
     threadId: params.threadId,
     toolCallsExecuted: result.toolCallsExecuted,
     reasoningModelUsed: useReasoning,
     finalText: result.finalText,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...(deliverableSummary ? { deliverables: deliverableSummary } : {}) as any,
   }
 }
