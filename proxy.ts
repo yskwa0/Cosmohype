@@ -57,11 +57,19 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/cosmohype-admin/') ||
     pathname === '/brand-admin' ||
     pathname.startsWith('/brand-admin/')
-  if (isAdminPath) {
+  // /ai-hq/<secret> は URL-secrecy に依存する owner 専用ページ。
+  // 検索エンジン / preview / archive を全て抑止し、accessKey の外部流出経路を減らす。
+  const isAiHqPath = pathname === '/ai-hq' || pathname.startsWith('/ai-hq/')
+  if (isAdminPath || isAiHqPath) {
     supabaseResponse.headers.set(
       'X-Robots-Tag',
       'noindex, nofollow, noarchive, nosnippet, noimageindex',
     )
+  }
+  // /ai-hq/<secret> は Referer header 経由で accessKey が外部サイトへ漏れうる。
+  // strict-origin により、外部リンクへ遷移した際に referer から secret を落とす。
+  if (isAiHqPath) {
+    supabaseResponse.headers.set('Referrer-Policy', 'no-referrer')
   }
 
   // Suspension check — only for logged-in users accessing protected paths.
