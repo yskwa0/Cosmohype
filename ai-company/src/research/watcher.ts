@@ -75,20 +75,25 @@ export async function runResearchWatch(admin: AiHqSupabase): Promise<ResearchRun
 
   for (const s of srcList) {
     const r = await fetchSource(s)
+    const fetchOk = r.status === 'ok_new' || r.status === 'ok_no_change' || r.status === 'not_modified'
     if (r.status === 'network_error' || r.status === 'parse_error') result.sources_failed++
     else if (r.status !== 'disabled') result.sources_ok++
 
     const already = await isInitialized(admin, s.id)
     const isBaseline = !already
-    const { insertedIds } = await applyFetchResult(admin, r, { isBaseline })
-    if (isBaseline) {
+    // fetch 失敗時は初期化 marker を作らず、items も挿入しない (applyFetchResult は
+    // source metadata 更新のみ実行、item は 0 件返す)。
+    // これにより Hypebeast の 403 のような一時失敗で「baseline 済」と誤認しなくなる。
+    const { insertedIds } = await applyFetchResult(admin, r, { isBaseline: isBaseline && fetchOk })
+    if (isBaseline && fetchOk) {
       result.baseline_items += insertedIds.length
-      // baseline 化を marker として保存 (item 数 0 でも初期化済とする)
+      // baseline 化を marker として保存 (item 数 0 でも fetch 成功なら初期化済扱い)
       await markInitialized(admin, s.id, insertedIds.length)
-    } else {
+    } else if (!isBaseline) {
       result.new_items += insertedIds.length
       insertedThisRun.push(...insertedIds)
     }
+    // isBaseline && !fetchOk: marker 作らない、次回リトライ時に再度 baseline 経路へ入る
 
     // 3-fail health event (once per streak)
     const health = await maybeEmitHealthEvent(admin, {
