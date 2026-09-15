@@ -170,6 +170,29 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
     research_sources: Array<{ name: string; enabled: boolean; last_checked_at: string | null; last_success_at: string | null; consecutive_failures: number; last_error: string | null }>
     github_state: Array<{ key: string; value: Record<string, unknown>; updated_at: string }>
   }>({ research_sources: [], github_state: [] })
+  // Phase 3A.1: EXECUTION INBOX state
+  const [executions, setExecutions] = useState<Array<{
+    id: string
+    deliverable_id: string | null
+    task_id: string | null
+    agent_id: AgentId
+    execution_type: 'github_issue_create'
+    title: string
+    summary: string
+    risk_level: 'low' | 'medium' | 'high' | 'critical'
+    status: 'draft' | 'waiting_for_approval' | 'approved' | 'executing' | 'succeeded' | 'failed' | 'cancelled' | 'expired'
+    expires_at: string
+    result?: { external_id?: string; external_url?: string; executed_at?: string; duplicate_found?: boolean } | null
+    failure_reason?: string | null
+    approved_by_ceo_at?: string | null
+    executed_at?: string | null
+    created_at: string
+  }>>([])
+  const [inboxExecOpen, setInboxExecOpen] = useState(true)
+  const [selectedExec, setSelectedExec] = useState<typeof executions[0] | null>(null)
+  const [execDetailPayload, setExecDetailPayload] = useState<Record<string, unknown> | null>(null)
+  const [execAction, setExecAction] = useState<'idle' | 'executing' | 'rejecting'>('idle')
+  const [execError, setExecError] = useState<string | null>(null)
   // Phase 2C: CEO INBOX state
   const [deliverables, setDeliverables] = useState<DeliverableRow[]>([])
   const [selectedDeliverable, setSelectedDeliverable] = useState<DeliverableRow | null>(null)
@@ -261,11 +284,12 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
     let alive = true
     ;(async () => {
       try {
-        const [evR, acR, whR, dlR] = await Promise.all([
+        const [evR, acR, whR, dlR, exR] = await Promise.all([
           fetch('/api/ai-hq/hq-events', { credentials: 'same-origin' }),
           fetch('/api/ai-hq/activity', { credentials: 'same-origin' }),
           fetch('/api/ai-hq/watch/health', { credentials: 'same-origin' }),
           fetch('/api/ai-hq/deliverables', { credentials: 'same-origin' }),
+          fetch('/api/ai-hq/executions', { credentials: 'same-origin' }),
         ])
         if (!alive) return
         if (evR.ok) {
@@ -283,6 +307,10 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
         if (dlR.ok) {
           const j = await dlR.json()
           setDeliverables(j.deliverables ?? [])
+        }
+        if (exR.ok) {
+          const j = await exR.json()
+          setExecutions(j.executions ?? [])
         }
       } catch {
         /* best-effort */
@@ -327,6 +355,19 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
         setDeliverables((prev) => prev.map((d) => (d.id === row.id ? { ...d, ...row } : d)))
       } catch { /* ignore */ }
     })
+    // Phase 3A.1: execution Realtime
+    es.addEventListener('execution_insert', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data)
+        setExecutions((prev) => (prev.some((e) => e.id === row.id) ? prev : [row, ...prev]))
+      } catch { /* ignore */ }
+    })
+    es.addEventListener('execution_update', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data)
+        setExecutions((prev) => prev.map((e) => (e.id === row.id ? { ...e, ...row } : e)))
+      } catch { /* ignore */ }
+    })
     es.onerror = () => {
       // EventSource は自動再接続する。
     }
@@ -335,6 +376,84 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
       es.close()
     }
   }, [])
+
+  // Phase 3A.1: EXECUTION INBOX helpers
+  const pendingExecutions = useMemo(
+    () => executions.filter((e) => e.status === 'waiting_for_approval').sort((a, b) => a.created_at < b.created_at ? 1 : -1),
+    [executions],
+  )
+  const recentExecutionResults = useMemo(
+    () => executions.filter((e) => e.status === 'succeeded' || e.status === 'failed' || e.status === 'cancelled' || e.status === 'expired').sort((a, b) => a.created_at < b.created_at ? 1 : -1).slice(0, 5),
+    [executions],
+  )
+
+  async function openExecution(e: typeof executions[0]) {
+    setSelectedExec(e)
+    setExecDetailPayload(null)
+    setExecError(null)
+    try {
+      const res = await fetch(`/api/ai-hq/executions/${e.id}`, { credentials: 'same-origin' })
+      if (res.ok) {
+        const j = await res.json()
+        setExecDetailPayload((j.execution?.payload as Record<string, unknown>) ?? null)
+      }
+    } catch { /* best-effort */ }
+  }
+  function closeExecution() {
+    if (execAction !== 'idle') return
+    setSelectedExec(null)
+    setExecDetailPayload(null)
+    setExecError(null)
+  }
+  async function doExecuteApprove() {
+    if (!selectedExec) return
+    if (!confirm('This will create 1 GitHub Issue. No code changes, no merge, no deploy. Proceed?')) return
+    setExecError(null)
+    setExecAction('executing')
+    try {
+      const res = await fetch(`/api/ai-hq/executions/${selectedExec.id}/approve-execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({}),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        if (res.status === 410) setExecError('This request has expired. Please recreate.')
+        else if (res.status === 409) setExecError(`Cannot execute: ${j?.error ?? 'already processed'}`)
+        else if (res.status === 403) setExecError(`Rejected: ${j?.error ?? 'forbidden'}`)
+        else setExecError(j?.failure_reason ?? j?.error ?? `HTTP ${res.status}`)
+        return
+      }
+      // Success — leave modal open briefly to show result then close
+      setTimeout(() => closeExecution(), 500)
+    } catch (err) {
+      setExecError((err as Error).message)
+    } finally {
+      setExecAction('idle')
+    }
+  }
+  async function doExecuteReject() {
+    if (!selectedExec) return
+    if (!confirm('Reject this execution request? It will not be executed.')) return
+    setExecError(null)
+    setExecAction('rejecting')
+    try {
+      const res = await fetch(`/api/ai-hq/executions/${selectedExec.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({}),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setExecError(j?.error ?? `HTTP ${res.status}`); return }
+      setTimeout(() => closeExecution(), 300)
+    } catch (err) {
+      setExecError((err as Error).message)
+    } finally {
+      setExecAction('idle')
+    }
+  }
 
   // Phase 2C: CEO INBOX の絞り込み。
   const pendingDeliverables = useMemo(
@@ -565,6 +684,199 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
           </div>
         )}
       </section>
+
+      {/* Phase 3A.1: EXECUTION INBOX — CEO INBOX の下、AUTO ACTIVITY の上 */}
+      <section className="mb-3">
+        <button
+          type="button"
+          onClick={() => setInboxExecOpen((v) => !v)}
+          aria-expanded={inboxExecOpen}
+          className="w-full flex items-center justify-between px-3 py-2 border border-amber-700/40 rounded-lg bg-amber-950/20 hover:bg-amber-900/30"
+        >
+          <span className="flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-amber-300 font-semibold">EXECUTION INBOX</span>
+            {pendingExecutions.length > 0 ? (
+              <span className="text-xs bg-amber-400 text-neutral-900 rounded-full px-2 py-0.5 font-bold">{pendingExecutions.length} pending</span>
+            ) : (
+              <span className="text-xs text-neutral-500">no pending</span>
+            )}
+          </span>
+          <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 text-amber-400 transition-transform ${inboxExecOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {inboxExecOpen && (
+          <div className="mt-2 space-y-2">
+            {pendingExecutions.length === 0 && (
+              <div className="text-xs text-neutral-500 px-2 py-3 border border-neutral-800 rounded-lg bg-neutral-900">
+                実行承認待ちのアクションはありません。 engineering_plan の Draft を Approve すると GitHub Issue 作成の提案がここに出ます。
+              </div>
+            )}
+            {pendingExecutions.map((e) => {
+              const ag = AGENTS.find((a) => a.id === e.agent_id)
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => openExecution(e)}
+                  className="w-full text-left p-3 border border-amber-700/40 rounded-lg bg-neutral-900 hover:bg-neutral-850"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={`shrink-0 w-8 h-8 rounded-full ${ag?.color ?? 'bg-neutral-500'} text-xs font-bold flex items-center justify-center`}>
+                      {(ag?.name ?? e.agent_id).slice(0, 1)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-neutral-100 font-semibold">{ag?.name ?? e.agent_id}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">
+                          {e.execution_type === 'github_issue_create' ? 'Create GitHub Issue' : e.execution_type}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${e.risk_level === 'low' ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
+                          Risk: {e.risk_level.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="text-sm text-neutral-200 mt-0.5 break-words">{e.title}</div>
+                      <div className="text-xs text-neutral-500 mt-1 line-clamp-2">{e.summary}</div>
+                      <div className="text-[10px] text-neutral-600 mt-1">
+                        Expires: {new Date(e.expires_at).toLocaleString('ja-JP')}
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs text-amber-400 self-center">Review →</span>
+                  </div>
+                </button>
+              )
+            })}
+            {recentExecutionResults.length > 0 && (
+              <div className="mt-3">
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 px-1">RECENT EXECUTIONS</div>
+                <div className="space-y-1">
+                  {recentExecutionResults.map((e) => {
+                    const ag = AGENTS.find((a) => a.id === e.agent_id)
+                    const icon = e.status === 'succeeded' ? '✓' : e.status === 'failed' ? '✗' : e.status === 'expired' ? '⌛' : '✕'
+                    const color = e.status === 'succeeded' ? 'text-emerald-400' : e.status === 'failed' ? 'text-red-400' : 'text-neutral-500'
+                    return (
+                      <button
+                        key={e.id}
+                        onClick={() => openExecution(e)}
+                        className="w-full text-left px-2 py-1.5 border border-neutral-800 rounded bg-neutral-950 hover:bg-neutral-900 text-xs"
+                      >
+                        <span className={`${color} mr-2`}>{icon}</span>
+                        <span className="text-neutral-300">{ag?.name ?? e.agent_id}</span>
+                        <span className="text-neutral-500 mx-2">/</span>
+                        <span className="text-neutral-400">{e.status}</span>
+                        <span className="text-neutral-500 mx-2">/</span>
+                        <span className="text-neutral-500">{e.title.slice(0, 60)}</span>
+                        {e.result?.external_url && (
+                          <a href={e.result.external_url} target="_blank" rel="noreferrer" className="ml-2 text-amber-400 underline" onClick={(ev) => ev.stopPropagation()}>#{e.result.external_id}</a>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Execution detail modal */}
+      {selectedExec && (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4" role="dialog" aria-modal="true">
+          <div className="w-full md:max-w-2xl md:rounded-lg bg-neutral-950 border border-amber-700/50 flex flex-col max-h-[100dvh] md:max-h-[90vh]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+            <div className="flex items-start justify-between p-4 border-b border-neutral-800 sticky top-0 bg-neutral-950">
+              <div className="flex-1 min-w-0 pr-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">
+                    {selectedExec.execution_type === 'github_issue_create' ? 'Create GitHub Issue' : selectedExec.execution_type}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Risk: {selectedExec.risk_level.toUpperCase()}</span>
+                  <span className="text-[10px] text-neutral-500">
+                    by {AGENTS.find((a) => a.id === selectedExec.agent_id)?.name ?? selectedExec.agent_id}
+                  </span>
+                </div>
+                <div className="text-base font-semibold text-neutral-100 mt-1 break-words">{selectedExec.title}</div>
+                <div className="text-[10px] text-neutral-500 mt-1">Expires: {new Date(selectedExec.expires_at).toLocaleString('ja-JP')}</div>
+              </div>
+              <button onClick={closeExecution} disabled={execAction !== 'idle'} aria-label="Close" className="shrink-0 h-10 w-10 flex items-center justify-center text-neutral-400 hover:text-neutral-200 disabled:opacity-40">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {execDetailPayload && (
+                <>
+                  <div className="p-3 rounded border border-emerald-900 bg-emerald-950/20">
+                    <div className="text-[10px] uppercase tracking-widest text-emerald-400 mb-1">THIS WILL:</div>
+                    <div className="text-sm text-neutral-100">
+                      Create <span className="font-semibold">1 GitHub Issue</span> in <span className="font-mono text-emerald-300">{String(execDetailPayload.owner ?? '?')}/{String(execDetailPayload.repo ?? '?')}</span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded border border-red-900 bg-red-950/20">
+                    <div className="text-[10px] uppercase tracking-widest text-red-400 mb-1">THIS WILL NOT:</div>
+                    <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-0.5">
+                      <li>change code</li>
+                      <li>push commits</li>
+                      <li>merge anything</li>
+                      <li>deploy anything</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">TITLE</div>
+                    <div className="text-sm text-neutral-100 break-words">{String(execDetailPayload.title ?? '')}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">BODY PREVIEW</div>
+                    <pre className="text-xs text-neutral-200 whitespace-pre-wrap break-words leading-relaxed bg-neutral-900 p-2 rounded border border-neutral-800 max-h-72 overflow-y-auto">{String(execDetailPayload.body ?? '')}</pre>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">LABELS</div>
+                    <div className="flex gap-1 flex-wrap">
+                      {(execDetailPayload.labels as string[] ?? []).map((l) => (
+                        <span key={l} className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">{l}</span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              {selectedExec.status !== 'waiting_for_approval' && (
+                <div className="p-2 rounded border border-neutral-800 bg-neutral-900">
+                  <div className="text-[10px] text-neutral-500 uppercase mb-1">STATUS</div>
+                  <div className="text-sm text-neutral-200">{selectedExec.status}</div>
+                  {selectedExec.result?.external_url && (
+                    <a href={selectedExec.result.external_url} target="_blank" rel="noreferrer" className="text-xs text-amber-400 underline mt-1 inline-block">
+                      Issue #{selectedExec.result.external_id} →
+                    </a>
+                  )}
+                  {selectedExec.failure_reason && (
+                    <div className="text-xs text-red-400 mt-1 break-words">Reason: {selectedExec.failure_reason}</div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-neutral-800 p-3 space-y-2 sticky bottom-0 bg-neutral-950">
+              {execError && <div className="text-xs text-red-400 px-1 break-words">{execError}</div>}
+              {selectedExec.status === 'waiting_for_approval' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={doExecuteReject}
+                    disabled={execAction !== 'idle'}
+                    className="min-h-[44px] bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded disabled:bg-neutral-700"
+                  >
+                    {execAction === 'rejecting' ? 'Rejecting…' : 'Reject'}
+                  </button>
+                  <button
+                    onClick={doExecuteApprove}
+                    disabled={execAction !== 'idle'}
+                    className="min-h-[44px] bg-amber-500 hover:bg-amber-400 text-neutral-900 text-sm font-bold rounded disabled:bg-neutral-700 disabled:text-neutral-400"
+                  >
+                    {execAction === 'executing' ? 'Executing…' : 'Approve & Execute'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Deliverable detail modal (mobile-friendly full-screen sheet on <md, centered on md+) */}
       {selectedDeliverable && (

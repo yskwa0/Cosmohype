@@ -95,7 +95,26 @@ export async function GET(req: NextRequest) {
         )
         .subscribe()
 
-      channels = [ev, ac, dl]
+      // Phase 3A.1: execution requests (EXECUTION INBOX live 反映)
+      const exch = admin
+        .channel('aihq-executions')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'agent_execution_requests' },
+          (payload) => {
+            write(`event: execution_insert\ndata: ${JSON.stringify(payload.new)}\n\n`)
+          },
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'agent_execution_requests' },
+          (payload) => {
+            write(`event: execution_update\ndata: ${JSON.stringify(payload.new)}\n\n`)
+          },
+        )
+        .subscribe()
+
+      channels = [ev, ac, dl, exch]
       heartbeat = setInterval(() => write(`: hb\n\n`), 15_000)
 
       const signal = req.signal

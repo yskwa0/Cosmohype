@@ -80,6 +80,16 @@ export async function reviewDeliverable(input: ReviewInput): Promise<ReviewResul
         .update({ status: 'done', updated_at: now })
         .eq('id', del.task_id)
     }
+    // Phase 3A.1: engineering_plan approve → github_issue_create の execution_request を auto-propose。
+    // GitHub API はまだ呼ばない (Approve Draft と Approve & Execute は完全分離)。
+    if (del.deliverable_type === 'engineering_plan') {
+      try {
+        const { proposeExecutionForApprovedDeliverable } = await import('../executions/proposer')
+        await proposeExecutionForApprovedDeliverable(input.admin, del.id)
+      } catch (err) {
+        console.error('[reviewer] execution proposal failed', err)
+      }
+    }
     return { ok: true, status: 200 }
   }
 
