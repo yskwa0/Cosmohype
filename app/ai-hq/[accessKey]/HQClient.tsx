@@ -101,6 +101,10 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
   const [agentStatuses, setAgentStatuses] = useState<
     Array<{ agent_id: string; status: string; current_thread_id: string | null; updated_at: string }>
   >([])
+  const [watchHealth, setWatchHealth] = useState<{
+    research_sources: Array<{ name: string; enabled: boolean; last_checked_at: string | null; last_success_at: string | null; consecutive_failures: number; last_error: string | null }>
+    github_state: Array<{ key: string; value: Record<string, unknown>; updated_at: string }>
+  }>({ research_sources: [], github_state: [] })
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
@@ -182,9 +186,10 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
     let alive = true
     ;(async () => {
       try {
-        const [evR, acR] = await Promise.all([
+        const [evR, acR, whR] = await Promise.all([
           fetch('/api/ai-hq/hq-events', { credentials: 'same-origin' }),
           fetch('/api/ai-hq/activity', { credentials: 'same-origin' }),
+          fetch('/api/ai-hq/watch/health', { credentials: 'same-origin' }),
         ])
         if (!alive) return
         if (evR.ok) {
@@ -194,6 +199,10 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
         if (acR.ok) {
           const j = await acR.json()
           setAgentStatuses(j.activity ?? [])
+        }
+        if (whR.ok) {
+          const j = await whR.json()
+          setWatchHealth({ research_sources: j.research_sources ?? [], github_state: j.github_state ?? [] })
         }
       } catch {
         /* best-effort */
@@ -374,6 +383,65 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                   ))}
                 </ul>
               </div>
+              {/* Watch status (Phase 2B) */}
+              {(watchHealth.research_sources.length > 0 || watchHealth.github_state.length > 0) && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 mt-2">
+                    WATCH STATUS
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    {watchHealth.research_sources.length > 0 && (
+                      <div className="p-1.5 rounded border border-neutral-800 bg-neutral-900">
+                        <div className="flex justify-between">
+                          <span className="text-neutral-300">MAYA Research</span>
+                          <span className="text-neutral-500">
+                            {watchHealth.research_sources.filter((s) => s.enabled).length}/{watchHealth.research_sources.length} enabled
+                          </span>
+                        </div>
+                        {(() => {
+                          const failing = watchHealth.research_sources.filter((s) => s.consecutive_failures >= 1)
+                          const latest = watchHealth.research_sources
+                            .filter((s) => s.last_checked_at)
+                            .sort((a, b) => (a.last_checked_at! < b.last_checked_at! ? 1 : -1))[0]
+                          return (
+                            <div className="text-[10px] text-neutral-500 mt-0.5">
+                              {latest ? `last: ${new Date(latest.last_checked_at!).toLocaleTimeString('ja-JP')}` : 'not yet'}
+                              {failing.length > 0 && (
+                                <span className="ml-2 text-red-400">failing: {failing.length}</span>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+                    {watchHealth.github_state.length > 0 && (
+                      <div className="p-1.5 rounded border border-neutral-800 bg-neutral-900">
+                        <div className="flex justify-between">
+                          <span className="text-neutral-300">HINATA GitHub</span>
+                          {(() => {
+                            const h = watchHealth.github_state.find((s) => s.key === 'health:github')
+                            const failCount = (h?.value?.count as number) ?? 0
+                            return failCount > 0 ? (
+                              <span className="text-red-400 text-[10px]">failing: {failCount}</span>
+                            ) : (
+                              <span className="text-neutral-500 text-[10px]">healthy</span>
+                            )
+                          })()}
+                        </div>
+                        {(() => {
+                          const g = watchHealth.github_state.find((s) => s.key === 'github')
+                          return g?.updated_at ? (
+                            <div className="text-[10px] text-neutral-500 mt-0.5">
+                              last: {new Date(g.updated_at).toLocaleTimeString('ja-JP')}
+                            </div>
+                          ) : null
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Recent events */}
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 mt-2">

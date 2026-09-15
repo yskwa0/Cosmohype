@@ -34,9 +34,19 @@ export const longTermMemory: LongTermMemoryRepository = {
     if (params.category) q = q.eq('category', params.category)
     if (params.tags && params.tags.length > 0) q = q.overlaps('tags', params.tags)
     if (params.keyword && params.keyword.trim().length >= 2) {
-      // pg_trgm ILIKE (title + content にヒットさせる)
-      const kw = `%${params.keyword.trim()}%`
-      q = q.or(`title.ilike.${kw},content.ilike.${kw}`)
+      // pg_trgm ILIKE (title + content にヒットさせる)。
+      // PostgREST .or() filter は改行 / カンマ / 括弧などで parse 破綻するため、
+      // 危険文字を除去し 60 文字に切る (Round 2 hardening)。
+      const safe = params.keyword
+        .trim()
+        .replace(/[\n\r\t,()"'*%]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60)
+      if (safe.length >= 2) {
+        const kw = `%${safe}%`
+        q = q.or(`title.ilike.${kw},content.ilike.${kw}`)
+      }
     }
 
     const { data, error } = await q
