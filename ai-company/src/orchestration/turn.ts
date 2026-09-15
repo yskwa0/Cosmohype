@@ -16,6 +16,7 @@ import {
   type HandlerContext,
 } from '../tools/handlers'
 import { callSpecialistOnce } from './specialist'
+import { logUsage } from '../usage'
 
 const MAX_TOOL_ITERATIONS = 6
 
@@ -63,6 +64,19 @@ export async function runManagerTurn(params: RunTurnParams): Promise<TurnLog> {
       temperature: 0.7,
       maxTokens: 900,
     })
+
+    // Phase 2A follow-up: manager turn (JURIN) の openai 呼出も usage 計測。
+    // specialist の usage は callSpecialistOnce 内で別途記録されるため二重にならない。
+    if (res.usage) {
+      await logUsage(params.admin, {
+        agentId: params.agentId,
+        model: params.model,
+        promptTokens: res.usage.prompt_tokens,
+        completionTokens: res.usage.completion_tokens,
+        threadId: params.threadId,
+        purpose: 'manager_turn',
+      })
+    }
 
     // model が普通のテキストで返してきた場合 (tool call なし)
     if (res.toolCalls.length === 0) {
