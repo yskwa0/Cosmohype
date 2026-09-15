@@ -1,6 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { safeInternalPath } from '@/lib/safeInternalPath'
+import {
+  AIHQ_COOKIE_MAX_AGE_SEC,
+  AIHQ_COOKIE_NAME,
+  accessKeyMatches,
+  createSessionToken,
+  verifySessionToken,
+} from '@/lib/ai-hq/session'
 
 const PROTECTED_PATHS = ['/feed', '/profile', '/post']
 const AUTH_PATHS = ['/login', '/register', '/onboarding']
@@ -70,6 +77,43 @@ export async function proxy(request: NextRequest) {
   // strict-origin により、外部リンクへ遷移した際に referer から secret を落とす。
   if (isAiHqPath) {
     supabaseResponse.headers.set('Referrer-Policy', 'no-referrer')
+  }
+  // /ai-hq/<accessKey> エントリ: middleware で accessKey 検証 & session cookie 発行。
+  // Server Component からは cookies().set() が禁じられているため、cookie 発行は
+  // ここ (middleware / Route Handler 相当) が唯一の許可された場所。
+  //   - accessKey 一致 → HMAC 署名 cookie を発行して request を通過させる
+  //   - 一致しない → 404 response を返し、page.tsx は実行されない
+  //   - すでに valid cookie を持つ場合は accessKey 再検証を skip (URL 再開示を減らす)
+  if (isAiHqPath && pathname !== '/ai-hq') {
+    const segments = pathname.split('/').filter(Boolean) // ['ai-hq', '<key>', ...]
+    const providedKey = segments[1] ?? ''
+    const existingCookie = request.cookies.get(AIHQ_COOKIE_NAME)?.value
+    const hasValidSession = verifySessionToken(existingCookie)
+    let keyOk = false
+    try {
+      keyOk = accessKeyMatches(providedKey)
+    } catch {
+      // env 未設定などで throw した場合は fail-closed (keyOk=false)。
+    }
+    if (!keyOk && !hasValidSession) {
+      // 存在自体を隠す。 404 を Next.js に任せると default 404 page が返る。
+      return new NextResponse(null, {
+        status: 404,
+        headers: {
+          'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noimageindex',
+          'Referrer-Policy': 'no-referrer',
+        },
+      })
+    }
+    if (keyOk) {
+      supabaseResponse.cookies.set(AIHQ_COOKIE_NAME, createSessionToken(), {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: AIHQ_COOKIE_MAX_AGE_SEC,
+      })
+    }
   }
 
   // Suspension check — only for logged-in users accessing protected paths.

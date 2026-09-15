@@ -1,47 +1,27 @@
 // AI HQ 秘密 URL エントリ (Server Component)。
 //
-// - path segment `accessKey` を env AI_HQ_ACCESS_KEY と timing-safe 比較
-// - 不一致 → notFound() (HTTP 404)
-// - 一致   → HttpOnly / Secure / SameSite=Lax の HMAC 署名済 session cookie を発行し、
-//            初期 threads を SSR で fetch して HQClient に渡す
-//
-// accessKey は URL path のみに存在し、cookie には保存しない。
-// cookie は cookie 単体で「AI HQ session あり」を証明する短寿命 signed token。
+// - accessKey 検証 & HttpOnly session cookie 発行は proxy.ts (middleware) 側で行う。
+//   Next.js の Server Component からは cookies().set() が禁じられているため。
+// - page.tsx はここでは cookie 存在の再確認 + 初期 threads の SSR fetch のみに責務を絞る。
+// - middleware が accessKey 不一致 & cookie 無し のリクエストを 404 で弾く。
+// - 例外的に middleware を通過して cookie も無い状態 (edge case) では notFound()。
 
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/server'
-import {
-  AIHQ_COOKIE_MAX_AGE_SEC,
-  AIHQ_COOKIE_NAME,
-  accessKeyMatches,
-  createSessionToken,
-} from '@/lib/ai-hq/session'
+import { AIHQ_COOKIE_NAME, verifySessionToken } from '@/lib/ai-hq/session'
 import type { AiHqSupabase } from '@/ai-company/src/types'
 import HQClient from './HQClient'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-export default async function AiHqSecretPage({
-  params,
-}: {
-  params: Promise<{ accessKey: string }>
-}) {
-  const { accessKey } = await params
-  if (!accessKey || !accessKeyMatches(accessKey)) {
+export default async function AiHqSecretPage() {
+  const cookieStore = await cookies()
+  const tok = cookieStore.get(AIHQ_COOKIE_NAME)?.value
+  if (!verifySessionToken(tok)) {
     notFound()
   }
-
-  // access key 一致 → session cookie を発行 (accessKey 自体は cookie に含めない)。
-  const cookieStore = await cookies()
-  cookieStore.set(AIHQ_COOKIE_NAME, createSessionToken(), {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: AIHQ_COOKIE_MAX_AGE_SEC,
-  })
 
   // 初期 thread 一覧を SSR で取得 (service_role で RLS bypass)。
   const admin = createAdminClient() as unknown as AiHqSupabase
