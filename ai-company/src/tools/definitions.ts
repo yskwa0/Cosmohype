@@ -150,3 +150,41 @@ export const JURIN_TOOLS: ToolDef[] = [
 /// specialist は tool を持たない (READ / DRAFT すら Phase 1 では JURIN 経由に集約)。
 /// specialist は "自分の意見を content で返すだけ" というシンプル設計 = 循環回避。
 export const SPECIALIST_TOOLS: ToolDef[] = []
+
+/// Phase 2A: spontaneous meeting 内でのみ specialist に解禁される peer request tool。
+/// meeting_state による限度 (participants=4, rounds=3, peer_requests=2/agent, chain_depth=2) を
+/// handler 側で強制する。 depth 超過 / round 超過は tool result で reject を返し、
+/// specialist は自ら Decision を作らずに終わる (JURIN 委譲 or 結論のみ)。
+export const REQUEST_PEER: ToolDef = {
+  type: 'function',
+  function: {
+    name: 'request_peer',
+    description:
+      '会議中に別 specialist へ短い質問を投げて意見を集める。 conversation を長引かせるためではなく、\
+自分の担当領域外の観点が必要な時だけ使う。 limit を超えると reject される。',
+    parameters: {
+      type: 'object',
+      properties: {
+        agent_id: {
+          type: 'string',
+          enum: ['chisa', 'hinata', 'harvey', 'juria', 'maya', 'cocona'],
+          description: '相談したい peer specialist の ID',
+        },
+        question: {
+          type: 'string',
+          description: '相談内容 (100〜300 文字)',
+        },
+        context_summary: {
+          type: 'string',
+          description: '会議の要旨と、この peer に見てほしい観点',
+        },
+      },
+      required: ['agent_id', 'question'],
+      additionalProperties: false,
+    },
+  },
+}
+
+/// spontaneous meeting 中の specialist が使える tool 集合。
+/// 通常 chat の specialist は SPECIALIST_TOOLS=[] のまま (Phase 1 互換)。
+export const SPECIALIST_MEETING_TOOLS: ToolDef[] = [REQUEST_PEER]

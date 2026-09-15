@@ -118,6 +118,44 @@ export async function handleDraftTask(
   return `task_id: ${(data as { id: string }).id}`
 }
 
+/// request_peer (Phase 2A): specialist が meeting 中に別 specialist を呼ぶ。
+/// meeting_state で limit 強制、reject 時は tool result に理由を返す。
+export async function handleRequestPeer(
+  ctx: HandlerContext,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const target = String(args.agent_id ?? '').trim() as AgentId
+  const question = String(args.question ?? '').trim()
+  const contextSummary = String(args.context_summary ?? '').trim()
+  if (!target || !question) return 'error: agent_id and question required'
+
+  // Lazy import to avoid circular dep
+  const [{ loadMeetingState, saveMeetingState, checkAddPeer, applyAddPeer, recordQuestion }, { callSpecialistOnce }] =
+    await Promise.all([
+      import('../meetings/state'),
+      import('../orchestration/specialist'),
+    ])
+
+  const state = await loadMeetingState(ctx.admin, ctx.threadId)
+  const check = checkAddPeer(state, ctx.callerAgent, target, question)
+  if (!check.ok) return `reject: ${check.reason}`
+
+  const next = recordQuestion(applyAddPeer(state, ctx.callerAgent, target), ctx.callerAgent, target, question)
+  await saveMeetingState(ctx.admin, ctx.threadId, next)
+
+  // peer を meeting 内で 1 turn 呼び出す。 peer 側は SPECIALIST_MEETING_TOOLS を使える。
+  const answer = await callSpecialistOnce({
+    admin: ctx.admin,
+    threadId: ctx.threadId,
+    specialistId: target,
+    question,
+    contextSummary,
+    model: 'gpt-5.6-terra',
+    enablePeerTool: true,
+  })
+  return answer
+}
+
 /// conclude_turn: 最終まとめを agent_messages に投稿 (sender=agent, agent=caller)。
 export async function handleConcludeTurn(
   ctx: HandlerContext,

@@ -86,6 +86,21 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
   // Mobile: AI TEAM panel は初期閉じる。 Desktop (md+) では CSS で常時展開されるので
   // この state は mobile 開閉のみを制御する。
   const [teamOpen, setTeamOpen] = useState(false)
+  const [activityOpen, setActivityOpen] = useState(false)
+  const [hqEvents, setHqEvents] = useState<
+    Array<{
+      id: string
+      event_type: string
+      severity: string
+      title: string
+      status: string
+      handled_by_thread_id: string | null
+      created_at: string
+    }>
+  >([])
+  const [agentStatuses, setAgentStatuses] = useState<
+    Array<{ agent_id: string; status: string; current_thread_id: string | null; updated_at: string }>
+  >([])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const esRef = useRef<EventSource | null>(null)
 
@@ -160,6 +175,64 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
       behavior: 'smooth',
     })
   }, [messages])
+
+  // AUTO ACTIVITY: 初回だけ REST で prefill (SSR 直後の空表示回避)、以降は SSE proxy
+  //   `/api/ai-hq/hq-stream` からの Realtime 更新のみ。 polling 廃止。
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const [evR, acR] = await Promise.all([
+          fetch('/api/ai-hq/hq-events', { credentials: 'same-origin' }),
+          fetch('/api/ai-hq/activity', { credentials: 'same-origin' }),
+        ])
+        if (!alive) return
+        if (evR.ok) {
+          const j = await evR.json()
+          setHqEvents(j.events ?? [])
+        }
+        if (acR.ok) {
+          const j = await acR.json()
+          setAgentStatuses(j.activity ?? [])
+        }
+      } catch {
+        /* best-effort */
+      }
+    })()
+
+    const es = new EventSource('/api/ai-hq/hq-stream', { withCredentials: true })
+    es.addEventListener('event_insert', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data)
+        setHqEvents((prev) => (prev.some((x) => x.id === row.id) ? prev : [row, ...prev]))
+      } catch {
+        /* ignore */
+      }
+    })
+    es.addEventListener('event_update', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data)
+        setHqEvents((prev) => prev.map((x) => (x.id === row.id ? { ...x, ...row } : x)))
+      } catch {
+        /* ignore */
+      }
+    })
+    es.addEventListener('activity_update', (ev) => {
+      try {
+        const row = JSON.parse((ev as MessageEvent).data)
+        setAgentStatuses((prev) => prev.map((x) => (x.agent_id === row.agent_id ? { ...x, ...row } : x)))
+      } catch {
+        /* ignore */
+      }
+    })
+    es.onerror = () => {
+      // EventSource は自動再接続する。
+    }
+    return () => {
+      alive = false
+      es.close()
+    }
+  }, [])
 
   async function refreshThreads() {
     try {
@@ -251,8 +324,98 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
             ))}
           </ul>
           <div className="mt-4 text-xs text-neutral-500 hidden md:block">
-            status は現状 idle 表示のみ (Phase 1)
+            Live status は Phase 2A で反映されます
           </div>
+        </div>
+
+        {/* AUTO ACTIVITY: 折りたたみ (mobile: 常に折りたたみ、desktop: aside 内で常時展開可能) */}
+        <div className="mt-3 md:mt-4">
+          <button
+            type="button"
+            onClick={() => setActivityOpen((v) => !v)}
+            aria-expanded={activityOpen}
+            className="w-full flex items-center justify-between px-3 py-2 border border-neutral-800 rounded-lg bg-neutral-900 text-sm"
+          >
+            <span className="text-xs uppercase tracking-wider text-neutral-400">
+              AUTO ACTIVITY ({hqEvents.length})
+            </span>
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              className={`w-4 h-4 text-neutral-400 transition-transform ${activityOpen ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {activityOpen && (
+            <div className="mt-2 space-y-2 border border-neutral-800 rounded-lg p-3">
+              {/* Live status */}
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">LIVE STATUS</div>
+                <ul className="text-xs space-y-0.5">
+                  {agentStatuses.map((a) => (
+                    <li key={a.agent_id} className="flex justify-between gap-2">
+                      <span className="text-neutral-300">{a.agent_id}</span>
+                      <span
+                        className={
+                          a.status === 'idle'
+                            ? 'text-neutral-500'
+                            : a.status === 'meeting'
+                              ? 'text-emerald-400'
+                              : 'text-amber-400'
+                        }
+                      >
+                        {a.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {/* Recent events */}
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 mt-2">
+                  RECENT EVENTS
+                </div>
+                {hqEvents.length === 0 && <div className="text-xs text-neutral-500">まだ event はありません</div>}
+                <ul className="text-xs space-y-1">
+                  {hqEvents.slice(0, 8).map((e) => (
+                    <li
+                      key={e.id}
+                      className={`p-1.5 rounded border ${
+                        e.severity === 'high' || e.severity === 'critical'
+                          ? 'border-red-800 bg-red-950/30'
+                          : e.severity === 'medium'
+                            ? 'border-amber-900 bg-amber-950/20'
+                            : 'border-neutral-800 bg-neutral-900'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="text-neutral-300 flex-1 min-w-0 truncate">{e.title}</span>
+                        <span className="shrink-0 text-[10px] text-neutral-500">{e.status}</span>
+                      </div>
+                      <div className="text-[10px] text-neutral-500 mt-0.5">
+                        {e.event_type} / {e.severity}
+                        {e.handled_by_thread_id && (
+                          <button
+                            className="ml-2 underline text-neutral-400"
+                            onClick={() => {
+                              setActiveThreadId(e.handled_by_thread_id)
+                              setActivityOpen(false)
+                            }}
+                          >
+                            open thread
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 

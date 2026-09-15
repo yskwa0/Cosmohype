@@ -22,6 +22,7 @@ import { fetchThreadHistory, formatHistoryForPrompt } from '../memory/session'
 import { longTermMemory, formatMemoryForPrompt } from '../memory/longterm'
 import { runManagerTurn } from './turn'
 import type { ChatMessage } from '../providers/openai'
+import { setAgentStatus, resetToIdle } from '../activity'
 
 export interface RunJurinParams {
   admin: AiHqSupabase
@@ -105,17 +106,23 @@ ${formatMemoryForPrompt(memory)}
 
   const chatHistory: ChatMessage[] = [] // ここでは system + user は turn.ts 側で構築するので空
 
-  // 4. turn 実行
-  const result = await runManagerTurn({
-    admin: params.admin,
-    threadId: params.threadId,
-    agentId: 'jurin',
-    model,
-    systemPrompt,
-    history: chatHistory,
-    ceoLatestMessage: params.ceoMessage,
-    tools: JURIN_TOOLS,
-  })
+  // 4. turn 実行 (activity status を meeting に切替)
+  await setAgentStatus(params.admin, 'jurin', 'meeting', { threadId: params.threadId })
+  let result
+  try {
+    result = await runManagerTurn({
+      admin: params.admin,
+      threadId: params.threadId,
+      agentId: 'jurin',
+      model,
+      systemPrompt,
+      history: chatHistory,
+      ceoLatestMessage: params.ceoMessage,
+      tools: JURIN_TOOLS,
+    })
+  } finally {
+    await resetToIdle(params.admin, 'jurin')
+  }
 
   // 5. JURIN が conclude_turn を呼ばなかった場合の fallback:
   //    通常テキストで返してきた content を agent_messages に保存する。
