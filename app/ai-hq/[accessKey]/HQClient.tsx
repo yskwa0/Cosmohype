@@ -1263,9 +1263,6 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               </li>
             ))}
           </ul>
-          <div className="mt-4 text-xs text-neutral-500 hidden md:block">
-            Live status は Phase 2A で反映されます
-          </div>
         </div>
 
         {/* AUTO ACTIVITY: 折りたたみ (mobile: 常に折りたたみ、desktop: aside 内で常時展開可能) */}
