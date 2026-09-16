@@ -68,6 +68,7 @@ const CHANNELS: Channel[] = [
 ]
 
 // Phase 2C: deliverable pretty-render labels (server-side schemas.ts と揃える)
+// Phase 3A.2: code_patch を追加
 type DeliverableType =
   | 'social_content_draft'
   | 'growth_experiment'
@@ -76,6 +77,7 @@ type DeliverableType =
   | 'research_brief'
   | 'business_case'
   | 'executive_brief'
+  | 'code_patch'
 
 const DELIVERABLE_UI: Record<DeliverableType, { fields: string[]; labels: Record<string, string>; short: string }> = {
   social_content_draft: {
@@ -112,6 +114,13 @@ const DELIVERABLE_UI: Record<DeliverableType, { fields: string[]; labels: Record
     short: 'Executive Brief',
     fields: ['situation', 'findings', 'options', 'recommendation', 'priority', 'owner', 'next_action'],
     labels: { situation: 'SITUATION', findings: 'FINDINGS', options: 'OPTIONS', recommendation: 'RECOMMENDATION', priority: 'PRIORITY', owner: 'OWNER', next_action: 'NEXT ACTION' },
+  },
+  code_patch: {
+    // Phase 3A.2: code_patch は通常 field 単純表示ではなく、専用 diff viewer を使うため
+    // このリストは fallback (raw content) 用。 実 UI は下部の render 分岐で切り替える。
+    short: 'コード変更案',
+    fields: ['summary', 'rationale', 'risk_level'],
+    labels: { summary: '概要', rationale: '意図', risk_level: 'リスク' },
   },
 }
 
@@ -202,13 +211,13 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
     research_sources: Array<{ name: string; enabled: boolean; last_checked_at: string | null; last_success_at: string | null; consecutive_failures: number; last_error: string | null }>
     github_state: Array<{ key: string; value: Record<string, unknown>; updated_at: string }>
   }>({ research_sources: [], github_state: [] })
-  // Phase 3A.1: EXECUTION INBOX state
+  // Phase 3A.1 + 3A.2: EXECUTION INBOX state
   const [executions, setExecutions] = useState<Array<{
     id: string
     deliverable_id: string | null
     task_id: string | null
     agent_id: AgentId
-    execution_type: 'github_issue_create'
+    execution_type: 'github_issue_create' | 'github_draft_pr_create'
     title: string
     summary: string
     risk_level: 'low' | 'medium' | 'high' | 'critical'
@@ -439,7 +448,10 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
   }
   async function doExecuteApprove() {
     if (!selectedExec) return
-    if (!confirm('GitHub Issue を 1件作成します。\nコード変更・merge・deploy は行いません。\n実行しますか?')) return
+    const confirmMsg = selectedExec.execution_type === 'github_draft_pr_create'
+      ? 'ai-hq/<branch> を作成し、承認済みファイルを1commit、Draft PR を1件作成します。\nmain への直接 push・merge・deploy は行いません。\n実行しますか?'
+      : 'GitHub Issue を 1件作成します。\nコード変更・merge・deploy は行いません。\n実行しますか?'
+    if (!confirm(confirmMsg)) return
     setExecError(null)
     setExecAction('executing')
     try {
@@ -760,7 +772,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-neutral-100 font-semibold">{ag?.name ?? e.agent_id}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">
-                          {e.execution_type === 'github_issue_create' ? 'GitHub Issue 作成' : e.execution_type}
+                          {e.execution_type === 'github_issue_create' ? 'GitHub Issue 作成' : e.execution_type === 'github_draft_pr_create' ? 'Draft PR 作成' : e.execution_type}
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${e.risk_level === 'low' ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
                           リスク: {RISK_LABEL_JA[e.risk_level]}
@@ -835,7 +847,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {execDetailPayload && (
+              {execDetailPayload && selectedExec.execution_type === 'github_issue_create' && (
                 <>
                   <div className="p-3 rounded border border-emerald-900 bg-emerald-950/20">
                     <div className="text-[10px] tracking-widest text-emerald-400 mb-1">実行されること:</div>
@@ -868,6 +880,72 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                         <span key={l} className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">{l}</span>
                       ))}
                     </div>
+                  </div>
+                </>
+              )}
+              {execDetailPayload && selectedExec.execution_type === 'github_draft_pr_create' && (
+                <>
+                  <div className="p-3 rounded border border-emerald-900 bg-emerald-950/20">
+                    <div className="text-[10px] tracking-widest text-emerald-400 mb-1">実行されること:</div>
+                    <div className="text-sm text-neutral-100 space-y-1">
+                      <div>
+                        <span className="font-mono text-emerald-300">{String(execDetailPayload.owner ?? '?')}/{String(execDetailPayload.repo ?? '?')}</span> に:
+                      </div>
+                      <ul className="list-disc pl-5 space-y-0.5">
+                        <li><span className="font-mono text-emerald-300">{String(execDetailPayload.branch_name ?? '')}</span> ブランチを作成</li>
+                        <li>承認済み <span className="font-semibold">{(execDetailPayload.files as unknown[] ?? []).length} ファイル</span>を 1 commit</li>
+                        <li>Draft PR を 1 件作成 (base = <span className="font-mono">main</span>)</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded border border-red-900 bg-red-950/20">
+                    <div className="text-[10px] tracking-widest text-red-400 mb-1">実行されないこと:</div>
+                    <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-0.5">
+                      <li>main への直接 push はしません</li>
+                      <li>merge しません</li>
+                      <li>deploy しません</li>
+                      <li>production DB は変更しません</li>
+                      <li>workflow の実行・権限変更はしません</li>
+                      <li>secret は変更しません</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-1">PR タイトル</div>
+                    <div className="text-sm text-neutral-100 break-words">{String(execDetailPayload.pr_title ?? '')}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-neutral-500">
+                    <div>base commit: <span className="font-mono text-neutral-300">{String(execDetailPayload.base_sha ?? '').slice(0, 12)}</span></div>
+                    <div>+{Number(execDetailPayload.total_additions ?? 0)} / -{Number(execDetailPayload.total_deletions ?? 0)} 行</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-1">変更ファイル ({(execDetailPayload.files as unknown[] ?? []).length})</div>
+                    <div className="space-y-3">
+                      {((execDetailPayload.files as Array<Record<string, unknown>>) ?? []).map((f, i) => (
+                        <div key={i} className="border border-neutral-800 rounded bg-neutral-900">
+                          <div className="flex items-center justify-between px-2 py-1 border-b border-neutral-800 gap-2 flex-wrap">
+                            <span className="text-xs font-mono text-neutral-200 truncate">{String(f.path ?? '')}</span>
+                            <span className="text-[10px] text-neutral-500 shrink-0">
+                              <span className="px-1 rounded bg-neutral-800 mr-1">{String(f.change_type ?? '')}</span>
+                              <span className="text-emerald-400">+{Number(f.additions ?? 0)}</span>
+                              {' '}
+                              <span className="text-red-400">-{Number(f.deletions ?? 0)}</span>
+                            </span>
+                          </div>
+                          <pre className="text-[10px] leading-snug whitespace-pre-wrap break-words p-2 max-h-64 overflow-y-auto font-mono">
+                            {(String(f.diff ?? '').split('\n')).map((line, li) => {
+                              const cls = line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' :
+                                line.startsWith('-') && !line.startsWith('---') ? 'text-red-400' :
+                                line.startsWith('@@') ? 'text-cyan-400' : 'text-neutral-400'
+                              return <div key={li} className={cls}>{line || ' '}</div>
+                            })}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-1">PR 本文プレビュー</div>
+                    <pre className="text-xs text-neutral-200 whitespace-pre-wrap break-words leading-relaxed bg-neutral-900 p-2 rounded border border-neutral-800 max-h-72 overflow-y-auto">{String(execDetailPayload.pr_body ?? '')}</pre>
                   </div>
                 </>
               )}
@@ -941,7 +1019,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {detailLoading && <div className="text-sm text-neutral-500">読込中…</div>}
-              {!detailLoading && detailContent && (
+              {!detailLoading && detailContent && selectedDeliverable.deliverable_type !== 'code_patch' && (
                 <>
                   {DELIVERABLE_UI[selectedDeliverable.deliverable_type]?.fields.map((f) => (
                     <div key={f}>
@@ -953,6 +1031,70 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       </div>
                     </div>
                   ))}
+                </>
+              )}
+              {!detailLoading && detailContent && selectedDeliverable.deliverable_type === 'code_patch' && (
+                <>
+                  {/* Phase 3A.2: code_patch は専用 diff viewer */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-neutral-400">
+                    <div>対象: <span className="text-neutral-200 font-mono">{String(detailContent.repository ?? '—')}</span></div>
+                    <div>base: <span className="text-neutral-200 font-mono">{String(detailContent.base_branch ?? 'main')} @ {String(detailContent.base_sha ?? '').slice(0, 12)}</span></div>
+                    <div>+{Number(detailContent.total_additions ?? 0)} / -{Number(detailContent.total_deletions ?? 0)} 行</div>
+                    <div>変更ファイル: {(detailContent.files as unknown[] ?? []).length}</div>
+                  </div>
+                  {typeof detailContent.summary === 'string' && detailContent.summary && (
+                    <div>
+                      <div className="text-[10px] tracking-widest text-neutral-500 mb-1">概要</div>
+                      <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words">{detailContent.summary}</div>
+                    </div>
+                  )}
+                  {typeof detailContent.rationale === 'string' && detailContent.rationale && (
+                    <div>
+                      <div className="text-[10px] tracking-widest text-neutral-500 mb-1">意図 / 説明</div>
+                      <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words">{detailContent.rationale}</div>
+                    </div>
+                  )}
+                  {(() => {
+                    const v = detailContent.validation as Record<string, unknown> | undefined
+                    if (!v) return null
+                    return (
+                      <div className="p-2 rounded border border-neutral-800 bg-neutral-900 text-[10px] text-neutral-400">
+                        <div className="tracking-widest text-neutral-500 mb-1">Validation</div>
+                        {Object.entries(v).map(([k, val]) => (
+                          <div key={k}>{k}: <span className={val === true ? 'text-emerald-400' : val === false ? 'text-red-400' : 'text-neutral-300'}>{JSON.stringify(val)}</span></div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                  <div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-2">変更ファイル一覧</div>
+                    <div className="text-[10px] text-neutral-500 mb-2 px-1">
+                      Phase 3A.2 では既存ファイルの <span className="text-neutral-300 font-mono">modify</span> のみサポート。 新規ファイル作成 / 削除 / rename は対象外です。
+                    </div>
+                    <div className="space-y-3">
+                      {((detailContent.files as Array<Record<string, unknown>>) ?? []).map((f, i) => (
+                        <div key={i} className="border border-neutral-800 rounded bg-neutral-900">
+                          <div className="flex items-center justify-between px-2 py-1 border-b border-neutral-800 gap-2 flex-wrap">
+                            <span className="text-xs font-mono text-neutral-200 truncate">{String(f.path ?? '')}</span>
+                            <span className="text-[10px] text-neutral-500 shrink-0">
+                              <span className="px-1 rounded bg-neutral-800 mr-1">{String(f.change_type ?? '')}</span>
+                              <span className="text-emerald-400">+{Number(f.additions ?? 0)}</span>
+                              {' '}
+                              <span className="text-red-400">-{Number(f.deletions ?? 0)}</span>
+                            </span>
+                          </div>
+                          <pre className="text-[10px] leading-snug whitespace-pre-wrap break-words p-2 max-h-64 overflow-y-auto font-mono">
+                            {(String(f.diff ?? '').split('\n')).map((line, li) => {
+                              const cls = line.startsWith('+') && !line.startsWith('+++') ? 'text-emerald-400' :
+                                line.startsWith('-') && !line.startsWith('---') ? 'text-red-400' :
+                                line.startsWith('@@') ? 'text-cyan-400' : 'text-neutral-400'
+                              return <div key={li} className={cls}>{line || ' '}</div>
+                            })}
+                          </pre>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </>
               )}
               {selectedDeliverable.review_notes && (
@@ -977,14 +1119,17 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => {
-                      if (confirm('この成果物を承認しますか?\n(外部への書き込みは発生しません)')) {
+                      const msg = selectedDeliverable.deliverable_type === 'code_patch'
+                        ? 'この変更案を承認しますか?\n(GitHub への書き込みはまだ発生しません)'
+                        : 'この成果物を承認しますか?\n(外部への書き込みは発生しません)'
+                      if (confirm(msg)) {
                         doReview(selectedDeliverable.id, 'approve')
                       }
                     }}
                     disabled={reviewAction !== 'idle'}
                     className="min-h-[44px] bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded disabled:bg-neutral-700"
                   >
-                    {reviewAction === 'approving' ? '承認中…' : '下書きを承認'}
+                    {reviewAction === 'approving' ? '承認中…' : selectedDeliverable.deliverable_type === 'code_patch' ? '変更案を承認' : '下書きを承認'}
                   </button>
                   <button
                     onClick={() => { setReviewMode('revise'); setReviewFeedback('') }}

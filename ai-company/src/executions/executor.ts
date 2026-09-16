@@ -112,7 +112,9 @@ async function createGithubIssue(
   }
 }
 
-/// Main executor: 承認済 execution_request を受け取り、Issue を 1 件作成。
+/// Main executor: 承認済 execution_request を受け取り、 execution_type に応じて dispatch。
+/// - github_issue_create → Phase 3A.1 の Issue 作成 (この file 内)
+/// - github_draft_pr_create → Phase 3A.2 の Draft PR 作成 (draft_pr_executor.ts へ委譲)
 /// 既 succeeded の場合は skip (idempotency)。 timeout 相当時は marker search で duplicate 回避。
 export async function executeExecutionRequest(admin: AiHqSupabase, req: ExecutionRow): Promise<ExecutorResult> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,6 +128,12 @@ export async function executeExecutionRequest(admin: AiHqSupabase, req: Executio
       external_url: String((req.result as Record<string, unknown>).external_url ?? ''),
       duplicate_found: true,
     }
+  }
+
+  // Phase 3A.2: draft PR は別 executor に委譲
+  if (req.execution_type === 'github_draft_pr_create') {
+    const { executeDraftPrCreate } = await import('./draft_pr_executor')
+    return executeDraftPrCreate(admin, req)
   }
 
   if (req.execution_type !== 'github_issue_create') {

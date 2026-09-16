@@ -108,7 +108,11 @@ export async function proxy(request: NextRequest) {
     if (keyOk) {
       supabaseResponse.cookies.set(AIHQ_COOKIE_NAME, createSessionToken(), {
         httpOnly: true,
-        secure: true,
+        // Vercel Prod (HTTPS) では Secure を必ず強制。
+        // 一方 local `npm run dev` は http://localhost 平文接続なので Secure を付けると browser が
+        // cookie を送り返さず AI HQ API が全て 404 になる。 NODE_ENV での分岐は Next.js 標準的な
+        // ゲート。
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
         maxAge: AIHQ_COOKIE_MAX_AGE_SEC,

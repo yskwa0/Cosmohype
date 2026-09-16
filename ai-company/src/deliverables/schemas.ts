@@ -15,6 +15,10 @@ export const DELIVERABLE_TYPES = [
   'research_brief',
   'business_case',
   'executive_brief',
+  // Phase 3A.2: 承認可能なコード差分。 通常の LLM 生成 free-form deliverable と異なり、
+  // content jsonb 内に (repository, base_sha, branch, files[], validation) を持ち、
+  // 承認時に github_draft_pr_create の execution_request を propose する。
+  'code_patch',
 ] as const
 export type DeliverableType = (typeof DELIVERABLE_TYPES)[number]
 
@@ -114,6 +118,20 @@ export const DELIVERABLE_SPECS: Record<DeliverableType, Spec> = {
       priority: 'PRIORITY',
       owner: 'OWNER',
       next_action: 'NEXT ACTION',
+    },
+  },
+  code_patch: {
+    // Phase 3A.2: code_patch は LLM の JSON 出力を human review にかけるのではなく、
+    // patch generation logic (HINATA) が組み立てた content を CEO が diff で確認する。
+    // fields は content の必須 key を最低限だけ列挙 (executor 側 validateGhDraftPrPayload
+    // が本命の検証者)。
+    primary_agent: 'hinata',
+    fields: ['repository', 'base_sha', 'files', 'summary'],
+    human_labels: {
+      repository: 'REPOSITORY',
+      base_sha: 'BASE SHA',
+      files: 'FILES',
+      summary: 'SUMMARY',
     },
   },
 }
