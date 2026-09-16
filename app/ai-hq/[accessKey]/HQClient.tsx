@@ -1048,10 +1048,14 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words">{detailContent.summary}</div>
                     </div>
                   )}
-                  {typeof detailContent.rationale === 'string' && detailContent.rationale && (
+                  {/* Phase 3A.2: CEO 向け短文説明。 LLM の技術 rationale を長文表示する代わりに、
+                      code_patch content.ceo_summary (何を / なぜ / 機能影響) を優先表示する。
+                      ceo_summary が未設定なら本 section は非表示 (rationale は CEO UI では表示しない、
+                      技術背景は diff + Validation 側で確認する)。 */}
+                  {typeof detailContent.ceo_summary === 'string' && detailContent.ceo_summary && (
                     <div>
-                      <div className="text-[10px] tracking-widest text-neutral-500 mb-1">意図 / 説明</div>
-                      <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words">{detailContent.rationale}</div>
+                      <div className="text-[10px] tracking-widest text-neutral-500 mb-1">変更理由</div>
+                      <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words">{detailContent.ceo_summary}</div>
                     </div>
                   )}
                   {(() => {

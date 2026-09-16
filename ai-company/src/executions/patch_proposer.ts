@@ -38,8 +38,9 @@ interface CodePatchContent {
   repository?: string           // 'yskwa0/Cosmohype-ai-hq-test' 形式 or 'yskwa0/Cosmohype'
   base_branch?: string          // 'main' 固定
   base_sha?: string
-  summary?: string
-  rationale?: string
+  summary?: string              // 短文タイトル的な説明
+  ceo_summary?: string          // Phase 3A.2: CEO 向け 1〜3 短文 (何を / なぜ / 機能影響)。 UI 優先表示。
+  rationale?: string            // LLM の技術長文。 audit / PR body に残るが CEO UI では非表示。
   risk_level?: string
   files?: CodePatchFileInput[]
   total_additions?: number
@@ -64,6 +65,7 @@ interface DeliverableSlim {
 function buildPrBody(patch: CodePatchContent, del: DeliverableSlim): string {
   const filesLines = (patch.files ?? []).map((f) => `- \`${f.path}\` (${f.change_type}, +${f.additions ?? 0}/-${f.deletions ?? 0})`).join('\n')
   const summary = (patch.summary ?? '').trim()
+  const ceoSummary = (patch.ceo_summary ?? '').trim()
   const rationale = (patch.rationale ?? '').trim()
   const totalAdd = patch.total_additions ?? 0
   const totalDel = patch.total_deletions ?? 0
@@ -82,7 +84,9 @@ function buildPrBody(patch: CodePatchContent, del: DeliverableSlim): string {
     filesLines || '(none)',
     '',
     summary ? `### 概要\n${summary}` : '',
-    rationale ? `### 意図\n${rationale}` : '',
+    // Phase 3A.2: CEO 向け短文説明を優先表示。 rationale は audit 用に technical background 見出しへ移動。
+    ceoSummary ? `### 変更理由\n${ceoSummary}` : '',
+    rationale ? `### 技術背景 (audit)\n${rationale}` : '',
     '',
     `**このPRは自動 merge されません。 人間レビュー後に CEO または maintainer が判断してください。**`,
   ].filter((s) => s !== '')

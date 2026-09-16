@@ -125,13 +125,17 @@ export const DELIVERABLE_SPECS: Record<DeliverableType, Spec> = {
     // patch generation logic (HINATA) が組み立てた content を CEO が diff で確認する。
     // fields は content の必須 key を最低限だけ列挙 (executor 側 validateGhDraftPrPayload
     // が本命の検証者)。
+    // ceo_summary は CEO 向け 1〜3 短文説明 (何を / なぜ / 機能影響)。 UI では
+    // rationale の代わりに本 field を「変更理由」として優先表示。 技術長文の rationale は
+    // audit / PR body に残しても CEO UI では非表示。
     primary_agent: 'hinata',
-    fields: ['repository', 'base_sha', 'files', 'summary'],
+    fields: ['repository', 'base_sha', 'files', 'summary', 'ceo_summary'],
     human_labels: {
       repository: 'REPOSITORY',
       base_sha: 'BASE SHA',
       files: 'FILES',
       summary: 'SUMMARY',
+      ceo_summary: 'CEO SUMMARY',
     },
   },
 }
