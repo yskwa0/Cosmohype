@@ -37,7 +37,7 @@ export default async function AiHqSecretPage() {
         <header className="mb-3 md:mb-6">
           <h1 className="text-xl md:text-2xl font-bold tracking-wide">COSMOHYPE AI HQ</h1>
           <p className="text-xs md:text-sm text-neutral-400 mt-1">
-            Phase 1 — READ / DRAFT only. EXECUTE は人間承認が必要です。
+            エージェントの読取・下書き作業は自動です。 実行は必ず CEO 承認が必要です。
           </p>
         </header>
         <HQClient initialThreads={threads ?? []} />

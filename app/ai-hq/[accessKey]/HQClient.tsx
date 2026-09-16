@@ -132,6 +132,38 @@ interface DeliverableRow {
   review_notes?: string | null
 }
 
+// Phase 3A.1: リスクレベル / ステータスの日本語表示ラベル (DB enum は英語のまま維持)
+const RISK_LABEL_JA: Record<'low' | 'medium' | 'high' | 'critical', string> = {
+  low: '低',
+  medium: '中',
+  high: '高',
+  critical: '緊急',
+}
+const EXEC_STATUS_LABEL_JA: Record<
+  'draft' | 'waiting_for_approval' | 'approved' | 'executing' | 'succeeded' | 'failed' | 'cancelled' | 'expired',
+  string
+> = {
+  draft: '下書き',
+  waiting_for_approval: '承認待ち',
+  approved: '承認済み',
+  executing: '実行中',
+  succeeded: '完了',
+  failed: '失敗',
+  cancelled: 'キャンセル',
+  expired: '期限切れ',
+}
+const DELIVERABLE_STATUS_LABEL_JA: Record<
+  'draft' | 'submitted' | 'approved' | 'revision_requested' | 'rejected' | 'superseded',
+  string
+> = {
+  draft: '下書き',
+  submitted: '承認待ち',
+  approved: '承認済み',
+  revision_requested: '修正依頼中',
+  rejected: '却下',
+  superseded: '差替え済み',
+}
+
 function senderLabel(m: MessageRow): { name: string; color: string } {
   if (m.sender_type === 'human') return { name: 'CEO', color: 'bg-white text-black' }
   if (m.sender_type === 'system')
@@ -407,7 +439,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
   }
   async function doExecuteApprove() {
     if (!selectedExec) return
-    if (!confirm('This will create 1 GitHub Issue. No code changes, no merge, no deploy. Proceed?')) return
+    if (!confirm('GitHub Issue を 1件作成します。\nコード変更・merge・deploy は行いません。\n実行しますか?')) return
     setExecError(null)
     setExecAction('executing')
     try {
@@ -419,9 +451,9 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok) {
-        if (res.status === 410) setExecError('This request has expired. Please recreate.')
-        else if (res.status === 409) setExecError(`Cannot execute: ${j?.error ?? 'already processed'}`)
-        else if (res.status === 403) setExecError(`Rejected: ${j?.error ?? 'forbidden'}`)
+        if (res.status === 410) setExecError('この申請は期限切れです。再作成してください。')
+        else if (res.status === 409) setExecError(`実行できません: ${j?.error ?? '既に処理済み'}`)
+        else if (res.status === 403) setExecError(`拒否されました: ${j?.error ?? 'forbidden'}`)
         else setExecError(j?.failure_reason ?? j?.error ?? `HTTP ${res.status}`)
         return
       }
@@ -435,7 +467,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
   }
   async function doExecuteReject() {
     if (!selectedExec) return
-    if (!confirm('Reject this execution request? It will not be executed.')) return
+    if (!confirm('この実行申請を却下しますか?\n実行はされません。')) return
     setExecError(null)
     setExecAction('rejecting')
     try {
@@ -516,9 +548,9 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
       const j = await res.json().catch(() => ({}))
       if (!res.ok) {
         if (res.status === 409 && j?.reason === 'revision_limit_reached') {
-          setReviewError('Revision limit reached (max 3)')
+          setReviewError('修正依頼の上限に達しました (最大3回)')
         } else if (res.status === 409) {
-          setReviewError(`Already ${j?.reason ?? 'processed'}`)
+          setReviewError(`すでに処理済みです (${j?.reason ?? 'processed'})`)
         } else {
           setReviewError(j?.reason ?? `HTTP ${res.status}`)
         }
@@ -604,12 +636,12 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
           className="w-full flex items-center justify-between px-3 py-2 border border-neutral-700 rounded-lg bg-neutral-900 hover:bg-neutral-850"
         >
           <span className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-neutral-300 font-semibold">CEO INBOX</span>
+            <span className="text-xs tracking-wider text-neutral-300 font-semibold">CEO受信箱</span>
             {pendingDeliverables.length > 0 && (
-              <span className="text-xs bg-white text-neutral-900 rounded-full px-2 py-0.5 font-bold">{pendingDeliverables.length} pending</span>
+              <span className="text-xs bg-white text-neutral-900 rounded-full px-2 py-0.5 font-bold">承認待ち {pendingDeliverables.length} 件</span>
             )}
             {pendingDeliverables.length === 0 && (
-              <span className="text-xs text-neutral-500">no pending</span>
+              <span className="text-xs text-neutral-500">承認待ちなし</span>
             )}
           </span>
           <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 text-neutral-400 transition-transform ${inboxOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2">
@@ -642,7 +674,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400">{typeShort}</span>
                         <span className="text-[10px] text-neutral-500">v{d.version}</span>
                         {d.review_notes && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300">JURIN reviewed</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-300">JURIN確認済</span>
                         )}
                       </div>
                       <div className="text-sm text-neutral-200 mt-0.5 break-words">{d.title}</div>
@@ -651,14 +683,14 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                         {d.submitted_at ? new Date(d.submitted_at).toLocaleString('ja-JP') : '—'}
                       </div>
                     </div>
-                    <span className="shrink-0 text-xs text-neutral-400 self-center">Review →</span>
+                    <span className="shrink-0 text-xs text-neutral-400 self-center">確認する →</span>
                   </div>
                 </button>
               )
             })}
             {recentlyApproved.length > 0 && (
               <div className="mt-3">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 px-1">RECENTLY APPROVED</div>
+                <div className="text-[10px] tracking-widest text-neutral-500 mb-1 px-1">最近承認したもの</div>
                 <div className="space-y-1">
                   {recentlyApproved.map((d) => {
                     const ag = AGENTS.find((a) => a.id === d.agent_id)
@@ -694,11 +726,11 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
           className="w-full flex items-center justify-between px-3 py-2 border border-amber-700/40 rounded-lg bg-amber-950/20 hover:bg-amber-900/30"
         >
           <span className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wider text-amber-300 font-semibold">EXECUTION INBOX</span>
+            <span className="text-xs tracking-wider text-amber-300 font-semibold">実行承認</span>
             {pendingExecutions.length > 0 ? (
-              <span className="text-xs bg-amber-400 text-neutral-900 rounded-full px-2 py-0.5 font-bold">{pendingExecutions.length} pending</span>
+              <span className="text-xs bg-amber-400 text-neutral-900 rounded-full px-2 py-0.5 font-bold">承認待ち {pendingExecutions.length} 件</span>
             ) : (
-              <span className="text-xs text-neutral-500">no pending</span>
+              <span className="text-xs text-neutral-500">承認待ちなし</span>
             )}
           </span>
           <svg aria-hidden viewBox="0 0 24 24" className={`w-4 h-4 text-amber-400 transition-transform ${inboxExecOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2">
@@ -709,7 +741,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
           <div className="mt-2 space-y-2">
             {pendingExecutions.length === 0 && (
               <div className="text-xs text-neutral-500 px-2 py-3 border border-neutral-800 rounded-lg bg-neutral-900">
-                実行承認待ちのアクションはありません。 engineering_plan の Draft を Approve すると GitHub Issue 作成の提案がここに出ます。
+                実行承認待ちのアクションはありません。 engineering_plan の下書きを承認すると、 GitHub Issue 作成の提案がここに出ます。
               </div>
             )}
             {pendingExecutions.map((e) => {
@@ -728,26 +760,26 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-neutral-100 font-semibold">{ag?.name ?? e.agent_id}</span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">
-                          {e.execution_type === 'github_issue_create' ? 'Create GitHub Issue' : e.execution_type}
+                          {e.execution_type === 'github_issue_create' ? 'GitHub Issue 作成' : e.execution_type}
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${e.risk_level === 'low' ? 'bg-emerald-900/40 text-emerald-300' : 'bg-red-900/40 text-red-300'}`}>
-                          Risk: {e.risk_level.toUpperCase()}
+                          リスク: {RISK_LABEL_JA[e.risk_level]}
                         </span>
                       </div>
                       <div className="text-sm text-neutral-200 mt-0.5 break-words">{e.title}</div>
                       <div className="text-xs text-neutral-500 mt-1 line-clamp-2">{e.summary}</div>
                       <div className="text-[10px] text-neutral-600 mt-1">
-                        Expires: {new Date(e.expires_at).toLocaleString('ja-JP')}
+                        期限: {new Date(e.expires_at).toLocaleString('ja-JP')}
                       </div>
                     </div>
-                    <span className="shrink-0 text-xs text-amber-400 self-center">Review →</span>
+                    <span className="shrink-0 text-xs text-amber-400 self-center">確認する →</span>
                   </div>
                 </button>
               )
             })}
             {recentExecutionResults.length > 0 && (
               <div className="mt-3">
-                <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 px-1">RECENT EXECUTIONS</div>
+                <div className="text-[10px] tracking-widest text-neutral-500 mb-1 px-1">最近の実行</div>
                 <div className="space-y-1">
                   {recentExecutionResults.map((e) => {
                     const ag = AGENTS.find((a) => a.id === e.agent_id)
@@ -762,7 +794,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                         <span className={`${color} mr-2`}>{icon}</span>
                         <span className="text-neutral-300">{ag?.name ?? e.agent_id}</span>
                         <span className="text-neutral-500 mx-2">/</span>
-                        <span className="text-neutral-400">{e.status}</span>
+                        <span className="text-neutral-400">{EXEC_STATUS_LABEL_JA[e.status]}</span>
                         <span className="text-neutral-500 mx-2">/</span>
                         <span className="text-neutral-500">{e.title.slice(0, 60)}</span>
                         {e.result?.external_url && (
@@ -786,15 +818,15 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               <div className="flex-1 min-w-0 pr-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">
-                    {selectedExec.execution_type === 'github_issue_create' ? 'Create GitHub Issue' : selectedExec.execution_type}
+                    {selectedExec.execution_type === 'github_issue_create' ? 'GitHub Issue 作成' : selectedExec.execution_type}
                   </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">Risk: {selectedExec.risk_level.toUpperCase()}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/40 text-emerald-300">リスク: {RISK_LABEL_JA[selectedExec.risk_level]}</span>
                   <span className="text-[10px] text-neutral-500">
-                    by {AGENTS.find((a) => a.id === selectedExec.agent_id)?.name ?? selectedExec.agent_id}
+                    提案者: {AGENTS.find((a) => a.id === selectedExec.agent_id)?.name ?? selectedExec.agent_id}
                   </span>
                 </div>
                 <div className="text-base font-semibold text-neutral-100 mt-1 break-words">{selectedExec.title}</div>
-                <div className="text-[10px] text-neutral-500 mt-1">Expires: {new Date(selectedExec.expires_at).toLocaleString('ja-JP')}</div>
+                <div className="text-[10px] text-neutral-500 mt-1">期限: {new Date(selectedExec.expires_at).toLocaleString('ja-JP')}</div>
               </div>
               <button onClick={closeExecution} disabled={execAction !== 'idle'} aria-label="Close" className="shrink-0 h-10 w-10 flex items-center justify-center text-neutral-400 hover:text-neutral-200 disabled:opacity-40">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -806,30 +838,31 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               {execDetailPayload && (
                 <>
                   <div className="p-3 rounded border border-emerald-900 bg-emerald-950/20">
-                    <div className="text-[10px] uppercase tracking-widest text-emerald-400 mb-1">THIS WILL:</div>
+                    <div className="text-[10px] tracking-widest text-emerald-400 mb-1">実行されること:</div>
                     <div className="text-sm text-neutral-100">
-                      Create <span className="font-semibold">1 GitHub Issue</span> in <span className="font-mono text-emerald-300">{String(execDetailPayload.owner ?? '?')}/{String(execDetailPayload.repo ?? '?')}</span>
+                      <span className="font-mono text-emerald-300">{String(execDetailPayload.owner ?? '?')}/{String(execDetailPayload.repo ?? '?')}</span>
+                      {' '}に <span className="font-semibold">GitHub Issue を 1件</span>作成します
                     </div>
                   </div>
                   <div className="p-3 rounded border border-red-900 bg-red-950/20">
-                    <div className="text-[10px] uppercase tracking-widest text-red-400 mb-1">THIS WILL NOT:</div>
+                    <div className="text-[10px] tracking-widest text-red-400 mb-1">実行されないこと:</div>
                     <ul className="text-sm text-neutral-300 list-disc pl-5 space-y-0.5">
-                      <li>change code</li>
-                      <li>push commits</li>
-                      <li>merge anything</li>
-                      <li>deploy anything</li>
+                      <li>コード変更はしません</li>
+                      <li>push しません</li>
+                      <li>merge しません</li>
+                      <li>deploy しません</li>
                     </ul>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">TITLE</div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-1">タイトル</div>
                     <div className="text-sm text-neutral-100 break-words">{String(execDetailPayload.title ?? '')}</div>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">BODY PREVIEW</div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-1">本文プレビュー</div>
                     <pre className="text-xs text-neutral-200 whitespace-pre-wrap break-words leading-relaxed bg-neutral-900 p-2 rounded border border-neutral-800 max-h-72 overflow-y-auto">{String(execDetailPayload.body ?? '')}</pre>
                   </div>
                   <div>
-                    <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">LABELS</div>
+                    <div className="text-[10px] tracking-widest text-neutral-500 mb-1">ラベル</div>
                     <div className="flex gap-1 flex-wrap">
                       {(execDetailPayload.labels as string[] ?? []).map((l) => (
                         <span key={l} className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300">{l}</span>
@@ -840,15 +873,15 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               )}
               {selectedExec.status !== 'waiting_for_approval' && (
                 <div className="p-2 rounded border border-neutral-800 bg-neutral-900">
-                  <div className="text-[10px] text-neutral-500 uppercase mb-1">STATUS</div>
-                  <div className="text-sm text-neutral-200">{selectedExec.status}</div>
+                  <div className="text-[10px] text-neutral-500 mb-1">ステータス</div>
+                  <div className="text-sm text-neutral-200">{EXEC_STATUS_LABEL_JA[selectedExec.status]}</div>
                   {selectedExec.result?.external_url && (
                     <a href={selectedExec.result.external_url} target="_blank" rel="noreferrer" className="text-xs text-amber-400 underline mt-1 inline-block">
-                      Issue #{selectedExec.result.external_id} →
+                      Issue #{selectedExec.result.external_id} を開く →
                     </a>
                   )}
                   {selectedExec.failure_reason && (
-                    <div className="text-xs text-red-400 mt-1 break-words">Reason: {selectedExec.failure_reason}</div>
+                    <div className="text-xs text-red-400 mt-1 break-words">理由: {selectedExec.failure_reason}</div>
                   )}
                 </div>
               )}
@@ -862,14 +895,14 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                     disabled={execAction !== 'idle'}
                     className="min-h-[44px] bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded disabled:bg-neutral-700"
                   >
-                    {execAction === 'rejecting' ? 'Rejecting…' : 'Reject'}
+                    {execAction === 'rejecting' ? '却下中…' : '却下'}
                   </button>
                   <button
                     onClick={doExecuteApprove}
                     disabled={execAction !== 'idle'}
                     className="min-h-[44px] bg-amber-500 hover:bg-amber-400 text-neutral-900 text-sm font-bold rounded disabled:bg-neutral-700 disabled:text-neutral-400"
                   >
-                    {execAction === 'executing' ? 'Executing…' : 'Approve & Execute'}
+                    {execAction === 'executing' ? '実行中…' : '承認して実行'}
                   </button>
                 </div>
               )}
@@ -890,7 +923,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                   </span>
                   <span className="text-[10px] text-neutral-500">v{selectedDeliverable.version}</span>
                   <span className="text-[10px] text-neutral-500">
-                    by {AGENTS.find((a) => a.id === selectedDeliverable.agent_id)?.name ?? selectedDeliverable.agent_id}
+                    提案者: {AGENTS.find((a) => a.id === selectedDeliverable.agent_id)?.name ?? selectedDeliverable.agent_id}
                   </span>
                 </div>
                 <div className="text-base font-semibold text-neutral-100 mt-1 break-words">{selectedDeliverable.title}</div>
@@ -907,12 +940,12 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {detailLoading && <div className="text-sm text-neutral-500">Loading…</div>}
+              {detailLoading && <div className="text-sm text-neutral-500">読込中…</div>}
               {!detailLoading && detailContent && (
                 <>
                   {DELIVERABLE_UI[selectedDeliverable.deliverable_type]?.fields.map((f) => (
                     <div key={f}>
-                      <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1">
+                      <div className="text-[10px] tracking-widest text-neutral-500 mb-1">
                         {DELIVERABLE_UI[selectedDeliverable.deliverable_type].labels[f] ?? f}
                       </div>
                       <div className="text-sm text-neutral-100 whitespace-pre-wrap break-words leading-relaxed">
@@ -924,7 +957,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               )}
               {selectedDeliverable.review_notes && (
                 <div className="mt-2 p-2 rounded border border-emerald-900 bg-emerald-950/30">
-                  <div className="text-[10px] uppercase tracking-widest text-emerald-400 mb-1">JURIN INTERNAL REVIEW</div>
+                  <div className="text-[10px] tracking-widest text-emerald-400 mb-1">JURIN 内部レビュー</div>
                   <div className="text-xs text-neutral-200 whitespace-pre-wrap">{selectedDeliverable.review_notes}</div>
                 </div>
               )}
@@ -936,47 +969,47 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
               )}
               {selectedDeliverable.status !== 'submitted' && (
                 <div className="text-xs text-neutral-500 px-1">
-                  status: <span className="text-neutral-300">{selectedDeliverable.status}</span>
-                  {selectedDeliverable.status === 'approved' || selectedDeliverable.status === 'rejected' ? ' — review closed' : ''}
+                  ステータス: <span className="text-neutral-300">{DELIVERABLE_STATUS_LABEL_JA[selectedDeliverable.status]}</span>
+                  {selectedDeliverable.status === 'approved' || selectedDeliverable.status === 'rejected' ? ' — レビュー終了' : ''}
                 </div>
               )}
               {selectedDeliverable.status === 'submitted' && reviewMode === null && (
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => {
-                      if (confirm('Approve this deliverable? (external execution is NOT triggered)')) {
+                      if (confirm('この成果物を承認しますか?\n(外部への書き込みは発生しません)')) {
                         doReview(selectedDeliverable.id, 'approve')
                       }
                     }}
                     disabled={reviewAction !== 'idle'}
                     className="min-h-[44px] bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded disabled:bg-neutral-700"
                   >
-                    {reviewAction === 'approving' ? 'Approving…' : 'Approve'}
+                    {reviewAction === 'approving' ? '承認中…' : '下書きを承認'}
                   </button>
                   <button
                     onClick={() => { setReviewMode('revise'); setReviewFeedback('') }}
                     disabled={reviewAction !== 'idle'}
                     className="min-h-[44px] bg-neutral-100 hover:bg-white text-neutral-900 text-sm font-medium rounded disabled:bg-neutral-700 disabled:text-neutral-400"
                   >
-                    Revise
+                    修正を依頼
                   </button>
                   <button
                     onClick={() => { setReviewMode('reject'); setReviewFeedback('') }}
                     disabled={reviewAction !== 'idle'}
                     className="min-h-[44px] bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded disabled:bg-neutral-700"
                   >
-                    Reject
+                    却下
                   </button>
                 </div>
               )}
               {reviewMode === 'revise' && (
                 <div className="space-y-2">
-                  <label className="text-xs text-neutral-400">Revision feedback (required)</label>
+                  <label className="text-xs text-neutral-400">修正内容 (必須)</label>
                   <textarea
                     value={reviewFeedback}
                     onChange={(e) => setReviewFeedback(e.target.value)}
                     rows={3}
-                    placeholder="どこをどう直してほしいか短く。EXECUTE 系の依頼 (push, merge, 課金操作) は反映されません。"
+                    placeholder="どこをどう直してほしいか短く。 push / merge / 課金操作などの実行系依頼は反映されません。"
                     className="w-full bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-base md:text-sm text-neutral-100 resize-none focus:outline-none focus:border-neutral-500"
                   />
                   <div className="grid grid-cols-2 gap-2">
@@ -985,21 +1018,21 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       disabled={reviewAction !== 'idle'}
                       className="min-h-[44px] bg-neutral-800 text-neutral-200 text-sm rounded disabled:bg-neutral-700"
                     >
-                      Cancel
+                      キャンセル
                     </button>
                     <button
                       onClick={() => reviewFeedback.trim().length > 0 && doReview(selectedDeliverable.id, 'revise', reviewFeedback.trim())}
                       disabled={reviewAction !== 'idle' || reviewFeedback.trim().length === 0}
                       className="min-h-[44px] bg-neutral-100 text-neutral-900 text-sm font-medium rounded disabled:bg-neutral-700 disabled:text-neutral-400"
                     >
-                      {reviewAction === 'revising' ? 'Creating revision…' : 'Submit revision'}
+                      {reviewAction === 'revising' ? '修正版を作成中…' : '修正を依頼する'}
                     </button>
                   </div>
                 </div>
               )}
               {reviewMode === 'reject' && (
                 <div className="space-y-2">
-                  <label className="text-xs text-neutral-400">Reject reason (optional)</label>
+                  <label className="text-xs text-neutral-400">却下理由 (任意)</label>
                   <textarea
                     value={reviewFeedback}
                     onChange={(e) => setReviewFeedback(e.target.value)}
@@ -1013,18 +1046,18 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       disabled={reviewAction !== 'idle'}
                       className="min-h-[44px] bg-neutral-800 text-neutral-200 text-sm rounded disabled:bg-neutral-700"
                     >
-                      Cancel
+                      キャンセル
                     </button>
                     <button
                       onClick={() => {
-                        if (confirm('Reject this deliverable? Task will be cancelled.')) {
+                        if (confirm('この成果物を却下しますか?\n関連タスクはキャンセルされます。')) {
                           doReview(selectedDeliverable.id, 'reject', reviewFeedback.trim())
                         }
                       }}
                       disabled={reviewAction !== 'idle'}
                       className="min-h-[44px] bg-red-700 hover:bg-red-600 text-white text-sm font-medium rounded disabled:bg-neutral-700"
                     >
-                      {reviewAction === 'rejecting' ? 'Rejecting…' : 'Confirm reject'}
+                      {reviewAction === 'rejecting' ? '却下中…' : '却下する'}
                     </button>
                   </div>
                 </div>
@@ -1144,7 +1177,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                         <div className="flex justify-between">
                           <span className="text-neutral-300">MAYA Research</span>
                           <span className="text-neutral-500">
-                            {watchHealth.research_sources.filter((s) => s.enabled).length}/{watchHealth.research_sources.length} enabled
+                            {watchHealth.research_sources.filter((s) => s.enabled).length}/{watchHealth.research_sources.length} 有効
                           </span>
                         </div>
                         {(() => {
@@ -1154,9 +1187,9 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                             .sort((a, b) => (a.last_checked_at! < b.last_checked_at! ? 1 : -1))[0]
                           return (
                             <div className="text-[10px] text-neutral-500 mt-0.5">
-                              {latest ? `last: ${new Date(latest.last_checked_at!).toLocaleTimeString('ja-JP')}` : 'not yet'}
+                              {latest ? `最終: ${new Date(latest.last_checked_at!).toLocaleTimeString('ja-JP')}` : '未実行'}
                               {failing.length > 0 && (
-                                <span className="ml-2 text-red-400">failing: {failing.length}</span>
+                                <span className="ml-2 text-red-400">失敗: {failing.length}</span>
                               )}
                             </div>
                           )
@@ -1171,9 +1204,9 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                             const h = watchHealth.github_state.find((s) => s.key === 'health:github')
                             const failCount = (h?.value?.count as number) ?? 0
                             return failCount > 0 ? (
-                              <span className="text-red-400 text-[10px]">failing: {failCount}</span>
+                              <span className="text-red-400 text-[10px]">失敗: {failCount}</span>
                             ) : (
-                              <span className="text-neutral-500 text-[10px]">healthy</span>
+                              <span className="text-neutral-500 text-[10px]">正常</span>
                             )
                           })()}
                         </div>
@@ -1181,7 +1214,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                           const g = watchHealth.github_state.find((s) => s.key === 'github')
                           return g?.updated_at ? (
                             <div className="text-[10px] text-neutral-500 mt-0.5">
-                              last: {new Date(g.updated_at).toLocaleTimeString('ja-JP')}
+                              最終: {new Date(g.updated_at).toLocaleTimeString('ja-JP')}
                             </div>
                           ) : null
                         })()}
@@ -1196,7 +1229,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                 <div className="text-[10px] uppercase tracking-widest text-neutral-500 mb-1 mt-2">
                   RECENT EVENTS
                 </div>
-                {hqEvents.length === 0 && <div className="text-xs text-neutral-500">まだ event はありません</div>}
+                {hqEvents.length === 0 && <div className="text-xs text-neutral-500">まだイベントはありません</div>}
                 <ul className="text-xs space-y-1">
                   {hqEvents.slice(0, 8).map((e) => (
                     <li
@@ -1223,7 +1256,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                               setActivityOpen(false)
                             }}
                           >
-                            open thread
+                            スレッドを開く
                           </button>
                         )}
                       </div>
@@ -1277,7 +1310,7 @@ export default function HQClient({ initialThreads }: { initialThreads: ThreadRow
                       : 'text-neutral-300 hover:bg-neutral-800'
                   }`}
                 >
-                  {t.title || '(untitled)'}
+                  {t.title || '(無題)'}
                 </button>
               </li>
             ))}
